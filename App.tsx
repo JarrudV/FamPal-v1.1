@@ -1,0 +1,278 @@
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { Place, ActivityType, AppState, UserReview, Memory, Child, FamilyGroup, FavoriteData } from './types';
+import { fetchNearbyPlaces } from './geminiService';
+import { auth, db, onAuthStateChanged, doc, onSnapshot, setDoc, googleProvider, signInWithPopup, signOut, isFirebaseConfigured } from './lib/firebase.ts';
+import Dashboard from './components/Dashboard';
+import Header from './components/Header';
+import Filters from './components/Filters';
+import PlaceCard from './components/PlaceCard';
+import FamilyGroups from './components/FamilyGroups';
+import Login from './components/Login';
+import Profile from './components/Profile';
+import VenueProfile from './components/VenueProfile';
+
+const STORAGE_KEY = 'fampals_offline_storage';
+
+const App: React.FC = () => {
+  const [view, setView] = useState<'discover' | 'dashboard' | 'groups' | 'profile'>('discover');
+  const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
+  const [places, setPlaces] = useState<Place[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [location, setLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [selectedType, setSelectedType] = useState<ActivityType>('all');
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isGuest, setIsGuest] = useState(false);
+  
+  const [state, setState] = useState<AppState>(() => {
+    // Initial state from localStorage for immediate UI responsiveness
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : {
+      isAuthenticated: false,
+      favorites: [],
+      favoriteDetails: {},
+      visited: [],
+      reviews: [],
+      memories: [],
+      children: [],
+      groups: []
+    };
+  });
+
+  // 1. Auth Listener (only if configured)
+  useEffect(() => {
+    if (!isFirebaseConfigured) return;
+    
+    const unsubscribe = onAuthStateChanged(auth, (user: any) => {
+      if (user) {
+        setCurrentUser(user);
+        setIsGuest(false);
+        setState(prev => ({ ...prev, isAuthenticated: true }));
+      } else if (!isGuest) {
+        setCurrentUser(null);
+        setState(prev => ({ ...prev, isAuthenticated: false }));
+      }
+    });
+    return () => unsubscribe();
+  }, [isGuest]);
+
+  // 2. Data Listener (Cloud Sync)
+  useEffect(() => {
+    if (!currentUser || !isFirebaseConfigured) return;
+
+    const userDocRef = doc(db, 'users', currentUser.uid);
+    const unsubscribe = onSnapshot(userDocRef, (docSnap: any) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as AppState;
+        setState(prev => ({ ...prev, ...data, isAuthenticated: true }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data, isAuthenticated: true }));
+      } else {
+        setDoc(userDocRef, {
+          favorites: [],
+          favoriteDetails: {},
+          visited: [],
+          children: [],
+          groups: []
+        });
+      }
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  // 3. Persistent Save Helper
+  const syncToCloud = async (newState: Partial<AppState>) => {
+    // Update local state immediately for snappy UI
+    const updatedState = { ...state, ...newState };
+    setState(updatedState);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedState));
+
+    // If logged in, push to Firebase
+    if (currentUser && isFirebaseConfigured) {
+      setIsSyncing(true);
+      try {
+        await setDoc(doc(db, 'users', currentUser.uid), newState, { merge: true });
+      } catch (e) {
+        console.error("Cloud Sync Failed", e);
+      } finally {
+        setIsSyncing(false);
+      }
+    }
+  };
+
+  const loadLocation = useCallback(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      }, () => setLocation({ lat: 37.7749, lng: -122.4194 }));
+    } else {
+      setLocation({ lat: 37.7749, lng: -122.4194 });
+    }
+  }, []);
+
+  useEffect(() => { loadLocation(); }, [loadLocation]);
+
+  const searchPlaces = useCallback(async () => {
+    if (!location || !state.isAuthenticated) return;
+    setLoading(true);
+    const results = await fetchNearbyPlaces(location.lat, location.lng, selectedType, state.children);
+    setPlaces(results);
+    setLoading(false);
+  }, [location, selectedType, state.isAuthenticated, state.children]);
+
+  useEffect(() => { searchPlaces(); }, [searchPlaces]);
+
+  const handleLogin = async (mode: 'google' | 'guest' = 'google') => {
+    if (mode === 'guest') {
+      setIsGuest(true);
+      setState(prev => ({ ...prev, isAuthenticated: true }));
+      return;
+    }
+
+    if (!isFirebaseConfigured) {
+      alert("Firebase is not configured yet. Please use Guest Mode to try the app!");
+      return;
+    }
+
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (e: any) {
+      console.error("Login Error", e);
+      alert("Could not sign in with Google. Ensure your Firebase API key is valid.");
+    }
+  };
+
+  const handleLogout = () => {
+    if (isFirebaseConfigured) signOut(auth);
+    setIsGuest(false);
+    setCurrentUser(null);
+    setState(prev => ({ ...prev, isAuthenticated: false }));
+  };
+
+  if (!state.isAuthenticated) {
+    return <Login onLogin={() => handleLogin('google')} onGuestLogin={() => handleLogin('guest')} />;
+  }
+
+  const toggleFavorite = (id: string) => {
+    const isFav = state.favorites.includes(id);
+    const newFavorites = isFav ? state.favorites.filter(f => f !== id) : [...state.favorites, id];
+    syncToCloud({ favorites: newFavorites });
+  };
+
+  return (
+    <div className="min-h-screen bg-[#F8FAFC] pb-24">
+      {selectedPlace && (
+        <VenueProfile 
+          place={selectedPlace} 
+          isFavorite={state.favorites.includes(selectedPlace.id)}
+          favoriteData={state.favoriteDetails[selectedPlace.id]}
+          onClose={() => setSelectedPlace(null)}
+          onToggleFavorite={() => toggleFavorite(selectedPlace.id)}
+          onUpdateDetails={(data) => {
+            const updatedDetails = { ...state.favoriteDetails, [selectedPlace.id]: { ...state.favoriteDetails[selectedPlace.id], ...data } };
+            syncToCloud({ favoriteDetails: updatedDetails });
+          }}
+        />
+      )}
+
+      {!selectedPlace && (
+        <>
+          <Header setView={setView} isSyncing={isSyncing} />
+          <main className="max-w-screen-xl mx-auto">
+            {isGuest && !isFirebaseConfigured && (
+              <div className="mx-5 mt-4 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-center gap-3">
+                <span className="text-xl">🛠️</span>
+                <p className="text-[10px] font-bold text-amber-700 leading-tight">
+                  <span className="block uppercase font-black mb-0.5">Development Mode</span>
+                  Cloud sync is disabled. Add your Firebase API key to <code className="bg-amber-100 px-1 rounded">lib/firebase.ts</code> to enable Google Login.
+                </p>
+              </div>
+            )}
+            
+            {view === 'discover' && (
+              <div className="space-y-8 animate-slide-up">
+                <div className="px-5 mt-4">
+                  <h2 className="text-2xl font-black text-[#1E293B] tracking-tight">Browse Local</h2>
+                  <Filters selected={selectedType} onChange={setSelectedType} />
+                </div>
+
+                <section className="px-5">
+                  <div className="flex justify-between items-end mb-6">
+                    <h2 className="text-2xl font-black text-[#1E293B] tracking-tight">Highly Rated</h2>
+                    <button className="text-sky-500 font-black text-[10px] uppercase tracking-widest bg-sky-50 px-3 py-1.5 rounded-xl">See all</button>
+                  </div>
+                  {loading ? (
+                    <div className="flex gap-4 overflow-x-hidden px-5">
+                      <div className="min-w-[280px] h-[380px] bg-slate-100 rounded-[40px] animate-pulse"></div>
+                    </div>
+                  ) : (
+                    <div className="flex gap-6 overflow-x-auto no-scrollbar py-2 -mx-5 px-5">
+                      {places.map(place => (
+                        <PlaceCard 
+                          key={place.id} place={place} variant="hero"
+                          isFavorite={state.favorites.includes(place.id)}
+                          onToggleFavorite={() => toggleFavorite(place.id)}
+                          onClick={() => setSelectedPlace(place)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                <section className="px-5 mb-8">
+                  <h2 className="text-2xl font-black text-[#1E293B] mb-6 tracking-tight">Explore More</h2>
+                  <div className="grid grid-cols-1 gap-5">
+                    {places.slice(2).map(place => (
+                      <PlaceCard 
+                        key={place.id} place={place} variant="list"
+                        isFavorite={state.favorites.includes(place.id)}
+                        onToggleFavorite={() => toggleFavorite(place.id)}
+                        onClick={() => setSelectedPlace(place)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              </div>
+            )}
+            {view === 'dashboard' && (
+              <Dashboard 
+                favorites={places.filter(p => state.favorites.includes(p.id))}
+                visitedPlaces={places.filter(p => state.visited.includes(p.id))}
+                memories={state.memories}
+                reviews={state.reviews}
+                onAddMemory={(m) => syncToCloud({ memories: [m, ...state.memories] })}
+              />
+            )}
+            {view === 'groups' && <FamilyGroups groups={state.groups} onAddGroup={(g) => syncToCloud({ groups: [...state.groups, g] })} />}
+            {view === 'profile' && (
+              <Profile 
+                userState={state} 
+                onLogout={handleLogout} 
+                onAddChild={(c) => syncToCloud({ children: [...state.children, c] })} 
+                onRemoveChild={(id) => syncToCloud({ children: state.children.filter(c => c.id !== id) })} 
+                onLinkSpouse={(e) => syncToCloud({ linkedEmail: e, spouseName: 'Partner' })} 
+              />
+            )}
+          </main>
+          <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] max-w-md h-20 bottom-nav-blur rounded-[40px] border border-white shadow-[0_25px_50px_-12px_rgba(14,165,233,0.15)] flex justify-around items-center px-8 z-50">
+            <NavButton icon="🧭" label="Discover" active={view === 'discover'} onClick={() => setView('discover')} />
+            <NavButton icon="💙" label="Saved" active={view === 'dashboard'} onClick={() => setView('dashboard')} />
+            <div className="relative -top-10"><button className="w-16 h-16 bg-gradient-to-br from-[#7DD3FC] to-[#0EA5E9] rounded-3xl shadow-2xl shadow-sky-200 flex items-center justify-center text-white text-3xl transition-transform active-press">＋</button></div>
+            <NavButton icon="🫂" label="Groups" active={view === 'groups'} onClick={() => setView('groups')} />
+            <NavButton icon="👤" label="Me" active={view === 'profile'} onClick={() => setView('profile')} />
+          </nav>
+        </>
+      )}
+    </div>
+  );
+};
+
+const NavButton = ({ icon, label, active, onClick }: any) => (
+  <button onClick={onClick} className="flex flex-col items-center gap-1.5 transition-all">
+    <span className={`text-2xl transition-transform ${active ? 'scale-110' : 'opacity-40 grayscale'}`}>{icon}</span>
+    <span className={`text-[9px] font-black uppercase tracking-tighter transition-colors ${active ? 'text-sky-600' : 'text-slate-300'}`}>{label}</span>
+  </button>
+);
+
+export default App;

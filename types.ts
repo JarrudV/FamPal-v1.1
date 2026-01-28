@@ -1,0 +1,77 @@
+
+export interface Place {
+  id: string;
+  name: string;
+  description: string;
+  address: string;
+  rating?: number;
+  tags: string[];
+  imageUrl?: string;
+  mapsUrl: string;
+  type: ActivityType;
+  priceLevel?: '$' | '$$' | '$$$' | '$$$$';
+  phone?: string;
+  website?: string;
+  distance?: string;
+  ageAppropriate?: string;
+  fullSummary?: string;
+}
+
+export type ActivityType = 'restaurant' | 'outdoor' | 'indoor' | 'active' | 'hike' | 'show' | 'all';
+
+export interface UserReview {
+  id: string;
+  placeId: string;
+  placeName: string;
+  userName: string;
+  rating: number;
+  comment: string;
+  isPublic: boolean;
+  date: string;
+}
+
+export interface Memory {
+  id: string;
+  placeId: string;
+  placeName: string;
+  photoUrl: string;
+  caption: string;
+  taggedFriends: string[];
+  date: string;
+}
+
+export interface FavoriteData {
+  placeId: string;
+  notes: string;
+  costEstimate: string;
+  menuPhotos: string[];
+  lastVisited?: string;
+}
+
+export interface Child {
+  id: string;
+  name: string;
+  age: number;
+}
+
+export interface FamilyGroup {
+  id: string;
+  name: string;
+  type: string;
+  members: string[];
+  inviteCode: string;
+  whatsappLink?: string;
+}
+
+export interface AppState {
+  isAuthenticated: boolean;
+  favorites: string[]; 
+  favoriteDetails: Record<string, FavoriteData>; // Map of placeId to custom info
+  visited: string[];
+  reviews: UserReview[];
+  memories: Memory[];
+  children: Child[];
+  spouseName?: string;
+  linkedEmail?: string;
+  groups: FamilyGroup[];
+}
