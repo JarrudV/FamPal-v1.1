@@ -26,6 +26,14 @@ const App: React.FC = () => {
   const [isGuest, setIsGuest] = useState(false);
 
   const [state, setState] = useState<AppState>(() => {
+    // Debug: confirm env + Firebase config (remove once stable)
+    console.log("Firebase configured:", isFirebaseConfigured);
+    console.log("Firebase env:", {
+      apiKey: import.meta.env.VITE_FIREBASE_API_KEY ? "set" : "missing",
+      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ? "set" : "missing",
+      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ? "set" : "missing",
+    });
+
     // Initial state from localStorage for immediate UI responsiveness
     const saved = localStorage.getItem(STORAGE_KEY);
     return saved ? JSON.parse(saved) : {
