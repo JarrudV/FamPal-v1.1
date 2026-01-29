@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Place, ActivityType, AppState, UserReview, Memory, Child, FamilyGroup, FavoriteData } from './types';
 import { fetchNearbyPlaces } from './geminiService';
-import { auth, db, onAuthStateChanged, doc, onSnapshot, setDoc, googleProvider, signInWithPopup, signOut, isFirebaseConfigured } from './lib/firebase.ts';
+import { auth, db, onAuthStateChanged, doc, onSnapshot, setDoc, collection, query, where, googleProvider, signInWithPopup, signOut, isFirebaseConfigured } from './lib/firebase';
 import Dashboard from './components/Dashboard';
 import Header from './components/Header';
 import Filters from './components/Filters';
@@ -20,11 +20,11 @@ const App: React.FC = () => {
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [location, setLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [location, setLocation] = useState<{ lat: number, lng: number } | null>(null);
   const [selectedType, setSelectedType] = useState<ActivityType>('all');
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isGuest, setIsGuest] = useState(false);
-  
+
   const [state, setState] = useState<AppState>(() => {
     // Initial state from localStorage for immediate UI responsiveness
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -43,7 +43,7 @@ const App: React.FC = () => {
   // 1. Auth Listener (only if configured)
   useEffect(() => {
     if (!isFirebaseConfigured) return;
-    
+
     const unsubscribe = onAuthStateChanged(auth, (user: any) => {
       if (user) {
         setCurrentUser(user);
@@ -62,23 +62,58 @@ const App: React.FC = () => {
     if (!currentUser || !isFirebaseConfigured) return;
 
     const userDocRef = doc(db, 'users', currentUser.uid);
-    const unsubscribe = onSnapshot(userDocRef, (docSnap: any) => {
+
+    // Listen to main user profile
+    const unsubUser = onSnapshot(userDocRef, (docSnap: any) => {
       if (docSnap.exists()) {
-        const data = docSnap.data() as AppState;
-        setState(prev => ({ ...prev, ...data, isAuthenticated: true }));
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data, isAuthenticated: true }));
+        const data = docSnap.data();
+        setState(prev => ({
+          ...prev,
+          // Only merge fields that are stored on the main user doc
+          isAuthenticated: true,
+          favorites: data.favorites || [],
+          visited: data.visited || [],
+          children: data.children || [],
+          reviews: data.reviews || [],
+          memories: data.memories || [], // Keeping memories on user doc for now as per plan
+          groups: prev.groups // Groups are loaded separately
+        }));
       } else {
         setDoc(userDocRef, {
           favorites: [],
-          favoriteDetails: {},
           visited: [],
           children: [],
-          groups: []
-        });
+          reviews: [],
+          memories: []
+        }, { merge: true });
       }
     });
 
-    return () => unsubscribe();
+    // Listen to Favorites Subcollection
+    const favColsRef = collection(db, 'users', currentUser.uid, 'favorites');
+    const unsubFavs = onSnapshot(favColsRef, (snapshot: any) => {
+      const details: Record<string, FavoriteData> = {};
+      snapshot.docs.forEach((d: any) => {
+        details[d.id] = d.data() as FavoriteData;
+      });
+      setState(prev => ({ ...prev, favoriteDetails: details }));
+    });
+
+    // Listen to Groups (where user is a member)
+    const groupsQuery = query(collection(db, 'groups'), where('members', 'array-contains', currentUser.uid));
+    const unsubGroups = onSnapshot(groupsQuery, (snapshot: any) => {
+      const groups: FamilyGroup[] = [];
+      snapshot.docs.forEach((d: any) => {
+        groups.push({ id: d.id, ...d.data() } as FamilyGroup);
+      });
+      setState(prev => ({ ...prev, groups }));
+    });
+
+    return () => {
+      unsubUser();
+      unsubFavs();
+      unsubGroups();
+    };
   }, [currentUser]);
 
   // 3. Persistent Save Helper
@@ -92,7 +127,39 @@ const App: React.FC = () => {
     if (currentUser && isFirebaseConfigured) {
       setIsSyncing(true);
       try {
-        await setDoc(doc(db, 'users', currentUser.uid), newState, { merge: true });
+        const batchPromises = [];
+        const userDocRef = doc(db, 'users', currentUser.uid);
+
+        // handle favoriteDetails (Subcollection)
+        if (newState.favoriteDetails) {
+          Object.entries(newState.favoriteDetails).forEach(([placeId, data]) => {
+            batchPromises.push(setDoc(doc(db, 'users', currentUser.uid, 'favorites', placeId), data, { merge: true }));
+          });
+        }
+
+        // handle groups (Groups Collection)
+        if (newState.groups) {
+          newState.groups.forEach(group => {
+            batchPromises.push(setDoc(doc(db, 'groups', group.id), group, { merge: true }));
+          });
+        }
+
+        // handle fields that stay on user doc
+        const userDocUpdates: any = {};
+        if (newState.favorites) userDocUpdates.favorites = newState.favorites;
+        if (newState.visited) userDocUpdates.visited = newState.visited;
+        if (newState.children) userDocUpdates.children = newState.children;
+        if (newState.reviews) userDocUpdates.reviews = newState.reviews;
+        if (newState.memories) userDocUpdates.memories = newState.memories; // Still on user doc for MVP
+        if (newState.spouseName) userDocUpdates.spouseName = newState.spouseName;
+        if (newState.linkedEmail) userDocUpdates.linkedEmail = newState.linkedEmail;
+
+        if (Object.keys(userDocUpdates).length > 0) {
+          batchPromises.push(setDoc(userDocRef, userDocUpdates, { merge: true }));
+        }
+
+        await Promise.all(batchPromises);
+
       } catch (e) {
         console.error("Cloud Sync Failed", e);
       } finally {
@@ -105,16 +172,16 @@ const App: React.FC = () => {
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition((pos) => {
         setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      }, () => setLocation({ lat: 37.7749, lng: -122.4194 }));
+      }, () => setLocation({ lat: -33.9249, lng: 18.4241 }));
     } else {
-      setLocation({ lat: 37.7749, lng: -122.4194 });
+      setLocation({ lat: -33.9249, lng: 18.4241 });
     }
   }, []);
 
   useEffect(() => { loadLocation(); }, [loadLocation]);
 
   const searchPlaces = useCallback(async () => {
-    if (!location || !state.isAuthenticated) return;
+    if (!location) return;
     setLoading(true);
     const results = await fetchNearbyPlaces(location.lat, location.lng, selectedType, state.children);
     setPlaces(results);
@@ -163,8 +230,8 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-24">
       {selectedPlace && (
-        <VenueProfile 
-          place={selectedPlace} 
+        <VenueProfile
+          place={selectedPlace}
           isFavorite={state.favorites.includes(selectedPlace.id)}
           favoriteData={state.favoriteDetails[selectedPlace.id]}
           onClose={() => setSelectedPlace(null)}
@@ -189,7 +256,7 @@ const App: React.FC = () => {
                 </p>
               </div>
             )}
-            
+
             {view === 'discover' && (
               <div className="space-y-8 animate-slide-up">
                 <div className="px-5 mt-4">
@@ -209,7 +276,7 @@ const App: React.FC = () => {
                   ) : (
                     <div className="flex gap-6 overflow-x-auto no-scrollbar py-2 -mx-5 px-5">
                       {places.map(place => (
-                        <PlaceCard 
+                        <PlaceCard
                           key={place.id} place={place} variant="hero"
                           isFavorite={state.favorites.includes(place.id)}
                           onToggleFavorite={() => toggleFavorite(place.id)}
@@ -224,7 +291,7 @@ const App: React.FC = () => {
                   <h2 className="text-2xl font-black text-[#1E293B] mb-6 tracking-tight">Explore More</h2>
                   <div className="grid grid-cols-1 gap-5">
                     {places.slice(2).map(place => (
-                      <PlaceCard 
+                      <PlaceCard
                         key={place.id} place={place} variant="list"
                         isFavorite={state.favorites.includes(place.id)}
                         onToggleFavorite={() => toggleFavorite(place.id)}
@@ -236,7 +303,7 @@ const App: React.FC = () => {
               </div>
             )}
             {view === 'dashboard' && (
-              <Dashboard 
+              <Dashboard
                 favorites={places.filter(p => state.favorites.includes(p.id))}
                 visitedPlaces={places.filter(p => state.visited.includes(p.id))}
                 memories={state.memories}
@@ -246,12 +313,12 @@ const App: React.FC = () => {
             )}
             {view === 'groups' && <FamilyGroups groups={state.groups} onAddGroup={(g) => syncToCloud({ groups: [...state.groups, g] })} />}
             {view === 'profile' && (
-              <Profile 
-                userState={state} 
-                onLogout={handleLogout} 
-                onAddChild={(c) => syncToCloud({ children: [...state.children, c] })} 
-                onRemoveChild={(id) => syncToCloud({ children: state.children.filter(c => c.id !== id) })} 
-                onLinkSpouse={(e) => syncToCloud({ linkedEmail: e, spouseName: 'Partner' })} 
+              <Profile
+                userState={state}
+                onLogout={handleLogout}
+                onAddChild={(c) => syncToCloud({ children: [...state.children, c] })}
+                onRemoveChild={(id) => syncToCloud({ children: state.children.filter(c => c.id !== id) })}
+                onLinkSpouse={(e) => syncToCloud({ linkedEmail: e, spouseName: 'Partner' })}
               />
             )}
           </main>

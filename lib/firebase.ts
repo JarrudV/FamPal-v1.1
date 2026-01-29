@@ -1,7 +1,22 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeApp } from "firebase/app";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+} from "firebase/auth";
+import {
+  getFirestore,
+  doc,
+  onSnapshot,
+  setDoc,
+  collection,
+  query,
+  where,
+} from "firebase/firestore";
 
+// Firebase config via Vite env vars
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -11,7 +26,29 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-const app = initializeApp(firebaseConfig);
+// Allow app to run in "guest mode" if env vars missing
+export const isFirebaseConfigured =
+  !!firebaseConfig.apiKey &&
+  !!firebaseConfig.authDomain &&
+  !!firebaseConfig.projectId;
 
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+const app = isFirebaseConfigured ? initializeApp(firebaseConfig) : null;
+
+// Core exports
+export const auth = app ? getAuth(app) : (null as any);
+export const db = app ? getFirestore(app) : (null as any);
+
+// Auth helpers
+export const googleProvider = new GoogleAuthProvider();
+
+export {
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+  doc,
+  onSnapshot,
+  setDoc,
+  collection,
+  query,
+  where,
+};
