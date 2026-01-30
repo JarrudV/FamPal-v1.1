@@ -2,7 +2,7 @@
 import React from 'react';
 import Logo from './Logo';
 
-const Header: React.FC<{ setView: any, isSyncing?: boolean }> = ({ setView, isSyncing }) => {
+const Header: React.FC<{ setView: any, isSyncing?: boolean, locationName?: string }> = ({ setView, isSyncing, locationName = 'Your Location' }) => {
   return (
     <header className="px-5 pt-8 pb-4 bg-white/80 backdrop-blur-lg sticky top-0 z-50 border-b border-slate-100">
       <div className="flex flex-col gap-6">
@@ -19,7 +19,7 @@ const Header: React.FC<{ setView: any, isSyncing?: boolean }> = ({ setView, isSy
                 {isSyncing ? 'Syncing Cloud...' : 'Local Guide'}
               </p>
               <h1 className="text-lg font-black text-[#1E293B] flex items-center gap-1 leading-none">
-                San Francisco <span className="text-sky-400 text-xs">●</span>
+                {locationName} <span className="text-sky-400 text-xs">●</span>
               </h1>
             </div>
           </div>

@@ -14,6 +14,18 @@ import VenueProfile from './components/VenueProfile';
 
 const STORAGE_KEY = 'fampals_offline_storage';
 
+// Convert coordinates to city name using reverse geocoding
+async function getLocationName(lat: number, lng: number): Promise<string> {
+  try {
+    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+    const data = await response.json();
+    // Return city, town, or county name
+    return data.address?.city || data.address?.town || data.address?.county || `${lat.toFixed(2)}, ${lng.toFixed(2)}`;
+  } catch (e) {
+    return `${lat.toFixed(2)}, ${lng.toFixed(2)}`;
+  }
+}
+
 const App: React.FC = () => {
   const [view, setView] = useState<'discover' | 'dashboard' | 'groups' | 'profile'>('discover');
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
@@ -21,6 +33,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [location, setLocation] = useState<{ lat: number, lng: number } | null>(null);
+  const [locationName, setLocationName] = useState<string>('Your Location');
   const [selectedType, setSelectedType] = useState<ActivityType>('all');
   const [radiusKm, setRadiusKm] = useState<number>(10);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -209,7 +222,14 @@ const App: React.FC = () => {
     setLoading(false);
   }, [location, selectedType, radiusKm, state.children]);
 
-  useEffect(() => { searchPlaces(); }, [searchPlaces]);
+  // Auto-search when location or filters change
+  useEffect(() => {
+    if (location) {
+      searchPlaces();
+      // Also update location name
+      getLocationName(location.lat, location.lng).then(name => setLocationName(name));
+    }
+  }, [location, selectedType, radiusKm]);
 
   const handleLogin = async (mode: 'google' | 'guest' = 'google') => {
     if (mode === 'guest') {
@@ -266,7 +286,7 @@ const App: React.FC = () => {
 
       {!selectedPlace && (
         <>
-          <Header setView={setView} isSyncing={isSyncing} />
+          <Header setView={setView} isSyncing={isSyncing} locationName={locationName} />
           <main className="max-w-screen-xl mx-auto">
             {isGuest && !isFirebaseConfigured && (
               <div className="mx-5 mt-4 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-center gap-3">
