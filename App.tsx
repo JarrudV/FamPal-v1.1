@@ -48,11 +48,12 @@ const App: React.FC = () => {
     };
   });
 
-  // 1. Auth Listener (only if configured)
+  // Auth Listener
   useEffect(() => {
     if (!isFirebaseConfigured) return;
 
     const unsubscribe = onAuthStateChanged(auth, (user: any) => {
+      console.log("Auth state:", user?.email || "logged out");
       if (user) {
         setCurrentUser(user);
         setIsGuest(false);
@@ -62,6 +63,7 @@ const App: React.FC = () => {
         setState(prev => ({ ...prev, isAuthenticated: false }));
       }
     });
+
     return () => unsubscribe();
   }, [isGuest]);
 
@@ -212,9 +214,9 @@ const App: React.FC = () => {
 
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (e: any) {
-      console.error("Login Error", e);
-      alert("Could not sign in with Google. Ensure your Firebase API key is valid.");
+    } catch (err: any) {
+      console.log("FULL Google auth error:", err);
+      alert(`Google sign-in failed: ${err?.code || err?.message}`);
     }
   };
 
