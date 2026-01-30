@@ -22,6 +22,7 @@ const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [location, setLocation] = useState<{ lat: number, lng: number } | null>(null);
   const [selectedType, setSelectedType] = useState<ActivityType>('all');
+  const [radiusKm, setRadiusKm] = useState<number>(10);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isGuest, setIsGuest] = useState(false);
 
@@ -180,11 +181,21 @@ const App: React.FC = () => {
 
   const loadLocation = useCallback(() => {
     if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition((pos) => {
-        setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      }, () => setLocation({ lat: -33.9249, lng: 18.4241 }));
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          console.log("Location found:", pos.coords.latitude, pos.coords.longitude);
+          setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        (error) => {
+          console.warn("Geolocation error:", error.message);
+          // Default to New York if location fails
+          setLocation({ lat: 40.7128, lng: -74.0060 });
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+      );
     } else {
-      setLocation({ lat: -33.9249, lng: 18.4241 });
+      console.warn("Geolocation not supported");
+      setLocation({ lat: 40.7128, lng: -74.0060 });
     }
   }, []);
 
@@ -193,10 +204,10 @@ const App: React.FC = () => {
   const searchPlaces = useCallback(async () => {
     if (!location) return;
     setLoading(true);
-    const results = await fetchNearbyPlaces(location.lat, location.lng, selectedType, state.children);
+    const results = await fetchNearbyPlaces(location.lat, location.lng, selectedType, state.children, radiusKm);
     setPlaces(results);
     setLoading(false);
-  }, [location, selectedType, state.isAuthenticated, state.children]);
+  }, [location, selectedType, radiusKm, state.children]);
 
   useEffect(() => { searchPlaces(); }, [searchPlaces]);
 
@@ -271,7 +282,7 @@ const App: React.FC = () => {
               <div className="space-y-8 animate-slide-up">
                 <div className="px-5 mt-4">
                   <h2 className="text-2xl font-black text-[#1E293B] tracking-tight">Browse Local</h2>
-                  <Filters selected={selectedType} onChange={setSelectedType} />
+                  <Filters selected={selectedType} onChange={setSelectedType} radiusKm={radiusKm} onRadiusChange={setRadiusKm} />
                 </div>
 
                 <section className="px-5">

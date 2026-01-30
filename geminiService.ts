@@ -9,7 +9,8 @@ export async function fetchNearbyPlaces(
   lat: number,
   lng: number,
   type: ActivityType = 'all',
-  children: Child[] = []
+  children: Child[] = [],
+  radiusKm: number = 10
 ): Promise<Place[]> {
   const ai = getAI();
   try {
@@ -17,7 +18,7 @@ export async function fetchNearbyPlaces(
       ? ` The family has children with ages: ${children.map(c => c.age).join(', ')}. Recommend places appropriate for these ages.`
       : " Recommend generic kid-friendly spots.";
 
-    const prompt = `Find 5-10 kid and pet-friendly ${type === 'all' ? 'places' : type} near ${lat}, ${lng}.${ageContext} 
+    const prompt = `Find 5-10 kid and pet-friendly ${type === 'all' ? 'places' : type} within ${radiusKm}km of ${lat}, ${lng}.${ageContext} 
     Return a strict JSON array of places. Each place must have an id, name, description, address, rating (1-5), tags (array of strings), mapsUrl, type, priceLevel ($, $$, $$$), imageUrl, distance (string), and ageAppropriate string.`;
 
     const response = await ai.models.generateContent({

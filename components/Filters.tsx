@@ -5,9 +5,11 @@ import { ActivityType } from '../types';
 interface FiltersProps {
   selected: ActivityType;
   onChange: (type: ActivityType) => void;
+  radiusKm?: number;
+  onRadiusChange?: (radius: number) => void;
 }
 
-const Filters: React.FC<FiltersProps> = ({ selected, onChange }) => {
+const Filters: React.FC<FiltersProps> = ({ selected, onChange, radiusKm = 10, onRadiusChange }) => {
   const categories: {id: ActivityType, label: string, icon: string}[] = [
     { id: 'all', label: 'All', icon: '✨' },
     { id: 'restaurant', label: 'Dine', icon: '🍕' },
@@ -19,7 +21,8 @@ const Filters: React.FC<FiltersProps> = ({ selected, onChange }) => {
   ];
 
   return (
-    <div className="flex gap-6 overflow-x-auto no-scrollbar py-6 -mx-5 px-5">
+    <div className="space-y-6">
+      <div className="flex gap-6 overflow-x-auto no-scrollbar py-6 -mx-5 px-5">
       {categories.map((cat) => (
         <button
           key={cat.id}
@@ -38,6 +41,28 @@ const Filters: React.FC<FiltersProps> = ({ selected, onChange }) => {
           </span>
         </button>
       ))}
+      </div>
+
+      {/* Distance Radius Filter */}
+      <div className="px-5 space-y-3">
+        <div className="flex justify-between items-center">
+          <label className="text-sm font-bold text-slate-600">Search radius:</label>
+          <span className="text-lg font-black text-sky-500">{radiusKm} km</span>
+        </div>
+        <input 
+          type="range" 
+          min="5" 
+          max="50" 
+          step="5" 
+          value={radiusKm}
+          onChange={(e) => onRadiusChange?.(parseInt(e.target.value))}
+          className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-sky-500"
+        />
+        <div className="flex justify-between text-[11px] font-bold text-slate-400">
+          <span>5 km</span>
+          <span>50 km</span>
+        </div>
+      </div>
     </div>
   );
 };
