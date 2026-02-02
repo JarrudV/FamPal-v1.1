@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Place, ActivityType, AppState, UserReview, Memory, Child, FamilyGroup, FavoriteData } from './types';
 import { fetchNearbyPlaces } from './geminiService';
 import {
@@ -81,65 +81,52 @@ const App: React.FC = () => {
     };
   });
 
-  // Combined Auth Logic
+  const redirectHandled = useRef(false);
+
   useEffect(() => {
-    if (!isFirebaseConfigured || !auth) {
+    if (!isFirebaseConfigured || !auth || redirectHandled.current) {
       setAuthLoading(false);
       return;
     }
-
-    let isActive = true;
-    let isProcessingRedirect = false;
-
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!isActive) return;
-      console.log("Auth state change:", user?.email || "pending...");
-
-      if (user) {
-        setCurrentUser(user);
-        setIsGuest(false);
-        setState(prev => ({ ...prev, isAuthenticated: true }));
-        setAuthLoading(false);
-        return;
-      }
-      
-      if (!isProcessingRedirect) {
-        isProcessingRedirect = true;
-        try {
-          const result = await getRedirectResult(auth);
-          if (!isActive) return;
-
-          if (result?.user) {
-            console.log("✅ Redirect login success:", result.user.email);
+  
+    redirectHandled.current = true; // Mark that we are handling the redirect
+  
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) {
+          console.log("✅ Redirect login success:", result.user.email);
+          // Don't need to manually set user, onAuthStateChanged will handle it
+        } else {
+          console.log("No redirect user found.");
+        }
+      })
+      .catch((err) => {
+        console.error("❌ Redirect result error:", err);
+        setError("Login failed during redirect. Please try signing in again.");
+      })
+      .finally(() => {
+        // Now set up the permanent auth state listener
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+          console.log("Auth state change:", user ? user.email : "No user");
+          if (user) {
+            setCurrentUser(user);
+            setIsGuest(false);
+            setState(prev => ({ ...prev, isAuthenticated: true }));
           } else {
-            console.log("No active user and no redirect user.");
+            // Only set to not-authenticated if not in guest mode
             if (!isGuest) {
               setState(prev => ({ ...prev, isAuthenticated: false }));
             }
             setCurrentUser(null);
           }
-        } catch (err) {
-          if (!isActive) return;
-          console.log("❌ Redirect result error:", err);
-          setError("There was an error logging in. Please try again.");
-          if (!isGuest) {
-            setState(prev => ({ ...prev, isAuthenticated: false }));
-          }
-          setCurrentUser(null);
-        } finally {
-          if (isActive) {
-            setAuthLoading(false);
-            isProcessingRedirect = false;
-          }
-        }
-      }
-    });
-
-    return () => {
-      isActive = false;
-      unsubscribe();
-    };
-  }, [isGuest]);
+          setAuthLoading(false); // Auth process is complete
+        });
+  
+        // Return the cleanup function for onAuthStateChanged
+        return () => unsubscribe();
+      });
+  
+  }, [isFirebaseConfigured, isGuest]);
 
 
   // 2. Data Listener (Cloud Sync)
