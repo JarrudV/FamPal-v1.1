@@ -1,0 +1,16 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // User Data (Recursive match for subcollections like favorites)
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Groups (MVP: members can read/write)
+    // Note: In a real app, you'd stricter rules checking 'members' array
+    match /groups/{groupId} {
+       allow read, write: if request.auth != null; 
+    }
+  }
+}

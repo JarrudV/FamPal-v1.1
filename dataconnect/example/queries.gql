@@ -1,0 +1,33 @@
+mutation CreateNewLocation @auth(level: PUBLIC, insecureReason: "This operation is safe to expose to the public") {
+  location_insert(data: {
+    address: "123 Main St",
+    name: "Example Location",
+    type: "Restaurant",
+    createdAt: "2024-01-01T00:00:00Z"
+  })
+}
+
+query ListAllLocations @auth(level: PUBLIC, insecureReason: "This operation is safe to expose to the public") {
+  locations {
+    id
+    name
+    address
+    type
+  }
+}
+
+mutation UpdateLocationDescription($id: UUID!, $description: String!) @auth(level: USER, insecureReason: "This operation is safe to expose to all logged in users.") {
+  location_update(id: $id, data: {
+    description: $description
+  })
+}
+
+query GetLocationById($id: UUID!) @auth(level: USER, insecureReason: "This operation is safe to expose to all logged in users.") {
+  location(id: $id) {
+    id
+    name
+    address
+    description
+    type
+  }
+}

@@ -1,0 +1,63 @@
+type User @table {
+  displayName: String!
+  createdAt: Timestamp!
+  email: String
+  photoUrl: String
+}
+
+type Group @table {
+  name: String!
+  createdAt: Timestamp!
+  description: String
+  admin: User
+  # members: [User] # Not supported
+}
+
+type GroupMembership @table(key: ["group", "user"]) {
+  group: Group!
+  user: User!
+}
+
+type Location @table {
+  name: String!
+  type: String!
+  address: String!
+  createdAt: Timestamp!
+  description: String
+  website: String
+  phoneNumber: String
+  rating: Float
+  familyFriendly: Boolean
+}
+
+type Event @table {
+  name: String!
+  date: Date!
+  createdAt: Timestamp!
+  description: String
+  notes: String
+  creator: User
+  group: Group
+  location: Location
+}
+
+type EventInvitation @table(key: ["event", "user"]) {
+  event: Event!
+  user: User!
+  rsvpStatus: String # e.g., "Attending", "Declined", "Pending"
+}
+
+type Memory @table {
+  createdAt: Timestamp!
+  photoUrl: String
+  note: String
+  user: User
+  event: Event
+  location: Location
+}
+
+type Favorite @table(key: ["user", "location"]) {
+  createdAt: Timestamp!
+  user: User!
+  location: Location!
+}
