@@ -3,67 +3,74 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Place, ActivityType, Child } from "./types";
 
 // Always create a fresh instance to ensure correct API key usage
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+const getAI = () => new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || "" });
 
 export async function fetchNearbyPlaces(
   lat: number,
   lng: number,
   type: ActivityType = 'all',
-  children: Child[] = []
+  children: Child[] = [],
+  radiusKm: number = 10
 ): Promise<Place[]> {
+  if (!import.meta.env.VITE_GEMINI_API_KEY) {
+    throw new Error("Gemini API key missing – AI disabled");
+  }
   const ai = getAI();
   try {
-    const ageContext = children.length > 0 
-      ? ` The family has children with ages: ${children.map(c => c.age).join(', ')}. Recommend places appropriate for these ages.` 
+    const ageContext = children.length > 0
+      ? ` The family has children with ages: ${children.map(c => c.age).join(', ')}. Recommend places appropriate for these ages.`
       : " Recommend generic kid-friendly spots.";
 
-    const prompt = `Find kid and pet-friendly ${type === 'all' ? 'places' : type} near ${lat}, ${lng}.${ageContext} 
-    Include details like name, address, rating, typical price level ($, $$, $$$), and why it fits this family.`;
+    const prompt = `Find 5-10 kid and pet-friendly ${type === 'all' ? 'places' : type} within ${radiusKm}km of ${lat}, ${lng}.${ageContext} 
+    Return a strict JSON array of places. Each place must have an id, name, description, address, rating (1-5), tags (array of strings), mapsUrl, type, priceLevel ($, $$, $$$), imageUrl, distance (string), and ageAppropriate string.`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
       config: {
-        tools: [{ googleMaps: {} }],
-        toolConfig: {
-          retrievalConfig: {
-            latLng: { latitude: lat, longitude: lng }
-          }
-        }
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              name: { type: Type.STRING },
+              description: { type: Type.STRING },
+              address: { type: Type.STRING },
+              rating: { type: Type.NUMBER },
+              tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+              mapsUrl: { type: Type.STRING },
+              type: { type: Type.STRING, enum: ["restaurant", "outdoor", "indoor", "active", "hike", "show", "all"] },
+              priceLevel: { type: Type.STRING, enum: ["$", "$$", "$$$", "$$$$"] },
+              imageUrl: { type: Type.STRING },
+              distance: { type: Type.STRING },
+              ageAppropriate: { type: Type.STRING },
+            },
+            required: ["id", "name", "description", "address", "rating", "tags", "mapsUrl", "type", "priceLevel", "imageUrl", "distance", "ageAppropriate"],
+          },
+        },
       },
     });
 
-    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    const places: Place[] = [];
-    
-    groundingChunks.forEach((chunk: any, index: number) => {
-      if (chunk.maps) {
-        places.push({
-          id: `map-${index}-${Date.now()}`,
-          name: chunk.maps.title || "Nearby Spot",
-          description: response.text?.slice(0, 100) || "Top family location identified by FamPals.",
-          address: "View on Google Maps",
-          rating: 4.0 + (Math.random() * 0.9),
-          tags: ["Kid-Friendly", "Pet-Friendly", "Verified"],
-          mapsUrl: chunk.maps.uri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(chunk.maps.title)}`,
-          type: type === 'all' ? 'outdoor' : type,
-          priceLevel: ['$', '$$', '$$$'][Math.floor(Math.random() * 3)] as any,
-          imageUrl: `https://picsum.photos/seed/${index + 101}/600/400`,
-          distance: `${(Math.random() * 2).toFixed(1)} km`,
-          ageAppropriate: children.length > 0 ? `${Math.min(...children.map(c => c.age))}-${Math.max(...children.map(c => c.age))}` : "All ages"
-        });
-      }
-    });
+    const responseText = response.text;
+    const data = responseText ? JSON.parse(responseText) : null;
 
-    // Fallback if grounding fails or returns empty
-    if (places.length === 0) {
-       return getSeedData(type);
+    if (!data || !Array.isArray(data)) {
+      console.warn("Gemini returned invalid JSON structure", data);
+      return getSeedData(type);
     }
 
-    return places;
+    // Post-process to ensure IDs are unique if Gemini generates duplicates or generic IDs
+    return data.map((place: any, index: number) => ({
+      ...place,
+      id: place.id || `gen-${Date.now()}-${index}`,
+      // Fallback for image until we have a real search API
+      imageUrl: place.imageUrl || `https://picsum.photos/seed/${index + Date.now()}/600/400`
+    }));
+
   } catch (error: any) {
     console.error("Gemini Fetch Error:", error);
-    // Return seed data instead of empty array to prevent UI breakage on 500s
     return getSeedData(type);
   }
 }

@@ -1,24 +1,24 @@
 {
-  "name": "fampals---parent's-local-guide",
+  "name": "fampals-parents-local-guide",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "vite preview --port $PORT"
   },
   "dependencies": {
-    "@dataconnect/generated": "file:src/dataconnect-generated",
     "@google/genai": "^1.38.0",
+    "@vitejs/plugin-react": "^4.7.0",
     "firebase": "^12.8.0",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "typescript": "~5.8.2",
+    "vite": "^7.3.1"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "@types/node": "^22.14.0"
   }
 }
