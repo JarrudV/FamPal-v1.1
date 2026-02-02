@@ -67,41 +67,7 @@ const App: React.FC = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Handle redirect result once on app load
-  useEffect(() => {
-    if (!isFirebaseConfigured || !auth) {
-      setAuthLoading(false);
-      return;
-    }
-
-    (async () => {
-      try {
-        const result = await getRedirectResult(auth);
-        if (result?.user) {
-          console.log("✅ Redirect login success:", result.user.email);
-          setCurrentUser(result.user);
-          setIsGuest(false);
-          setState(prev => ({ ...prev, isAuthenticated: true }));
-        }
-      } catch (err) {
-        console.log("❌ Redirect result error:", err);
-        setError("There was an error logging in. Please try again.");
-      } finally {
-        setAuthLoading(false);
-      }
-    })();
-  }, []);
-
   const [state, setState] = useState<AppState>(() => {
-    // Debug: confirm env + Firebase config (remove once stable)
-    console.log("Firebase configured:", isFirebaseConfigured);
-    console.log("Firebase env:", {
-      apiKey: import.meta.env.VITE_FIREBASE_API_KEY ? "set" : "missing",
-      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ? "set" : "missing",
-      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ? "set" : "missing",
-    });
-
-    // Initial state from localStorage for immediate UI responsiveness
     const saved = localStorage.getItem(STORAGE_KEY);
     return saved ? JSON.parse(saved) : {
       isAuthenticated: false,
@@ -115,29 +81,62 @@ const App: React.FC = () => {
     };
   });
 
-  // Auth Listener
+  // Combined Auth Logic
   useEffect(() => {
     if (!isFirebaseConfigured || !auth) {
       setAuthLoading(false);
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, (user: any) => {
-      console.log("Auth state:", user?.email || "logged out");
+    let isProcessingRedirect = false;
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      console.log("Auth state change:", user?.email || "pending...");
+
+      // If a user is found, we are done.
       if (user) {
         setCurrentUser(user);
         setIsGuest(false);
         setState(prev => ({ ...prev, isAuthenticated: true }));
-      } else if (!isGuest) {
-        setCurrentUser(null);
-        setState(prev => ({ ...prev, isAuthenticated: false }));
+        setAuthLoading(false);
+        return;
       }
-
-      setAuthLoading(false);
+      
+      // If no user, it might be a redirect. Let's check.
+      // The flag prevents multiple simultaneous checks.
+      if (!isProcessingRedirect) {
+        isProcessingRedirect = true;
+        try {
+          const result = await getRedirectResult(auth);
+          if (result?.user) {
+            // This will trigger onAuthStateChanged again with a user.
+            console.log("✅ Redirect login success:", result.user.email);
+          } else {
+            // No user from redirect, and no active user.
+            // Only now can we be sure they are logged out.
+            console.log("No active user and no redirect user.");
+            if (!isGuest) {
+              setState(prev => ({ ...prev, isAuthenticated: false }));
+            }
+            setCurrentUser(null);
+          }
+        } catch (err) {
+          console.log("❌ Redirect result error:", err);
+          setError("There was an error logging in. Please try again.");
+          if (!isGuest) {
+            setState(prev => ({ ...prev, isAuthenticated: false }));
+          }
+          setCurrentUser(null);
+        } finally {
+          setAuthLoading(false);
+          isProcessingRedirect = false;
+        }
+      }
     });
 
     return () => unsubscribe();
   }, [isGuest]);
+
 
   // 2. Data Listener (Cloud Sync)
   useEffect(() => {
@@ -151,14 +150,13 @@ const App: React.FC = () => {
         const data = docSnap.data();
         setState(prev => ({
           ...prev,
-          // Only merge fields that are stored on the main user doc
           isAuthenticated: true,
           favorites: data.favorites || [],
           visited: data.visited || [],
           children: data.children || [],
           reviews: data.reviews || [],
-          memories: data.memories || [], // Keeping memories on user doc for now as per plan
-          groups: prev.groups // Groups are loaded separately
+          memories: data.memories || [], 
+          groups: prev.groups 
         }));
       } else {
         setDoc(userDocRef, {
@@ -171,7 +169,6 @@ const App: React.FC = () => {
       }
     });
 
-    // Listen to Favorites Subcollection
     const favColsRef = collection(db, 'users', currentUser.uid, 'favorites');
     const unsubFavs = onSnapshot(favColsRef, (snapshot: any) => {
       const details: Record<string, FavoriteData> = {};
@@ -181,7 +178,6 @@ const App: React.FC = () => {
       setState(prev => ({ ...prev, favoriteDetails: details }));
     });
 
-    // Listen to Groups (where user is a member)
     const groupsQuery = query(collection(db, 'groups'), where('members', 'array-contains', currentUser.uid));
     const unsubGroups = onSnapshot(groupsQuery, (snapshot: any) => {
       const groups: FamilyGroup[] = [];
@@ -200,39 +196,34 @@ const App: React.FC = () => {
 
   // 3. Persistent Save Helper
   const syncToCloud = async (newState: Partial<AppState>) => {
-    // Update local state immediately for snappy UI
     const updatedState = { ...state, ...newState };
     setState(updatedState);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedState));
 
-    // If logged in, push to Firebase
     if (currentUser && isFirebaseConfigured && db) {
       setIsSyncing(true);
       try {
         const batchPromises = [];
         const userDocRef = doc(db, 'users', currentUser.uid);
 
-        // handle favoriteDetails (Subcollection)
         if (newState.favoriteDetails) {
           Object.entries(newState.favoriteDetails).forEach(([placeId, data]) => {
             batchPromises.push(setDoc(doc(db, 'users', currentUser.uid, 'favorites', placeId), data, { merge: true }));
           });
         }
 
-        // handle groups (Groups Collection)
         if (newState.groups) {
           newState.groups.forEach(group => {
             batchPromises.push(setDoc(doc(db, 'groups', group.id), group, { merge: true }));
           });
         }
 
-        // handle fields that stay on user doc
         const userDocUpdates: any = {};
         if (newState.favorites) userDocUpdates.favorites = newState.favorites;
         if (newState.visited) userDocUpdates.visited = newState.visited;
         if (newState.children) userDocUpdates.children = newState.children;
         if (newState.reviews) userDocUpdates.reviews = newState.reviews;
-        if (newState.memories) userDocUpdates.memories = newState.memories; // Still on user doc for MVP
+        if (newState.memories) userDocUpdates.memories = newState.memories;
         if (newState.spouseName) userDocUpdates.spouseName = newState.spouseName;
         if (newState.linkedEmail) userDocUpdates.linkedEmail = newState.linkedEmail;
 
@@ -258,9 +249,8 @@ const App: React.FC = () => {
           console.log("Location found:", pos.coords.latitude, pos.coords.longitude);
           setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         },
-        (error) => {
-          console.warn("Geolocation error:", error.message);
-          // Default to New York if location fails
+        (err) => {
+          console.warn("Geolocation error:", err.message);
           setLocation({ lat: 40.7128, lng: -74.0060 });
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
@@ -288,51 +278,53 @@ const App: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [location, selectedType, radiusKm, state.children]);
+  }, [location, selectedType, radiusKm, state.isAuthenticated, state.children]);
 
-  // Auto-search when location or filters change
   useEffect(() => {
-    if (location) {
+    if (location && state.isAuthenticated) {
       searchPlaces();
-      // Also update location name
       getLocationName(location.lat, location.lng).then(name => setLocationName(name));
     }
-  }, [location, selectedType, radiusKm]);
+  }, [location, selectedType, radiusKm, state.isAuthenticated]);
 
   const handleLogin = async (mode: 'google' | 'guest' = 'google') => {
     if (mode === 'guest') {
       setIsGuest(true);
       setState(prev => ({ ...prev, isAuthenticated: true }));
+      setAuthLoading(false); // No longer loading
       return;
     }
-
+    
+    setIsGuest(false); // Reset guest mode on google login
+    setAuthLoading(true); // Start loading for Google Auth
     if (!isFirebaseConfigured || !auth || !googleProvider) {
       alert("Firebase is not configured yet. Please use Guest Mode to try the app!");
+      setAuthLoading(false);
       return;
     }
 
     try {
-      console.log("Starting redirect login...", {
-        origin: window.location.origin,
-        authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-      });
       await signInWithRedirect(auth, googleProvider);
     } catch (err: any) {
-      console.log("FULL Google auth error:", err);
       alert(`Google sign-in failed: ${err?.code || err?.message}`);
+      setAuthLoading(false);
     }
   };
 
   const handleLogout = () => {
-    if (isFirebaseConfigured && auth) signOut(auth);
-    setIsGuest(false);
+    if (isGuest) {
+      setIsGuest(false);
+      setState(prev => ({ ...prev, isAuthenticated: false }));
+    } else if (isFirebaseConfigured && auth) {
+      signOut(auth);
+    }
+    // Universal state reset
     setCurrentUser(null);
-    setState(prev => ({ ...prev, isAuthenticated: false }));
   };
 
   if (authLoading) {
     return (
-      <div style={{ display: "grid", placeItems: "center", height: "100vh", color: "white" }}>
+      <div style={{ display: "grid", placeItems: "center", height: "100vh", color: "white", backgroundColor: "#38bdf8" }}>
         Loading…
       </div>
     );
