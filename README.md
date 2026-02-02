@@ -20,4 +20,4 @@ View your app in AI Studio: https://ai.studio/apps/drive/12CPxLHcwBC_HKfkvh9za9c
 3. Run the app:
    `npm run dev`
 
-- Triggering deployment again.
+- Triggering deployment with .env creation.
