@@ -2,7 +2,12 @@
 import React from 'react';
 import Logo from './Logo';
 
-const Login: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
+type LoginProps = {
+  onLogin: () => void;
+  onGuestLogin: () => void;
+};
+
+const Login: React.FC<LoginProps> = ({ onLogin, onGuestLogin }) => {
   return (
     <div className="h-screen w-full bg-gradient-to-br from-[#7DD3FC] via-[#0EA5E9] to-[#0369A1] flex flex-col items-center justify-center px-8 text-white relative overflow-hidden">
       <div className="absolute top-[-10%] right-[-10%] w-64 h-64 rounded-full bg-white/20 blur-3xl"></div>
@@ -18,15 +23,15 @@ const Login: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
       </p>
 
       <div className="w-full max-w-xs space-y-4 relative z-10">
-        <button 
+        <button
           onClick={onLogin}
           className="w-full bg-white text-[#0369A1] h-16 rounded-3xl font-black flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all text-sm uppercase tracking-widest"
         >
           <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="" />
           Sign in with Google
         </button>
-        <button 
-          onClick={onLogin}
+        <button
+          onClick={onGuestLogin}
           className="w-full bg-white/10 backdrop-blur-sm text-white h-16 rounded-3xl font-black border border-white/20 active:scale-95 transition-all text-sm uppercase tracking-widest"
         >
           Guest Mode

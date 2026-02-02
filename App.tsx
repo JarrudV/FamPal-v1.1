@@ -88,12 +88,13 @@ const App: React.FC = () => {
       return;
     }
 
+    let isActive = true;
     let isProcessingRedirect = false;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!isActive) return;
       console.log("Auth state change:", user?.email || "pending...");
 
-      // If a user is found, we are done.
       if (user) {
         setCurrentUser(user);
         setIsGuest(false);
@@ -102,18 +103,15 @@ const App: React.FC = () => {
         return;
       }
       
-      // If no user, it might be a redirect. Let's check.
-      // The flag prevents multiple simultaneous checks.
       if (!isProcessingRedirect) {
         isProcessingRedirect = true;
         try {
           const result = await getRedirectResult(auth);
+          if (!isActive) return;
+
           if (result?.user) {
-            // This will trigger onAuthStateChanged again with a user.
             console.log("✅ Redirect login success:", result.user.email);
           } else {
-            // No user from redirect, and no active user.
-            // Only now can we be sure they are logged out.
             console.log("No active user and no redirect user.");
             if (!isGuest) {
               setState(prev => ({ ...prev, isAuthenticated: false }));
@@ -121,6 +119,7 @@ const App: React.FC = () => {
             setCurrentUser(null);
           }
         } catch (err) {
+          if (!isActive) return;
           console.log("❌ Redirect result error:", err);
           setError("There was an error logging in. Please try again.");
           if (!isGuest) {
@@ -128,13 +127,18 @@ const App: React.FC = () => {
           }
           setCurrentUser(null);
         } finally {
-          setAuthLoading(false);
-          isProcessingRedirect = false;
+          if (isActive) {
+            setAuthLoading(false);
+            isProcessingRedirect = false;
+          }
         }
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      isActive = false;
+      unsubscribe();
+    };
   }, [isGuest]);
 
 
