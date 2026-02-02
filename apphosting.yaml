@@ -2,3 +2,20 @@ run:
   command: npm run build
   static:
     output: dist
+env:
+  - variable: VITE_FIREBASE_API_KEY
+    value: AIzaSyAG_u9nAIfWwI51u2pnMMdhOeYiVNXLKn0
+  - variable: VITE_FIREBASE_AUTH_DOMAIN
+    value: fampals-56984122-8166e.firebaseapp.com
+  - variable: VITE_FIREBASE_PROJECT_ID
+    value: fampals-56984122-8166e
+  - variable: VITE_FIREBASE_STORAGE_BUCKET
+    value: fampals-56984122-8166e.appspot.com
+  - variable: VITE_FIREBASE_MESSAGING_SENDER_ID
+    value: '382513418'
+  - variable: VITE_FIREBASE_APP_ID
+    value: 1:382513418:web:c64c715dfc3780f1cf8af3
+  - variable: VITE_FIREBASE_MEASUREMENT_ID
+    value: G-SF51SG7PPV
+  - variable: VITE_GEMINI_API_KEY
+    value: AIzaSyCG3DG4f3s4tMWo1VsAwUUzZyp4bzvzpc4
