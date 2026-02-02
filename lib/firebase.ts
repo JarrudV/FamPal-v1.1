@@ -1,6 +1,22 @@
 import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-import { getAuth } from "firebase/auth";
+import {
+  getAuth,
+  onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithRedirect,
+  signOut,
+  getRedirectResult
+} from "firebase/auth";
+import {
+  getFirestore,
+  doc,
+  onSnapshot,
+  setDoc,
+  collection,
+  query,
+  where
+} from "firebase/firestore";
+
 
 // Your web app's Firebase configuration from environment variables
 const firebaseConfig = {
@@ -13,7 +29,23 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-export const auth = getAuth(app);
+export const isFirebaseConfigured = !!firebaseConfig.apiKey && !!firebaseConfig.projectId;
+
+const app = isFirebaseConfigured ? initializeApp(firebaseConfig) : null;
+
+export const auth = app ? getAuth(app) : null;
+export const db = app ? getFirestore(app) : null;
+export const googleProvider = app ? new GoogleAuthProvider() : null;
+
+export {
+    onAuthStateChanged,
+    signInWithRedirect,
+    signOut,
+    getRedirectResult,
+    doc,
+    onSnapshot,
+    setDoc,
+    collection,
+    query,
+    where
+};

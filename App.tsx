@@ -2,8 +2,22 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Place, ActivityType, AppState, UserReview, Memory, Child, FamilyGroup, FavoriteData } from './types';
 import { fetchNearbyPlaces } from './geminiService';
-import { auth, db, onAuthStateChanged, doc, onSnapshot, setDoc, collection, query, where, googleProvider, signOut, isFirebaseConfigured } from './lib/firebase';
-import * as firebase from './lib/firebase';
+import {
+  auth,
+  db,
+  isFirebaseConfigured,
+  googleProvider,
+  onAuthStateChanged,
+  signInWithRedirect,
+  signOut,
+  getRedirectResult,
+  doc,
+  onSnapshot,
+  setDoc,
+  collection,
+  query,
+  where,
+} from './lib/firebase';
 import Dashboard from './components/Dashboard';
 import Header from './components/Header';
 import Filters from './components/Filters';
@@ -55,14 +69,14 @@ const App: React.FC = () => {
 
   // Handle redirect result once on app load
   useEffect(() => {
-    if (!isFirebaseConfigured) {
+    if (!isFirebaseConfigured || !auth) {
       setAuthLoading(false);
       return;
     }
 
     (async () => {
       try {
-        const result = await firebase.getRedirectResult(auth);
+        const result = await getRedirectResult(auth);
         if (result?.user) {
           console.log("✅ Redirect login success:", result.user.email);
           setCurrentUser(result.user);
@@ -103,7 +117,7 @@ const App: React.FC = () => {
 
   // Auth Listener
   useEffect(() => {
-    if (!isFirebaseConfigured) {
+    if (!isFirebaseConfigured || !auth) {
       setAuthLoading(false);
       return;
     }
@@ -127,7 +141,7 @@ const App: React.FC = () => {
 
   // 2. Data Listener (Cloud Sync)
   useEffect(() => {
-    if (!currentUser || !isFirebaseConfigured) return;
+    if (!currentUser || !isFirebaseConfigured || !db) return;
 
     const userDocRef = doc(db, 'users', currentUser.uid);
 
@@ -192,7 +206,7 @@ const App: React.FC = () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedState));
 
     // If logged in, push to Firebase
-    if (currentUser && isFirebaseConfigured) {
+    if (currentUser && isFirebaseConfigured && db) {
       setIsSyncing(true);
       try {
         const batchPromises = [];
@@ -292,7 +306,7 @@ const App: React.FC = () => {
       return;
     }
 
-    if (!isFirebaseConfigured) {
+    if (!isFirebaseConfigured || !auth || !googleProvider) {
       alert("Firebase is not configured yet. Please use Guest Mode to try the app!");
       return;
     }
@@ -302,7 +316,7 @@ const App: React.FC = () => {
         origin: window.location.origin,
         authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
       });
-      await firebase.signInWithRedirect(auth, googleProvider);
+      await signInWithRedirect(auth, googleProvider);
     } catch (err: any) {
       console.log("FULL Google auth error:", err);
       alert(`Google sign-in failed: ${err?.code || err?.message}`);
@@ -310,7 +324,7 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    if (isFirebaseConfigured) signOut(auth);
+    if (isFirebaseConfigured && auth) signOut(auth);
     setIsGuest(false);
     setCurrentUser(null);
     setState(prev => ({ ...prev, isAuthenticated: false }));
