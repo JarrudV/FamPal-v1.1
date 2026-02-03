@@ -93,3 +93,9 @@ For Google Sign-In to work:
   - Website and phone numbers now displayed on venue profiles (clickable)
   - Improved geocoding with proper User-Agent headers
   - Cache keys include family context (children ages) for accurate results
+- **V1.3 Freemium Model**:
+  - AI requests limited to 5 for free signed-in users (tracks usage in AppState)
+  - Guest users see greyed-out AI panel with "Sign in to unlock AI summaries" prompt
+  - Pro model foundation (isPro flag) for unlimited AI access
+  - "Save Summary to Notes" button appends AI responses to venue notes with timestamps
+  - Visual feedback with "Saved!" confirmation and remaining requests counter
