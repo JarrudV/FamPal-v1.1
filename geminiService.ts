@@ -17,8 +17,9 @@ export async function fetchNearbyPlaces(
   }
   const ai = getAI();
   try {
-    const ageContext = children.length > 0
-      ? ` The family has children with ages: ${children.map(c => c.age).join(', ')}. Recommend places appropriate for these ages.`
+    const safeChildren = Array.isArray(children) ? children : [];
+    const ageContext = safeChildren.length > 0
+      ? ` The family has children with ages: ${safeChildren.map(c => c.age).join(', ')}. Recommend places appropriate for these ages.`
       : " Recommend generic kid-friendly spots.";
 
     const prompt = `Find 5-10 kid and pet-friendly ${type === 'all' ? 'places' : type} within ${radiusKm}km of ${lat}, ${lng}.${ageContext} 

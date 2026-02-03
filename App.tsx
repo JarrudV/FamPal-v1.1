@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   auth,
   googleProvider,
   getRedirectResult,
-  signInWithPopup,
   signInWithRedirect,
   onAuthStateChanged,
-  signOut as firebaseSignOut, // Renamed to avoid conflict
+  signOut as firebaseSignOut,
   doc,
   setDoc,
   onSnapshot,
@@ -15,111 +15,115 @@ import {
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Profile from './components/Profile';
-import { User } from 'firebase/auth';
+import { AppState, User, Child, Memory, UserReview, FamilyGroup } from './types';
+
+
+// Returns a state object with all arrays guaranteed to be non-null
+const getInitialState = (user: User | null): AppState => ({
+  isAuthenticated: !!user,
+  user,
+  favorites: [],
+  favoriteDetails: {},
+  visited: [],
+  reviews: [],
+  memories: [],
+  children: [],
+  spouseName: '',
+  linkedEmail: '',
+  groups: [],
+});
 
 const App: React.FC = () => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isGuest, setIsGuest] = useState(false); // New state for guest mode
+  const [state, setState] = useState<AppState>(() => getInitialState(null));
+  const [isGuest, setIsGuest] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState('login'); // login, dashboard, profile
+  const [view, setView] = useState('login');
 
-  const handleSignIn = async (): Promise<void> => {
+  const handleSignIn = useCallback(async () => {
     setError(null);
+    setLoading(true);
     try {
-      // Prefer popup, fallback to redirect
-      await signInWithPopup(auth, googleProvider);
-    } catch (error: any) {
-      if (error.code === 'auth/popup-blocked') {
-        try {
-            await signInWithRedirect(auth, googleProvider);
-        } catch(e: any) {
-            setError(`Redirect login failed: ${e.message}`);
-            console.error("Redirect login error:", e);
-        }
-      } else {
-        setError(`Login failed: ${error.message}`);
-        console.error("Login error:", error);
-      }
+      await signInWithRedirect(auth, googleProvider);
+    } catch (e: any) {
+      setError(`Login failed: ${e.message}`);
+      console.error("Login redirect error:", e);
+      setLoading(false);
     }
-  };
+  }, []);
 
   const handleGuestLogin = () => {
     setIsGuest(true);
+    setState(getInitialState(null));
     setView('dashboard');
   };
 
-  const handleSignOut = async () => {
+  const handleSignOut = useCallback(async () => {
     setError(null);
     if (isGuest) {
       setIsGuest(false);
+      setState(getInitialState(null));
       setView('login');
       return;
     }
     try {
       await firebaseSignOut(auth);
-      setUser(null);
+      setState(getInitialState(null));
       setView('login');
     } catch (error: any) {
       console.error('Sign out error', error);
       setError(`Sign out failed: ${error.message}`);
     }
-  };
+  }, [isGuest]);
+
+  const handleUpdateState = useCallback((key: keyof AppState, value: any) => {
+    setState(prev => ({ ...prev, [key]: value }));
+  }, []);
+  
 
   useEffect(() => {
-    // If we are in guest mode, don't run firebase auth listeners
     if (isGuest) {
       setLoading(false);
       return;
     }
 
-    console.log("Auth state change: pending...");
-    console.log("Current location on load:", window.location.href);
-
-    const unsubscribe = onAuthStateChanged(auth, async (userAuth) => {
+    const unsubscribe = onAuthStateChanged(auth, (userAuth) => {
       if (userAuth) {
-        console.log("onAuthStateChanged: User found", userAuth);
         const userDocRef = doc(db, 'users', userAuth.uid);
-        
+
         const unsubscribeSnapshot = onSnapshot(userDocRef, (snap) => {
+          const initialState = getInitialState(userAuth);
           if (snap.exists()) {
-            setUser({ ...userAuth, ...snap.data() });
+            const dbState = snap.data();
+            // Deep merge to avoid undefined arrays
+            setState({
+              ...initialState,
+              ...dbState,
+              favorites: dbState.favorites || [],
+              favoriteDetails: dbState.favoriteDetails || {},
+              visited: dbState.visited || [],
+              reviews: dbState.reviews || [],
+              memories: dbState.memories || [],
+              children: dbState.children || [],
+              groups: dbState.groups || [],
+            });
           } else {
-            // Create user profile if it doesn't exist
-            const userData = {
-              uid: userAuth.uid,
-              email: userAuth.email,
-              displayName: userAuth.displayName,
-              photoURL: userAuth.photoURL,
-              createdAt: new Date(),
-            };
-            setDoc(userDocRef, userData);
-            setUser(userAuth);
+            setDoc(userDocRef, initialState, { merge: true });
+            setState(initialState);
           }
-          setView('dashboard'); // Go to dashboard after login/profile creation
+          setView('dashboard');
           setLoading(false);
         });
 
-        // Detach snapshot listener on cleanup
         return () => unsubscribeSnapshot();
       } else {
-        console.log("onAuthStateChanged: No user found. Checking for redirect result...");
         getRedirectResult(auth)
-          .then((result) => {
-            console.log("getRedirectResult:", result);
-            if (result && result.user) {
-              // This is handled by onAuthStateChanged, so this is just for debugging
-              console.log("User found via getRedirectResult", result.user);
-            } else {
-              console.log("No active user and no redirect user.");
-            }
-          })
           .catch((error) => {
-            console.error("Error getting redirect result:", error);
-            setError(`Redirect failed: ${error.code} - ${error.message}`);
+            console.error("Redirect result error:", error);
+            setError(`Login failed: ${error.message}`);
           })
           .finally(() => {
-            setUser(null);
+            setState(getInitialState(null));
             setView('login');
             setLoading(false);
           });
@@ -127,7 +131,7 @@ const App: React.FC = () => {
     });
 
     return () => unsubscribe();
-  }, [isGuest]); // Re-run effect if guest status changes
+  }, [isGuest]);
 
   const renderView = () => {
     if (loading) {
@@ -136,10 +140,10 @@ const App: React.FC = () => {
 
     switch (view) {
       case 'dashboard':
-        return <Dashboard user={user} onSignOut={handleSignOut} setView={setView} />;
+        return <Dashboard state={state} onSignOut={handleSignOut} setView={setView} onUpdateState={handleUpdateState} />;
       case 'profile':
-        return <Profile user={user} onSignOut={handleSignOut} setView={setView} />;
-      default: // 'login' view
+        return <Profile state={state} onSignOut={handleSignOut} setView={setView} onUpdateState={handleUpdateState} />;
+      default:
         return <Login onLogin={handleSignIn} onGuestLogin={handleGuestLogin} error={error} />;
     }
   };
