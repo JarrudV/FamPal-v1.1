@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Place } from '../types';
+import { Place, FriendCircle } from '../types';
 
 interface PlaceCardProps {
   place: Place;
@@ -8,9 +8,11 @@ interface PlaceCardProps {
   isFavorite: boolean;
   onToggleFavorite: () => void;
   onClick: () => void;
+  onAddToGroup?: () => void;
+  showAddToGroup?: boolean;
 }
 
-const PlaceCard: React.FC<PlaceCardProps> = ({ place, variant, isFavorite, onToggleFavorite, onClick }) => {
+const PlaceCard: React.FC<PlaceCardProps> = ({ place, variant, isFavorite, onToggleFavorite, onClick, onAddToGroup, showAddToGroup }) => {
   if (variant === 'hero') {
     return (
       <div 
@@ -62,12 +64,23 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place, variant, isFavorite, onTog
             <span className="text-sky-500">⭐ {place.rating}</span>
             <span>{place.priceLevel}</span>
           </div>
-          <button 
-            onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
-            className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${isFavorite ? 'text-sky-500 bg-sky-50' : 'text-slate-200 bg-slate-50'}`}
-          >
-            {isFavorite ? '💙' : '🤍'}
-          </button>
+          <div className="flex items-center gap-2">
+            {showAddToGroup && onAddToGroup && (
+              <button 
+                onClick={(e) => { e.stopPropagation(); onAddToGroup(); }}
+                className="w-9 h-9 rounded-full flex items-center justify-center transition-colors text-purple-500 bg-purple-50 hover:bg-purple-100"
+                title="Add to group"
+              >
+                👥
+              </button>
+            )}
+            <button 
+              onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
+              className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${isFavorite ? 'text-sky-500 bg-sky-50' : 'text-slate-200 bg-slate-50'}`}
+            >
+              {isFavorite ? '💙' : '🤍'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

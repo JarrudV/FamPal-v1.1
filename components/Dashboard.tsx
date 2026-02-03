@@ -38,6 +38,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   
   // Groups state
   const [selectedGroup, setSelectedGroup] = useState<FriendCircle | null>(null);
+  const [addToGroupPlace, setAddToGroupPlace] = useState<Place | null>(null);
 
   // Get user's location on mount
   useEffect(() => {
@@ -369,6 +370,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                   isFavorite={true}
                   onToggleFavorite={() => toggleFavorite(place.id)}
                   onClick={() => setSelectedPlace(place)}
+                  showAddToGroup={!isGuest && (state.friendCircles || []).length > 0}
+                  onAddToGroup={() => setAddToGroupPlace(place)}
                 />
               ))
             ) : (
@@ -376,6 +379,46 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                 No saved spots yet.
               </div>
             )}
+          </div>
+        )}
+
+        {addToGroupPlace && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={() => setAddToGroupPlace(null)}>
+            <div className="bg-white rounded-t-3xl w-full max-w-lg p-6 space-y-4 animate-slide-up" onClick={e => e.stopPropagation()}>
+              <h3 className="font-bold text-lg text-slate-800">Add to Group</h3>
+              <p className="text-sm text-slate-500">Select a group to add "{addToGroupPlace.name}":</p>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {(state.friendCircles || []).map(group => {
+                  const alreadyAdded = group.sharedPlaces.some(sp => sp.placeId === addToGroupPlace.id);
+                  return (
+                    <button
+                      key={group.id}
+                      onClick={() => {
+                        if (!alreadyAdded) {
+                          handleAddPlaceToGroup(group.id, addToGroupPlace.id, addToGroupPlace.name);
+                        }
+                        setAddToGroupPlace(null);
+                      }}
+                      disabled={alreadyAdded}
+                      className={`w-full p-4 rounded-xl text-left transition-colors ${
+                        alreadyAdded 
+                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
+                          : 'bg-purple-50 hover:bg-purple-100 text-slate-700'
+                      }`}
+                    >
+                      <span className="font-semibold">{group.name}</span>
+                      {alreadyAdded && <span className="text-xs ml-2">(already added)</span>}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => setAddToGroupPlace(null)}
+                className="w-full py-3 text-slate-500 text-sm font-medium"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         )}
 

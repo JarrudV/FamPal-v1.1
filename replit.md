@@ -99,3 +99,12 @@ For Google Sign-In to work:
   - Pro model foundation (isPro flag) for unlimited AI access
   - "Save Summary to Notes" button appends AI responses to venue notes with timestamps
   - Visual feedback with "Saved!" confirmation and remaining requests counter
+- **V1.4 Friend Circles (Private Groups)**:
+  - Create private groups with partner, family, or friends
+  - Share saved places with group members
+  - "Add to Group" button on saved places for quick sharing
+  - Group detail view with members list and shared places
+  - Invite members via shareable link or email
+  - Leave or delete groups (owner can delete, members can leave)
+  - Data models: FriendCircle, GroupMember, GroupPlace, GroupPlan
+  - Guest users see sign-in prompt on Groups tab
