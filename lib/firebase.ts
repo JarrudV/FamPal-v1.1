@@ -2,14 +2,14 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
   getAuth,
   onAuthStateChanged,
+  GoogleAuthProvider,
   signInWithRedirect,
   signInWithPopup,
   signOut,
   getRedirectResult,
-  GoogleAuthProvider,
   setPersistence,
-  browserLocalPersistence // Correct import
-} from 'firebase/auth';
+  browserLocalPersistence
+} from "firebase/auth";
 import {
   getFirestore,
   doc,
@@ -34,16 +34,16 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const isFirebaseConfigured = !!app;
 
 export const auth = app ? getAuth(app) : null;
+
+if (auth) {
+  setPersistence(auth, browserLocalPersistence).catch((e) => {
+    console.warn("Auth persistence failed", e);
+  });
+}
+
 export const db = app ? getFirestore(app) : null;
 export const googleProvider = app ? new GoogleAuthProvider() : null;
 
-// Set persistence
-if (auth) {
-  setPersistence(auth, browserLocalPersistence)
-    .catch((error) => {
-      console.error("Error setting auth persistence:", error);
-    });
-}
 
 export {
   onAuthStateChanged,
