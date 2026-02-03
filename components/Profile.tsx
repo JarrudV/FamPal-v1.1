@@ -165,6 +165,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
                   onChange={e => setChildAge(e.target.value)}
                 />
                 <button 
+                  type="button"
                   onClick={handleAddChild}
                   className="w-14 h-14 bg-sky-500 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-sky-100 active-press"
                 >
