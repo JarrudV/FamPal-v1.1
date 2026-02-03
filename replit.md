@@ -86,3 +86,10 @@ For Google Sign-In to work:
   - Partner linking with PartnerLink data model (pending/accepted status, unlink option)
   - Category-specific placeholder images from Unsplash
   - Share to WhatsApp & Add to Google Calendar buttons
+- **V1.2 Performance & UX**:
+  - Places caching (5-min TTL) to reduce API calls and speed up navigation
+  - Working search bar with search button and clear (X) functionality
+  - Postcode/address input - click location name to enter custom location
+  - Website and phone numbers now displayed on venue profiles (clickable)
+  - Improved geocoding with proper User-Agent headers
+  - Cache keys include family context (children ages) for accurate results
