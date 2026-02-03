@@ -118,13 +118,20 @@ const App: React.FC = () => {
         return () => unsubscribeSnapshot();
       } else {
         getRedirectResult(auth)
+          .then((result) => {
+            if (!result) {
+              // No redirect result, so we are not in a login flow.
+              // Stop loading and show the login page.
+              setState(getInitialState(null));
+              setView('login');
+              setLoading(false);
+            }
+            // If there is a redirect result, onAuthStateChanged will
+            // fire again with a user. We just wait.
+          })
           .catch((error) => {
             console.error("Redirect result error:", error);
             setError(`Login failed: ${error.message}`);
-          })
-          .finally(() => {
-            setState(getInitialState(null));
-            setView('login');
             setLoading(false);
           });
       }
