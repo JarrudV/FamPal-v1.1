@@ -1,13 +1,21 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import Logo from './Logo';
 
 type LoginProps = {
-  onLogin: () => void;
+  onLogin: () => Promise<void>;
   onGuestLogin: () => void;
+  error: string | null;
 };
 
-const Login: React.FC<LoginProps> = ({ onLogin, onGuestLogin }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, onGuestLogin, error }) => {
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  const handleLogin = () => {
+    setIsLoggingIn(true);
+    onLogin().finally(() => setIsLoggingIn(false));
+  };
+
   return (
     <div className="h-screen w-full bg-gradient-to-br from-[#7DD3FC] via-[#0EA5E9] to-[#0369A1] flex flex-col items-center justify-center px-8 text-white relative overflow-hidden">
       <div className="absolute top-[-10%] right-[-10%] w-64 h-64 rounded-full bg-white/20 blur-3xl"></div>
@@ -23,12 +31,23 @@ const Login: React.FC<LoginProps> = ({ onLogin, onGuestLogin }) => {
       </p>
 
       <div className="w-full max-w-xs space-y-4 relative z-10">
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative mb-4 text-sm" role="alert">
+            <strong className="font-bold">Login failed.</strong>
+            <span className="block sm:inline"> {error}</span>
+          </div>
+        )}
         <button
-          onClick={onLogin}
-          className="w-full bg-white text-[#0369A1] h-16 rounded-3xl font-black flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all text-sm uppercase tracking-widest"
+          onClick={handleLogin}
+          disabled={isLoggingIn}
+          className="w-full bg-white text-[#0369A1] h-16 rounded-3xl font-black flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all text-sm uppercase tracking-widest disabled:opacity-50"
         >
-          <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="" />
-          Sign in with Google
+          {isLoggingIn ? 'Signing in...' : (
+            <>
+              <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="" />
+              Sign in with Google
+            </>
+          )}
         </button>
         <button
           onClick={onGuestLogin}
