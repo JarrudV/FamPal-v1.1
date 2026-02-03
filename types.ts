@@ -46,6 +46,7 @@ export interface Memory {
   placeId: string;
   placeName: string;
   photoUrl: string;
+  photoUrls?: string[];
   caption: string;
   taggedFriends: string[];
   date: string;

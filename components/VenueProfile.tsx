@@ -87,7 +87,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   // Add Memory state
   const [showAddMemory, setShowAddMemory] = useState(false);
   const [memoryCaption, setMemoryCaption] = useState('');
-  const [memoryPhoto, setMemoryPhoto] = useState<string | null>(null);
+  const [memoryPhotos, setMemoryPhotos] = useState<string[]>([]);
   const [uploadingMemoryPhoto, setUploadingMemoryPhoto] = useState(false);
   
   // Fetch place details from Google Places for reviews and extra info
@@ -613,43 +613,6 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-xl font-extrabold text-sky-900">Family Photos</h3>
-                    <input 
-                      ref={fileInputRef}
-                      type="file" 
-                      accept="image/*" 
-                      onChange={handlePhotoUpload}
-                      className="hidden"
-                      id="photo-upload"
-                    />
-                    <button 
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploadingPhoto || !auth?.currentUser}
-                      className="text-sky-500 font-black text-[10px] uppercase tracking-widest bg-sky-50 px-4 py-2 rounded-xl disabled:opacity-50"
-                    >
-                      {uploadingPhoto ? 'Uploading...' : 'Upload +'}
-                    </button>
-                  </div>
-                  <p className="text-xs text-slate-400">Max 5MB per photo. Photos are private to you.</p>
-                  <div className="grid grid-cols-3 gap-4">
-                    {(favoriteData?.menuPhotos || []).map((url, idx) => (
-                      <div key={idx} className="aspect-square rounded-3xl overflow-hidden shadow-sm">
-                        <img src={url} alt={`Memory ${idx + 1}`} className="w-full h-full object-cover" />
-                      </div>
-                    ))}
-                    {(!favoriteData?.menuPhotos || favoriteData.menuPhotos.length < 6) && (
-                      <button 
-                        onClick={() => fileInputRef.current?.click()}
-                        className="aspect-square bg-slate-100 rounded-3xl border-2 border-dashed border-slate-200 flex items-center justify-center text-slate-300 text-2xl hover:bg-slate-50 transition-colors"
-                      >
-                        📸
-                      </button>
-                    )}
-                  </div>
-                </div>
-
                 {/* Add Memory Section */}
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
@@ -674,6 +637,11 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                           const file = e.target.files?.[0];
                           if (!file || !storage || !auth?.currentUser) return;
                           
+                          if (memoryPhotos.length >= 3) {
+                            alert('Maximum 3 photos per memory');
+                            return;
+                          }
+                          
                           if (file.size > 5 * 1024 * 1024) {
                             alert('Photo must be under 5MB');
                             return;
@@ -686,7 +654,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                             const storageRef = ref(storage, fileName);
                             await uploadBytes(storageRef, file);
                             const downloadUrl = await getDownloadURL(storageRef);
-                            setMemoryPhoto(downloadUrl);
+                            setMemoryPhotos(prev => [...prev, downloadUrl]);
                           } catch (error) {
                             alert('Failed to upload photo');
                           }
@@ -696,32 +664,42 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                         className="hidden"
                       />
                       
-                      <div className="flex gap-4">
-                        {memoryPhoto ? (
-                          <div className="relative w-24 h-24 rounded-2xl overflow-hidden">
-                            <img src={memoryPhoto} className="w-full h-full object-cover" alt="" />
+                      <div className="space-y-4">
+                        <div className="flex gap-2 flex-wrap">
+                          {memoryPhotos.map((photo, idx) => (
+                            <div key={idx} className="relative w-20 h-20 rounded-xl overflow-hidden">
+                              <img src={photo} className="w-full h-full object-cover" alt="" />
+                              <button
+                                onClick={() => setMemoryPhotos(prev => prev.filter((_, i) => i !== idx))}
+                                className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                          {memoryPhotos.length < 3 && (
                             <button
-                              onClick={() => setMemoryPhoto(null)}
-                              className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full text-xs"
+                              onClick={() => memoryFileInputRef.current?.click()}
+                              disabled={uploadingMemoryPhoto}
+                              className="w-20 h-20 bg-white rounded-xl border-2 border-dashed border-sky-200 flex flex-col items-center justify-center text-sky-300 hover:border-sky-400"
                             >
-                              ✕
+                              {uploadingMemoryPhoto ? (
+                                <span className="text-xs">...</span>
+                              ) : (
+                                <>
+                                  <span className="text-lg">📷</span>
+                                  <span className="text-[9px] font-bold">{memoryPhotos.length}/3</span>
+                                </>
+                              )}
                             </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => memoryFileInputRef.current?.click()}
-                            disabled={uploadingMemoryPhoto}
-                            className="w-24 h-24 bg-white rounded-2xl border-2 border-dashed border-sky-200 flex items-center justify-center text-2xl text-sky-300 hover:border-sky-400"
-                          >
-                            {uploadingMemoryPhoto ? '...' : '📷'}
-                          </button>
-                        )}
+                          )}
+                        </div>
                         
                         <textarea
                           value={memoryCaption}
                           onChange={(e) => setMemoryCaption(e.target.value)}
                           placeholder="What did you love about this place?"
-                          className="flex-1 p-4 bg-white rounded-2xl text-sm font-medium text-slate-600 resize-none outline-none focus:ring-2 focus:ring-sky-400"
+                          className="w-full p-4 bg-white rounded-2xl text-sm font-medium text-slate-600 resize-none outline-none focus:ring-2 focus:ring-sky-400"
                           rows={3}
                         />
                       </div>
@@ -742,7 +720,8 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                             onAddMemory({
                               placeId: place.id,
                               placeName: place.name,
-                              photoUrl: memoryPhoto || `https://picsum.photos/seed/${Date.now()}/400/400`,
+                              photoUrl: memoryPhotos[0] || `https://picsum.photos/seed/${Date.now()}/400/400`,
+                              photoUrls: memoryPhotos.length > 0 ? memoryPhotos : undefined,
                               caption: memoryCaption,
                               taggedFriends: [],
                               date: new Date().toISOString()
@@ -755,7 +734,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                           }
                           
                           setMemoryCaption('');
-                          setMemoryPhoto(null);
+                          setMemoryPhotos([]);
                           setShowAddMemory(false);
                           alert('Memory added!');
                         }}
