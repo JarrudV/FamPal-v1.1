@@ -6,14 +6,14 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
       server: {
-        port: parseInt(process.env.PORT) || 8080,
+        port: 5000,
         host: '0.0.0.0',
-        allowedHosts: ['.a.run.app'],
+        allowedHosts: true,
       },
       preview: {
-        port: parseInt(process.env.PORT) || 8080,
+        port: 5000,
         host: '0.0.0.0',
-        allowedHosts: ['.a.run.app'],
+        allowedHosts: true,
       },
       plugins: [react()],
       define: {
