@@ -98,8 +98,25 @@ const App: React.FC = () => {
   }, [isGuest]);
 
   const handleUpdateState = useCallback((key: keyof AppState, value: any) => {
-    setState(prev => ({ ...prev, [key]: value }));
-  }, []);
+    setState(prev => {
+      const newState = { ...prev, [key]: value };
+      
+      // Save to Firestore if user is logged in (not guest)
+      // Use auth.currentUser for more reliable UID access
+      const uid = auth?.currentUser?.uid || prev.user?.uid;
+      if (!isGuest && uid && db) {
+        const userDocRef = doc(db, 'users', uid);
+        // Only save the data fields, not the full state
+        const dataToSave: Record<string, any> = {};
+        dataToSave[key] = value;
+        setDoc(userDocRef, dataToSave, { merge: true }).catch(err => {
+          console.error('Failed to save to Firestore:', err);
+        });
+      }
+      
+      return newState;
+    });
+  }, [isGuest]);
   
 
   useEffect(() => {

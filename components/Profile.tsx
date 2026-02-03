@@ -70,7 +70,7 @@ const Profile: React.FC<ProfileProps> = ({ state, onSignOut, setView, onUpdateSt
         <div className="flex flex-col items-center gap-6">
           <div className="relative">
             <div className="w-36 h-36 rounded-[56px] overflow-hidden border-8 border-white shadow-2xl shadow-slate-200">
-              <img src={userPhoto} className="w-full h-full object-cover" alt="" />
+              <img src={userPhoto} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
             </div>
             <div className="absolute -bottom-2 -right-2 w-12 h-12 bg-sky-500 rounded-2xl flex items-center justify-center text-white border-4 border-[#F8FAFC] shadow-lg">
               📸

@@ -21,12 +21,67 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onSignOut, setView, onUpda
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [showAddMemory, setShowAddMemory] = useState(false);
   const [caption, setCaption] = useState('');
+  
+  // Location state
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationName, setLocationName] = useState('Locating...');
+  const [locationError, setLocationError] = useState<string | null>(null);
+  
+  // Radius slider state (in km)
+  const [radiusKm, setRadiusKm] = useState(10);
 
+  // Get user's location on mount
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation not supported');
+      setLocationName('Unknown Location');
+      // Fallback to default location
+      setUserLocation({ lat: 37.7749, lng: -122.4194 });
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        setUserLocation({ lat: latitude, lng: longitude });
+        
+        // Reverse geocode to get location name
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+          );
+          const data = await response.json();
+          const city = data.address?.city || data.address?.town || data.address?.village || data.address?.suburb || 'Your Area';
+          setLocationName(city);
+        } catch (err) {
+          setLocationName('Your Area');
+        }
+      },
+      (error) => {
+        console.error('Location error:', error);
+        setLocationError('Unable to get location');
+        setLocationName('Unknown Location');
+        // Fallback to default location
+        setUserLocation({ lat: 37.7749, lng: -122.4194 });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+    );
+  }, []);
+
+  // Fetch places when location, filter, or radius changes
   useEffect(() => {
     const fetchPlaces = async () => {
+      if (!userLocation) return;
+      
       setLoading(true);
       try {
-        const results = await fetchNearbyPlaces(37.7749, -122.4194, selectedFilter, state.children);
+        const results = await fetchNearbyPlaces(
+          userLocation.lat, 
+          userLocation.lng, 
+          selectedFilter, 
+          state.children,
+          radiusKm
+        );
         setPlaces(results);
       } catch (error) {
         console.error('Error fetching places:', error);
@@ -35,10 +90,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onSignOut, setView, onUpda
       }
     };
     
-    if (activeTab === 'explore') {
+    if (activeTab === 'explore' && userLocation) {
       fetchPlaces();
     }
-  }, [selectedFilter, activeTab, state.children]);
+  }, [selectedFilter, activeTab, state.children, userLocation, radiusKm]);
 
   const toggleFavorite = (placeId: string) => {
     const newFavorites = state.favorites.includes(placeId)
@@ -83,7 +138,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onSignOut, setView, onUpda
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-24">
-      <Header setView={setView} />
+      <Header setView={setView} user={state.user} locationName={locationName} />
       
       <div className="px-5 py-4">
         <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar">
@@ -95,9 +150,36 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onSignOut, setView, onUpda
         {activeTab === 'explore' && (
           <>
             <Filters selected={selectedFilter} onChange={setSelectedFilter} />
-            {loading ? (
+            
+            {/* Radius Slider */}
+            <div className="bg-white rounded-3xl p-5 mt-4 border border-slate-100 shadow-sm">
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Search Radius</span>
+                <span className="text-sm font-black text-sky-500">{radiusKm} km</span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="200"
+                value={radiusKm}
+                onChange={(e) => setRadiusKm(parseInt(e.target.value))}
+                className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-sky-500"
+              />
+              <div className="flex justify-between mt-2">
+                <span className="text-[10px] text-slate-400 font-bold">1 km</span>
+                <span className="text-[10px] text-slate-400 font-bold">200 km</span>
+              </div>
+            </div>
+
+            {locationError && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mt-4 text-amber-700 text-xs font-bold">
+                {locationError}. Showing default location.
+              </div>
+            )}
+            
+            {loading || !userLocation ? (
               <div className="py-24 text-center text-slate-300 font-black text-xs uppercase tracking-widest">
-                Finding adventures...
+                {!userLocation ? 'Getting your location...' : 'Finding adventures...'}
               </div>
             ) : (
               <div className="space-y-4 mt-4">

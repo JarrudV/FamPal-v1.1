@@ -1,8 +1,16 @@
-
 import React from 'react';
 import Logo from './Logo';
+import { User } from '../types';
 
-const Header: React.FC<{ setView: any }> = ({ setView }) => {
+interface HeaderProps {
+  setView: (view: string) => void;
+  user: User | null;
+  locationName: string;
+}
+
+const Header: React.FC<HeaderProps> = ({ setView, user, locationName }) => {
+  const userPhoto = user?.photoURL || 'https://picsum.photos/seed/guest/100';
+  
   return (
     <header className="px-5 pt-8 pb-4 bg-white/80 backdrop-blur-lg sticky top-0 z-50 border-b border-slate-100">
       <div className="flex flex-col gap-6">
@@ -12,7 +20,7 @@ const Header: React.FC<{ setView: any }> = ({ setView }) => {
             <div>
               <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest leading-none mb-1">Local Guide</p>
               <h1 className="text-lg font-black text-[#1E293B] flex items-center gap-1 leading-none">
-                San Francisco <span className="text-sky-400 text-xs">●</span>
+                {locationName} <span className="text-sky-400 text-xs">●</span>
               </h1>
             </div>
           </div>
@@ -20,7 +28,7 @@ const Header: React.FC<{ setView: any }> = ({ setView }) => {
             onClick={() => setView('profile')}
             className="w-11 h-11 rounded-2xl overflow-hidden border-2 border-white shadow-xl"
           >
-            <img src="https://picsum.photos/seed/mom/100" alt="Profile" className="w-full h-full object-cover" />
+            <img src={userPhoto} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
           </button>
         </div>
 
