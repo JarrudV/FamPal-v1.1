@@ -3,10 +3,8 @@ import {
   getAuth,
   onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithRedirect,
   signInWithPopup,
   signOut,
-  getRedirectResult,
   setPersistence,
   browserLocalPersistence
 } from "firebase/auth";
@@ -29,28 +27,36 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-export const isFirebaseConfigured = !!app;
+const isConfigValid = firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.authDomain;
 
-export const auth = app ? getAuth(app) : null;
+let app = null;
+let auth: ReturnType<typeof getAuth> | null = null;
+let db: ReturnType<typeof getFirestore> | null = null;
+let googleProvider: GoogleAuthProvider | null = null;
 
-if (auth) {
+if (isConfigValid) {
+  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+  auth = getAuth(app);
+  db = getFirestore(app);
+  googleProvider = new GoogleAuthProvider();
+
   setPersistence(auth, browserLocalPersistence).catch((e) => {
     console.warn("Auth persistence failed", e);
   });
 }
 
-export const db = app ? getFirestore(app) : null;
-export const googleProvider = app ? new GoogleAuthProvider() : null;
-
+export const isFirebaseConfigured = isConfigValid && !!app;
+export const firebaseConfigError = !isConfigValid 
+  ? "Firebase is not configured. Please add Firebase secrets (VITE_FIREBASE_API_KEY, etc.) in the Secrets tab."
+  : null;
 
 export {
+  auth,
+  db,
+  googleProvider,
   onAuthStateChanged,
-  signInWithRedirect,
   signInWithPopup,
   signOut,
-  getRedirectResult,
   doc,
   onSnapshot,
   setDoc,

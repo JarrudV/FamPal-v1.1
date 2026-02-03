@@ -10,11 +10,13 @@ import {
   setDoc,
   onSnapshot,
   db,
+  isFirebaseConfigured,
+  firebaseConfigError,
 } from './lib/firebase';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Profile from './components/Profile';
-import { AppState, User, Child, Memory, UserReview, FamilyGroup } from './types';
+import { AppState, User } from './types';
 
 
 // Returns a state object with all arrays guaranteed to be non-null
@@ -40,12 +42,24 @@ const App: React.FC = () => {
   const [view, setView] = useState('login');
 
   const handleSignIn = useCallback(async () => {
+    if (!isFirebaseConfigured || !auth || !googleProvider) {
+      setError(firebaseConfigError || "Firebase is not configured properly.");
+      return;
+    }
     setError(null);
     setLoading(true);
     try {
-      await signInWithPopup(auth!, googleProvider!);
+      await signInWithPopup(auth, googleProvider);
     } catch (e: any) {
-      setError(`Login failed: ${e.message}`);
+      if (e.code === 'auth/unauthorized-domain') {
+        setError("This domain is not authorized for Google Sign-In. Please add it to Firebase Console -> Authentication -> Settings -> Authorized domains.");
+      } else if (e.code === 'auth/popup-blocked') {
+        setError("Popup was blocked. Please allow popups for this site.");
+      } else if (e.code === 'auth/popup-closed-by-user') {
+        setError(null);
+      } else {
+        setError(`Login failed: ${e.message}`);
+      }
       console.error("Login popup error:", e);
       setLoading(false);
     }
@@ -86,8 +100,17 @@ const App: React.FC = () => {
       return;
     }
 
+    if (!isFirebaseConfigured || !auth) {
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (userAuth) => {
       if (userAuth) {
+        if (!db) {
+          setLoading(false);
+          return;
+        }
         const userDocRef = doc(db, 'users', userAuth.uid);
 
         const unsubscribeSnapshot = onSnapshot(userDocRef, (snap) => {

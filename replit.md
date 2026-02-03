@@ -18,9 +18,10 @@ A React-based family adventure app that helps parents find curated family-friend
 ├── index.html           # HTML template
 ├── vite.config.ts       # Vite configuration
 ├── components/          # React components
-├── lib/                 # Library utilities
+├── lib/                 # Library utilities (Firebase setup)
 ├── src/                 # Source files
 ├── dataconnect/         # Firebase Data Connect config
+├── geminiService.ts     # Gemini AI integration
 └── types.ts             # TypeScript type definitions
 ```
 
@@ -29,10 +30,21 @@ A React-based family adventure app that helps parents find curated family-friend
 - Run `npm run build` to create a production build
 - The app uses hot module replacement (HMR) for development
 
-## Environment Variables
-The app expects:
-- `GEMINI_API_KEY` - Google Gemini API key for AI features
-- Firebase configuration in `.env` file
+## Environment Variables (Secrets)
+All secrets are stored securely in Replit Secrets:
+- `VITE_FIREBASE_API_KEY` - Firebase API key
+- `VITE_FIREBASE_AUTH_DOMAIN` - Firebase auth domain
+- `VITE_FIREBASE_PROJECT_ID` - Firebase project ID
+- `VITE_FIREBASE_STORAGE_BUCKET` - Firebase storage bucket
+- `VITE_FIREBASE_MESSAGING_SENDER_ID` - Firebase messaging sender ID
+- `VITE_FIREBASE_APP_ID` - Firebase app ID
+- `VITE_GEMINI_API_KEY` - Google Gemini API key
+
+## Firebase Authentication Setup
+For Google Sign-In to work:
+1. Go to Firebase Console -> Authentication -> Settings -> Authorized domains
+2. Add your Replit domain (e.g., `*.replit.dev`)
+3. Add your Firebase App Hosting domain if publishing there
 
 ## Deployment
 - Configured for static deployment
