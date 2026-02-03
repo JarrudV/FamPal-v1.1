@@ -9,10 +9,22 @@ interface ProfileProps {
   onUpdateState: (key: keyof AppState, value: any) => void;
 }
 
+const generateInviteCode = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+};
+
 const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, onUpdateState }) => {
   const [childName, setChildName] = useState('');
   const [childAge, setChildAge] = useState('');
   const [spouseEmail, setSpouseEmail] = useState('');
+  const [partnerCode, setPartnerCode] = useState('');
+  const [showCodeInput, setShowCodeInput] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
 
   const handleAddChild = () => {
     if (!childName || !childAge) return;
@@ -26,18 +38,42 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
     onUpdateState('children', state.children.filter(c => c.id !== id));
   };
 
-  const handleLinkSpouse = () => {
-    if (!spouseEmail) return;
+  const handleGenerateCode = () => {
+    const code = generateInviteCode();
     const partnerLink: PartnerLink = {
-      partnerEmail: spouseEmail,
-      partnerName: spouseEmail.split('@')[0],
+      inviteCode: code,
       linkedAt: new Date().toISOString(),
       status: 'pending'
     };
     onUpdateState('partnerLink', partnerLink);
-    onUpdateState('spouseName', spouseEmail.split('@')[0]);
-    onUpdateState('linkedEmail', spouseEmail);
-    setSpouseEmail('');
+  };
+
+  const handleCopyCode = async () => {
+    if (state.partnerLink?.inviteCode) {
+      await navigator.clipboard.writeText(state.partnerLink.inviteCode);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    }
+  };
+
+  const handleShareCode = () => {
+    if (state.partnerLink?.inviteCode) {
+      const message = `Join me on FamPals! Use my partner code: ${state.partnerLink.inviteCode}\n\nDownload the app: ${window.location.origin}`;
+      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+    }
+  };
+
+  const handleJoinWithCode = () => {
+    if (!partnerCode || partnerCode.length !== 6) return;
+    const partnerLink: PartnerLink = {
+      inviteCode: partnerCode.toUpperCase(),
+      linkedAt: new Date().toISOString(),
+      status: 'accepted',
+      partnerName: 'Partner'
+    };
+    onUpdateState('partnerLink', partnerLink);
+    setPartnerCode('');
+    setShowCodeInput(false);
   };
 
   const handleUnlinkPartner = () => {
@@ -180,39 +216,94 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
           <div className="space-y-6">
             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Connections</h3>
             <div className="bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm space-y-6">
-              {state.partnerLink || state.spouseName ? (
-                <div className="flex items-center gap-4 p-5 bg-sky-50 rounded-3xl border border-sky-100">
-                  <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-xl shadow-sm">💑</div>
-                  <div className="flex-1">
-                    <p className="text-sm font-black text-sky-900">{state.partnerLink?.partnerName || state.spouseName}</p>
-                    <p className="text-[10px] text-sky-400 font-black uppercase tracking-widest">
-                      {state.partnerLink?.status === 'accepted' ? 'Connected' : 'Invite Sent'}
-                    </p>
-                    {state.partnerLink?.partnerEmail && (
-                      <p className="text-[9px] text-slate-400 mt-1">{state.partnerLink.partnerEmail}</p>
-                    )}
+              {state.partnerLink ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4 p-5 bg-sky-50 rounded-3xl border border-sky-100">
+                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-xl shadow-sm">💑</div>
+                    <div className="flex-1">
+                      {state.partnerLink.status === 'accepted' ? (
+                        <>
+                          <p className="text-sm font-black text-sky-900">{state.partnerLink.partnerName || 'Partner'}</p>
+                          <p className="text-[10px] text-green-500 font-black uppercase tracking-widest">Connected</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm font-black text-sky-900">Your Invite Code</p>
+                          <p className="text-2xl font-black text-sky-500 tracking-[0.3em] mt-1">{state.partnerLink.inviteCode}</p>
+                          <p className="text-[10px] text-amber-500 font-black uppercase tracking-widest mt-1">Waiting for partner</p>
+                        </>
+                      )}
+                    </div>
+                    <button 
+                      onClick={handleUnlinkPartner}
+                      className="text-slate-300 hover:text-rose-500 text-xs font-bold transition-colors"
+                    >
+                      Unlink
+                    </button>
                   </div>
-                  <button 
-                    onClick={handleUnlinkPartner}
-                    className="text-slate-300 hover:text-rose-500 text-xs font-bold transition-colors"
-                  >
-                    Unlink
-                  </button>
+                  
+                  {state.partnerLink.status === 'pending' && (
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={handleCopyCode}
+                        className="flex-1 h-12 bg-slate-100 rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-600 active-press"
+                      >
+                        {codeCopied ? '✓ Copied!' : 'Copy Code'}
+                      </button>
+                      <button 
+                        onClick={handleShareCode}
+                        className="flex-1 h-12 bg-green-500 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest active-press"
+                      >
+                        Share via WhatsApp
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="flex gap-2">
-                  <input 
-                    placeholder="Partner's Email" 
-                    className="flex-1 h-14 bg-slate-50 border-none rounded-2xl px-5 text-sm font-bold outline-none"
-                    value={spouseEmail}
-                    onChange={e => setSpouseEmail(e.target.value)}
-                  />
-                  <button 
-                    onClick={handleLinkSpouse}
-                    className="bg-[#1E293B] text-white px-6 rounded-2xl text-[11px] font-black uppercase tracking-widest active-press"
-                  >
-                    Link
-                  </button>
+                <div className="space-y-4">
+                  <p className="text-sm text-slate-500 text-center">Link with your partner to share saved places and plan adventures together.</p>
+                  
+                  {showCodeInput ? (
+                    <div className="space-y-3">
+                      <div className="flex gap-2">
+                        <input 
+                          placeholder="Enter 6-digit code" 
+                          className="flex-1 h-14 bg-slate-50 border-none rounded-2xl px-5 text-lg font-black text-center uppercase tracking-[0.2em] outline-none"
+                          maxLength={6}
+                          value={partnerCode}
+                          onChange={e => setPartnerCode(e.target.value.toUpperCase())}
+                        />
+                        <button 
+                          onClick={handleJoinWithCode}
+                          disabled={partnerCode.length !== 6}
+                          className="bg-sky-500 text-white px-6 rounded-2xl text-[11px] font-black uppercase tracking-widest active-press disabled:opacity-50"
+                        >
+                          Join
+                        </button>
+                      </div>
+                      <button 
+                        onClick={() => setShowCodeInput(false)}
+                        className="w-full text-slate-400 text-xs font-bold"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={handleGenerateCode}
+                        className="flex-1 h-14 bg-sky-500 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest active-press"
+                      >
+                        Generate Invite Code
+                      </button>
+                      <button 
+                        onClick={() => setShowCodeInput(true)}
+                        className="flex-1 h-14 bg-slate-100 rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-600 active-press"
+                      >
+                        I Have a Code
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

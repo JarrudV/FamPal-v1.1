@@ -100,10 +100,12 @@ export interface FamilyGroup {
 }
 
 export interface PartnerLink {
-  partnerEmail: string;
-  partnerName: string;
+  partnerEmail?: string;
+  partnerName?: string;
+  partnerUserId?: string;
   linkedAt: string;
   status: 'pending' | 'accepted';
+  inviteCode?: string;
 }
 
 export interface GroupMember {
