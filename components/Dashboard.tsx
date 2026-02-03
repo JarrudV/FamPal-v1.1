@@ -24,6 +24,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [showAddMemory, setShowAddMemory] = useState(false);
   const [caption, setCaption] = useState('');
+  const [memoryPhoto, setMemoryPhoto] = useState<string | null>(null);
+  const [memoryVenueId, setMemoryVenueId] = useState<string>('');
+  const [memoryVenueName, setMemoryVenueName] = useState<string>('');
   
   // Location state
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -170,19 +173,51 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     }
   };
 
+  const handleMemoryPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.size <= 5 * 1024 * 1024) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setMemoryPhoto(event.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const captureMemory = () => {
-    if (!caption) return;
+    if (!caption || !memoryVenueId) return;
     const newMemory: Memory = {
       id: Date.now().toString(),
-      placeId: 'manual',
-      placeName: 'Current Location',
-      photoUrl: `https://picsum.photos/seed/${Date.now()}/600/600`,
+      placeId: memoryVenueId,
+      placeName: memoryVenueName || 'Adventure',
+      photoUrl: memoryPhoto || `https://picsum.photos/seed/${Date.now()}/600/600`,
       caption,
       taggedFriends: [],
-      date: new Date().toLocaleDateString()
+      date: new Date().toISOString()
     };
     onUpdateState('memories', [...state.memories, newMemory]);
+
+    // Auto-mark venue as visited
+    const visitedPlaces = state.visitedPlaces || [];
+    const alreadyVisited = visitedPlaces.some(v => v.placeId === memoryVenueId);
+    if (!alreadyVisited) {
+      const selectedVenue = places.find(p => p.id === memoryVenueId);
+      const newVisit: VisitedPlace = {
+        placeId: memoryVenueId,
+        placeName: memoryVenueName,
+        placeType: selectedVenue?.type || 'all',
+        imageUrl: selectedVenue?.imageUrl,
+        visitedAt: new Date().toISOString(),
+        notes: '',
+        isFavorite: state.favorites.includes(memoryVenueId),
+      };
+      onUpdateState('visitedPlaces', [...visitedPlaces, newVisit]);
+    }
+
     setCaption('');
+    setMemoryPhoto(null);
+    setMemoryVenueId('');
+    setMemoryVenueName('');
     setShowAddMemory(false);
   };
 
@@ -296,6 +331,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         place={selectedPlace} 
         isFavorite={state.favorites.includes(selectedPlace.id)}
         isVisited={(state.visitedPlaces || []).some(v => v.placeId === selectedPlace.id)}
+        memories={state.memories}
         onToggleFavorite={() => toggleFavorite(selectedPlace.id)}
         onMarkVisited={() => markVisited(selectedPlace)}
         onClose={() => setSelectedPlace(null)}
@@ -563,7 +599,63 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
 
               {showAddMemory && (
                 <div className="bg-white p-6 rounded-[40px] shadow-2xl border border-sky-50 space-y-4 animate-slide-up">
-                  <h3 className="font-black text-sky-900">Tag a Memory</h3>
+                  <h3 className="font-black text-sky-900">Add a Memory</h3>
+                  
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Tag a Venue</label>
+                    <select
+                      value={memoryVenueId}
+                      onChange={(e) => {
+                        const venue = [...places, ...favoritePlaces].find(p => p.id === e.target.value);
+                        setMemoryVenueId(e.target.value);
+                        setMemoryVenueName(venue?.name || '');
+                      }}
+                      className="w-full h-14 bg-slate-50 border-none rounded-2xl px-5 text-sm font-bold text-slate-600 outline-none appearance-none"
+                    >
+                      <option value="">Select a place...</option>
+                      {state.favorites.length > 0 && (
+                        <optgroup label="Your Saved Places">
+                          {favoritePlaces.map(p => (
+                            <option key={`fav-${p.id}`} value={p.id}>{p.name}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      <optgroup label="Nearby Places">
+                        {places.filter(p => !state.favorites.includes(p.id)).map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Add a Photo</label>
+                    <div className="flex gap-3">
+                      {memoryPhoto ? (
+                        <div className="relative w-24 h-24 rounded-2xl overflow-hidden">
+                          <img src={memoryPhoto} className="w-full h-full object-cover" alt="" />
+                          <button 
+                            onClick={() => setMemoryPhoto(null)}
+                            className="absolute top-1 right-1 w-6 h-6 bg-black/50 rounded-full text-white text-xs"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="w-24 h-24 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 flex items-center justify-center cursor-pointer hover:bg-slate-100">
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            className="hidden" 
+                            onChange={handleMemoryPhotoUpload}
+                          />
+                          <span className="text-2xl text-slate-300">📷</span>
+                        </label>
+                      )}
+                      <p className="text-xs text-slate-400 flex-1">Tap to add a photo from your adventure (max 5MB)</p>
+                    </div>
+                  </div>
+
                   <textarea 
                     placeholder="What happened today?..."
                     className="w-full p-5 bg-slate-50 border-none rounded-3xl text-sm font-bold text-slate-600 outline-none"
@@ -573,7 +665,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                   />
                   <button 
                     onClick={captureMemory}
-                    className="w-full h-14 bg-sky-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-sky-100"
+                    disabled={!memoryVenueId || !caption}
+                    className="w-full h-14 bg-sky-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-sky-100 disabled:opacity-50"
                   >
                     Save Memory
                   </button>

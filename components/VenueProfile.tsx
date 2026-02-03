@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { Place, FavoriteData, ACTIVITY_OPTIONS } from '../types';
+import { Place, FavoriteData, ACTIVITY_OPTIONS, Memory } from '../types';
 import { askAboutPlace, generateFamilySummary } from '../geminiService';
 import { storage, auth, ref, uploadBytes, getDownloadURL } from '../lib/firebase';
 
@@ -8,6 +8,7 @@ interface VenueProfileProps {
   place: Place;
   isFavorite: boolean;
   isVisited: boolean;
+  memories?: Memory[];
   favoriteData?: FavoriteData;
   childrenAges?: number[];
   isGuest?: boolean;
@@ -26,6 +27,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   place, 
   isFavorite, 
   isVisited,
+  memories = [],
   favoriteData, 
   childrenAges = [],
   isGuest = false,
@@ -37,6 +39,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   onUpdateDetails,
   onIncrementAiRequests
 }) => {
+  const venueMemories = memories.filter(m => m.placeId === place.id);
   const [activeTab, setActiveTab] = useState<'info' | 'parent'>('info');
   const [aiQuestion, setAiQuestion] = useState('');
   const [aiAnswer, setAiAnswer] = useState('');
@@ -331,6 +334,37 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                 </div>
               </div>
             </section>
+
+            {venueMemories.length > 0 && (
+              <section className="space-y-4">
+                <h3 className="text-xl font-extrabold text-[#1E293B] flex items-center gap-2">
+                  <span>📸</span> Your Memories
+                </h3>
+                <div className="space-y-3">
+                  {venueMemories.map(memory => (
+                    <div key={memory.id} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100">
+                      <div className="flex gap-4 p-4">
+                        {memory.photoUrl && (
+                          <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0">
+                            <img src={memory.photoUrl} className="w-full h-full object-cover" alt="" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-slate-700">{memory.caption}</p>
+                          <p className="text-xs text-slate-400 mt-2">
+                            {new Date(memory.date).toLocaleDateString('en-US', { 
+                              month: 'short', 
+                              day: 'numeric', 
+                              year: 'numeric' 
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
           </>
         ) : (
           <div className="animate-slide-up space-y-8">

@@ -128,6 +128,15 @@ For Google Sign-In to work:
   - Responsive text sizing for venue names
   - Minimum 44px touch targets for buttons
   - Word-break for long place names
+- **V1.8 Improved Features**:
+  - Partner linking now uses 6-digit invite codes (no email required)
+  - Generate code, copy or share via WhatsApp
+  - Partners enter code to link accounts
+  - Enhanced Memories: Tag a venue when adding memory
+  - Photo upload for memories (max 5MB)
+  - Adding memory auto-marks venue as visited
+  - Memories appear as activity feed on venue profile page
+  - Venue selector shows saved places and nearby places
 - **Guest Mode Restrictions**:
   - Memories tab: Sign-in required prompt
   - Profile family updates: Sign-in required prompt
