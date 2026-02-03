@@ -11,6 +11,7 @@ import { UpgradePrompt, LimitIndicator } from './UpgradePrompt';
 import { searchNearbyPlaces, textSearchPlaces } from '../placesService';
 import { getLimits, canSavePlace, canAddMemory, isPaidTier } from '../lib/entitlements';
 import { updateLocation, updateRadius, updateCategory, updateActiveCircle } from '../lib/profileSync';
+import { ShareMemoryModal, QuickShareButton } from './ShareMemory';
 
 interface DashboardProps {
   state: AppState;
@@ -69,6 +70,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   
   // Upgrade prompt state
   const [showUpgradePrompt, setShowUpgradePrompt] = useState<'savedPlaces' | 'memories' | null>(null);
+  
+  // Share memory state
+  const [shareMemory, setShareMemory] = useState<Memory | null>(null);
   
   // Plan & Billing modal
   const [showPlanBilling, setShowPlanBilling] = useState(false);
@@ -761,6 +765,13 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                       <p className="text-[10px] font-black leading-tight mb-1">{memory.caption}</p>
                       <p className="text-[8px] font-bold opacity-60 uppercase tracking-widest">@{memory.placeName}</p>
                     </div>
+                    <button
+                      onClick={() => setShareMemory(memory)}
+                      className="absolute top-3 right-3 w-9 h-9 bg-white/90 backdrop-blur-sm text-sky-600 rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Share memory"
+                    >
+                      📤
+                    </button>
                   </div>
                 ))}
               </div>
@@ -878,14 +889,52 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
       )}
       
       {showUpgradePrompt && (
-        <UpgradePrompt 
-          feature={showUpgradePrompt}
-          entitlement={state.entitlement}
-          onClose={() => setShowUpgradePrompt(null)}
-          onUpgrade={() => {
-            setShowUpgradePrompt(null);
-            setShowPlanBilling(true);
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6" onClick={() => setShowUpgradePrompt(null)}>
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+            <UpgradePrompt 
+              feature={showUpgradePrompt === 'savedPlaces' ? 'saved places' : 'memories'}
+              currentLimit={showUpgradePrompt === 'savedPlaces' ? limits.savedPlaces : limits.memories}
+              onUpgrade={() => {
+                setShowUpgradePrompt(null);
+                setShowPlanBilling(true);
+              }}
+            />
+            <button 
+              onClick={() => setShowUpgradePrompt(null)}
+              className="w-full mt-4 py-2 text-slate-500 text-sm font-medium"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {shareMemory && (
+        <ShareMemoryModal
+          memory={shareMemory}
+          circles={state.friendCircles || []}
+          onShareToCircle={(memory, circleId) => {
+            const circle = (state.friendCircles || []).find(c => c.id === circleId);
+            if (circle) {
+              const sharedPlace: GroupPlace = {
+                placeId: memory.placeId,
+                placeName: memory.placeName,
+                addedBy: state.user?.uid || 'guest',
+                addedByName: state.user?.displayName || 'Guest',
+                addedAt: new Date().toISOString(),
+                note: memory.caption
+              };
+              const updatedCircle = {
+                ...circle,
+                sharedPlaces: [...circle.sharedPlaces, sharedPlace]
+              };
+              const updatedCircles = (state.friendCircles || []).map(c => 
+                c.id === circleId ? updatedCircle : c
+              );
+              onUpdateState('friendCircles', updatedCircles);
+            }
           }}
+          onClose={() => setShareMemory(null)}
         />
       )}
     </div>
