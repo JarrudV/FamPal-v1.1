@@ -19,3 +19,5 @@ env:
     secret: VITE_FIREBASE_MEASUREMENT_ID
   - variable: VITE_GEMINI_API_KEY
     secret: VITE_GEMINI_API_KEY
+  - variable: VITE_GOOGLE_PLACES_API_KEY
+    secret: VITE_GOOGLE_PLACES_API_KEY
