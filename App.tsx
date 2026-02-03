@@ -195,7 +195,7 @@ const App: React.FC = () => {
       case 'dashboard':
         return <Dashboard state={state} isGuest={isGuest} onSignOut={handleSignOut} setView={setView} onUpdateState={handleUpdateState} />;
       case 'profile':
-        return <Profile state={state} onSignOut={handleSignOut} setView={setView} onUpdateState={handleUpdateState} />;
+        return <Profile state={state} isGuest={isGuest} onSignOut={handleSignOut} setView={setView} onUpdateState={handleUpdateState} />;
       default:
         return <Login onLogin={handleSignIn} onGuestLogin={handleGuestLogin} error={error} />;
     }

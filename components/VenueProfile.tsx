@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { Place, FavoriteData } from '../types';
+import { Place, FavoriteData, ACTIVITY_OPTIONS } from '../types';
 import { askAboutPlace, generateFamilySummary } from '../geminiService';
 import { storage, auth, ref, uploadBytes, getDownloadURL } from '../lib/firebase';
 
@@ -342,6 +342,43 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                     value={favoriteData?.notes || ''}
                     onChange={(e) => onUpdateDetails({ notes: e.target.value })}
                   />
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-xl font-extrabold text-sky-900 flex items-center gap-2">
+                    <span className="opacity-50 text-base">🏷️</span> Activities & Features
+                  </h3>
+                  <p className="text-xs text-slate-500">Tag what's available at this spot for quick reference</p>
+                  
+                  {Object.entries(ACTIVITY_OPTIONS).map(([category, activities]) => (
+                    <div key={category} className="bg-white rounded-2xl p-4 shadow-sm">
+                      <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-3">{category}</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {activities.map((activity) => {
+                          const isSelected = favoriteData?.activities?.includes(activity);
+                          return (
+                            <button
+                              key={activity}
+                              onClick={() => {
+                                const currentActivities = favoriteData?.activities || [];
+                                const newActivities = isSelected
+                                  ? currentActivities.filter(a => a !== activity)
+                                  : [...currentActivities, activity];
+                                onUpdateDetails({ activities: newActivities });
+                              }}
+                              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                                isSelected
+                                  ? 'bg-sky-500 text-white shadow-sm'
+                                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                              }`}
+                            >
+                              {activity}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 <div className="space-y-4">

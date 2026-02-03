@@ -100,11 +100,22 @@ For Google Sign-In to work:
   - "Save Summary to Notes" button appends AI responses to venue notes with timestamps
   - Visual feedback with "Saved!" confirmation and remaining requests counter
 - **V1.4 Friend Circles (Private Groups)**:
-  - Create private groups with partner, family, or friends
+  - Create private groups with partner, family, or friends (max 2 circles per user)
   - Share saved places with group members
   - "Add to Group" button on saved places for quick sharing
   - Group detail view with members list and shared places
   - Invite members via shareable link or email
   - Leave or delete groups (owner can delete, members can leave)
   - Data models: FriendCircle, GroupMember, GroupPlace, GroupPlan
-  - Guest users see sign-in prompt on Groups tab
+  - Guest users see teaser UI with sample groups and login CTA
+- **V1.5 Parents Notebook Activities**:
+  - Activities/features tagging system in Parent's Notebook
+  - 40+ predefined activity tags across 4 categories (Kids & Family, Nature & Outdoors, Food & Drink, Logistics & Vibes)
+  - Toggle tags on/off per saved place for quick reference
+  - Tags persist to Firestore with favoriteData
+- **Guest Mode Restrictions**:
+  - Memories tab: Sign-in required prompt
+  - Profile family updates: Sign-in required prompt
+  - Connections/partner linking: Hidden for guests
+  - Groups: Teaser UI with sample circles shown
+  - Family info messaging: "Add children's ages for better AI recommendations"

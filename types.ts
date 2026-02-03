@@ -46,7 +46,27 @@ export interface FavoriteData {
   costEstimate: string;
   menuPhotos: string[];
   lastVisited?: string;
+  activities?: string[];
+  customTags?: string[];
 }
+
+export const ACTIVITY_OPTIONS = {
+  'Kids & Family': [
+    'Jumping castle', 'Outdoor play area', 'Indoor play area', 'Jungle gym',
+    'Water features', 'Pool', 'Petting zoo', 'Animal encounters',
+    'Kid-friendly menu', 'High chair available', 'Changing facilities',
+    'Pram friendly', 'Shaded seating', 'Safe parking', 'Birthday party friendly'
+  ],
+  'Nature & Outdoors': [
+    'Hike', 'Easy walk', 'Trail running', 'Picnic spot', 'Beach', 'Dam/lake', 'Farm visit'
+  ],
+  'Food & Drink': [
+    'Coffee spot', 'Breakfast', 'Lunch', 'Dinner', 'Wine tasting', 'Beer tasting', 'Craft gin tasting'
+  ],
+  'Logistics & Vibes': [
+    'Free entry', 'Paid entry', 'Booking required', 'Dog friendly', 'Wheelchair accessible', 'Quiet', 'Busy/noisy'
+  ]
+} as const;
 
 export interface Child {
   id: string;

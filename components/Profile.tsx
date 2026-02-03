@@ -3,12 +3,13 @@ import { AppState, Child, PartnerLink } from '../types';
 
 interface ProfileProps {
   state: AppState;
+  isGuest: boolean;
   onSignOut: () => void;
   setView: (view: string) => void;
   onUpdateState: (key: keyof AppState, value: any) => void;
 }
 
-const Profile: React.FC<ProfileProps> = ({ state, onSignOut, setView, onUpdateState }) => {
+const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, onUpdateState }) => {
   const [childName, setChildName] = useState('');
   const [childAge, setChildAge] = useState('');
   const [spouseEmail, setSpouseEmail] = useState('');
@@ -108,83 +109,114 @@ const Profile: React.FC<ProfileProps> = ({ state, onSignOut, setView, onUpdateSt
 
         <div className="space-y-6">
           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Your Family</h3>
-          <div className="bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm space-y-6">
-            <div className="space-y-3">
-              {state.children.map(child => (
-                <div key={child.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-100/50">
-                  <div>
-                    <p className="font-black text-sm text-[#1E293B]">{child.name}</p>
-                    <p className="text-[9px] text-sky-500 font-black uppercase tracking-widest">Age {child.age}</p>
-                  </div>
-                  <button onClick={() => handleRemoveChild(child.id)} className="text-slate-300 font-black text-[10px] uppercase hover:text-rose-500 transition-colors">Remove</button>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex gap-2">
-              <input 
-                placeholder="Child's Name" 
-                className="flex-1 h-14 bg-slate-50 border-none rounded-2xl px-5 text-sm font-bold outline-none focus:bg-white focus:ring-2 focus:ring-sky-100"
-                value={childName}
-                onChange={e => setChildName(e.target.value)}
-              />
-              <input 
-                placeholder="Age" 
-                type="number"
-                className="w-20 h-14 bg-slate-50 border-none rounded-2xl px-4 text-sm font-bold text-center outline-none focus:bg-white focus:ring-2 focus:ring-sky-100"
-                value={childAge}
-                onChange={e => setChildAge(e.target.value)}
-              />
-              <button 
-                onClick={handleAddChild}
-                className="w-14 h-14 bg-sky-500 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-sky-100 active-press"
-              >
-                +
-              </button>
+          
+          <div className="bg-gradient-to-r from-purple-50 to-violet-50 rounded-2xl p-4 border border-purple-100">
+            <div className="flex items-start gap-3">
+              <span className="text-xl">✨</span>
+              <div>
+                <p className="text-sm font-bold text-purple-800">Better recommendations for your family</p>
+                <p className="text-xs text-purple-600 mt-1">
+                  Add your children's ages below to get personalized AI summaries and place recommendations tailored to your family's needs.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="space-y-6">
-          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Connections</h3>
-          <div className="bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm space-y-6">
-            {state.partnerLink || state.spouseName ? (
-              <div className="flex items-center gap-4 p-5 bg-sky-50 rounded-3xl border border-sky-100">
-                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-xl shadow-sm">💑</div>
-                <div className="flex-1">
-                  <p className="text-sm font-black text-sky-900">{state.partnerLink?.partnerName || state.spouseName}</p>
-                  <p className="text-[10px] text-sky-400 font-black uppercase tracking-widest">
-                    {state.partnerLink?.status === 'accepted' ? 'Connected' : 'Invite Sent'}
-                  </p>
-                  {state.partnerLink?.partnerEmail && (
-                    <p className="text-[9px] text-slate-400 mt-1">{state.partnerLink.partnerEmail}</p>
-                  )}
+          {isGuest ? (
+            <div className="bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm">
+              <div className="text-center py-6">
+                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 mx-auto">
+                  <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
                 </div>
-                <button 
-                  onClick={handleUnlinkPartner}
-                  className="text-slate-300 hover:text-rose-500 text-xs font-bold transition-colors"
-                >
-                  Unlink
-                </button>
+                <h3 className="text-base font-semibold text-slate-700 mb-2">Sign in to save your family</h3>
+                <p className="text-sm text-slate-500 max-w-xs mx-auto">
+                  Create an account to save your children's details and get personalized recommendations.
+                </p>
               </div>
-            ) : (
+            </div>
+          ) : (
+            <div className="bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm space-y-6">
+              <div className="space-y-3">
+                {state.children.map(child => (
+                  <div key={child.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-100/50">
+                    <div>
+                      <p className="font-black text-sm text-[#1E293B]">{child.name}</p>
+                      <p className="text-[9px] text-sky-500 font-black uppercase tracking-widest">Age {child.age}</p>
+                    </div>
+                    <button onClick={() => handleRemoveChild(child.id)} className="text-slate-300 font-black text-[10px] uppercase hover:text-rose-500 transition-colors">Remove</button>
+                  </div>
+                ))}
+              </div>
+
               <div className="flex gap-2">
                 <input 
-                  placeholder="Partner's Email" 
-                  className="flex-1 h-14 bg-slate-50 border-none rounded-2xl px-5 text-sm font-bold outline-none"
-                  value={spouseEmail}
-                  onChange={e => setSpouseEmail(e.target.value)}
+                  placeholder="Child's Name" 
+                  className="flex-1 h-14 bg-slate-50 border-none rounded-2xl px-5 text-sm font-bold outline-none focus:bg-white focus:ring-2 focus:ring-sky-100"
+                  value={childName}
+                  onChange={e => setChildName(e.target.value)}
+                />
+                <input 
+                  placeholder="Age" 
+                  type="number"
+                  className="w-20 h-14 bg-slate-50 border-none rounded-2xl px-4 text-sm font-bold text-center outline-none focus:bg-white focus:ring-2 focus:ring-sky-100"
+                  value={childAge}
+                  onChange={e => setChildAge(e.target.value)}
                 />
                 <button 
-                  onClick={handleLinkSpouse}
-                  className="bg-[#1E293B] text-white px-6 rounded-2xl text-[11px] font-black uppercase tracking-widest active-press"
+                  onClick={handleAddChild}
+                  className="w-14 h-14 bg-sky-500 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-sky-100 active-press"
                 >
-                  Link
+                  +
                 </button>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
+
+        {!isGuest && (
+          <div className="space-y-6">
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Connections</h3>
+            <div className="bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm space-y-6">
+              {state.partnerLink || state.spouseName ? (
+                <div className="flex items-center gap-4 p-5 bg-sky-50 rounded-3xl border border-sky-100">
+                  <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-xl shadow-sm">💑</div>
+                  <div className="flex-1">
+                    <p className="text-sm font-black text-sky-900">{state.partnerLink?.partnerName || state.spouseName}</p>
+                    <p className="text-[10px] text-sky-400 font-black uppercase tracking-widest">
+                      {state.partnerLink?.status === 'accepted' ? 'Connected' : 'Invite Sent'}
+                    </p>
+                    {state.partnerLink?.partnerEmail && (
+                      <p className="text-[9px] text-slate-400 mt-1">{state.partnerLink.partnerEmail}</p>
+                    )}
+                  </div>
+                  <button 
+                    onClick={handleUnlinkPartner}
+                    className="text-slate-300 hover:text-rose-500 text-xs font-bold transition-colors"
+                  >
+                    Unlink
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input 
+                    placeholder="Partner's Email" 
+                    className="flex-1 h-14 bg-slate-50 border-none rounded-2xl px-5 text-sm font-bold outline-none"
+                    value={spouseEmail}
+                    onChange={e => setSpouseEmail(e.target.value)}
+                  />
+                  <button 
+                    onClick={handleLinkSpouse}
+                    className="bg-[#1E293B] text-white px-6 rounded-2xl text-[11px] font-black uppercase tracking-widest active-press"
+                  >
+                    Link
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
           <button 

@@ -432,45 +432,59 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         )}
 
         {activeTab === 'memories' && (
-          <div className="space-y-4 mt-4">
-            <button 
-              onClick={() => setShowAddMemory(!showAddMemory)}
-              className="w-full bg-sky-500 text-white h-14 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-sky-100"
-            >
-              {showAddMemory ? 'Cancel' : 'Add Memory'}
-            </button>
-
-            {showAddMemory && (
-              <div className="bg-white p-6 rounded-[40px] shadow-2xl border border-sky-50 space-y-4 animate-slide-up">
-                <h3 className="font-black text-sky-900">Tag a Memory</h3>
-                <textarea 
-                  placeholder="What happened today?..."
-                  className="w-full p-5 bg-slate-50 border-none rounded-3xl text-sm font-bold text-slate-600 outline-none"
-                  rows={3}
-                  value={caption}
-                  onChange={e => setCaption(e.target.value)}
-                />
-                <button 
-                  onClick={captureMemory}
-                  className="w-full h-14 bg-sky-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-sky-100"
-                >
-                  Save Memory
-                </button>
+          isGuest ? (
+            <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+              <div className="w-20 h-20 bg-sky-100 rounded-full flex items-center justify-center mb-4">
+                <svg className="w-10 h-10 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
               </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-4">
-              {state.memories.map(memory => (
-                <div key={memory.id} className="bg-white rounded-[32px] overflow-hidden shadow-sm relative group aspect-square">
-                  <img src={memory.photoUrl} className="w-full h-full object-cover" alt="" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-sky-950/80 via-transparent flex flex-col justify-end p-5 text-white">
-                    <p className="text-[10px] font-black leading-tight mb-1">{memory.caption}</p>
-                    <p className="text-[8px] font-bold opacity-60 uppercase tracking-widest">@{memory.placeName}</p>
-                  </div>
-                </div>
-              ))}
+              <h3 className="text-lg font-semibold text-slate-800 mb-2">Sign in to save memories</h3>
+              <p className="text-sm text-slate-500 max-w-xs">
+                Create an account to save photos and memories from your family adventures.
+              </p>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-4 mt-4">
+              <button 
+                onClick={() => setShowAddMemory(!showAddMemory)}
+                className="w-full bg-sky-500 text-white h-14 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-sky-100"
+              >
+                {showAddMemory ? 'Cancel' : 'Add Memory'}
+              </button>
+
+              {showAddMemory && (
+                <div className="bg-white p-6 rounded-[40px] shadow-2xl border border-sky-50 space-y-4 animate-slide-up">
+                  <h3 className="font-black text-sky-900">Tag a Memory</h3>
+                  <textarea 
+                    placeholder="What happened today?..."
+                    className="w-full p-5 bg-slate-50 border-none rounded-3xl text-sm font-bold text-slate-600 outline-none"
+                    rows={3}
+                    value={caption}
+                    onChange={e => setCaption(e.target.value)}
+                  />
+                  <button 
+                    onClick={captureMemory}
+                    className="w-full h-14 bg-sky-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-sky-100"
+                  >
+                    Save Memory
+                  </button>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                {state.memories.map(memory => (
+                  <div key={memory.id} className="bg-white rounded-[32px] overflow-hidden shadow-sm relative group aspect-square">
+                    <img src={memory.photoUrl} className="w-full h-full object-cover" alt="" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-sky-950/80 via-transparent flex flex-col justify-end p-5 text-white">
+                      <p className="text-[10px] font-black leading-tight mb-1">{memory.caption}</p>
+                      <p className="text-[8px] font-bold opacity-60 uppercase tracking-widest">@{memory.placeName}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
         )}
       </div>
 
