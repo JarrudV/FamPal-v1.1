@@ -6,7 +6,7 @@ import Filters from './Filters';
 import VenueProfile from './VenueProfile';
 import GroupsList from './GroupsList';
 import GroupDetail from './GroupDetail';
-import { fetchNearbyPlaces } from '../geminiService';
+import { fetchNearbyPlaces, SearchContext } from '../geminiService';
 
 interface DashboardProps {
   state: AppState;
@@ -89,13 +89,18 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
       
       setLoading(true);
       try {
+        const searchContext: SearchContext = {
+          userPreferences: state.preferences,
+          searchMode: 'family'
+        };
         const results = await fetchNearbyPlaces(
           userLocation.lat, 
           userLocation.lng, 
           selectedFilter, 
           state.children,
           radiusKm,
-          searchQuery
+          searchQuery,
+          searchContext
         );
         setPlaces(results);
       } catch (error) {
@@ -108,7 +113,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     if (activeTab === 'explore' && userLocation) {
       fetchPlaces();
     }
-  }, [selectedFilter, activeTab, state.children, userLocation, radiusKm, searchQuery]);
+  }, [selectedFilter, activeTab, state.children, state.preferences, userLocation, radiusKm, searchQuery]);
   
   // Handle search from header
   const handleSearch = (query: string) => {
@@ -708,15 +713,20 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
             </div>
 
             <div className="space-y-4">
-              <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Shared Favorites</h4>
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Shared Favorites</h4>
+                {!state.isPro && state.favorites.length > 3 && (
+                  <span className="text-[9px] font-bold text-amber-500">Free: 3 of {state.favorites.length}</span>
+                )}
+              </div>
               {state.favorites.length > 0 ? (
                 <div className="space-y-3">
-                  {state.favorites.slice(0, 3).map((fav) => (
-                    <div key={fav.id} className="bg-white rounded-2xl p-4 border border-slate-100 flex items-center gap-4">
+                  {state.favorites.slice(0, state.isPro ? undefined : 3).map((favId, idx) => (
+                    <div key={favId} className="bg-white rounded-2xl p-4 border border-slate-100 flex items-center gap-4">
                       <div className="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center text-xl">📍</div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-bold text-sm text-slate-800 truncate">{fav.name}</p>
-                        <p className="text-xs text-slate-400">Saved together</p>
+                        <p className="font-bold text-sm text-slate-800 truncate">Saved Place {idx + 1}</p>
+                        <p className="text-xs text-slate-400">Shared with partner</p>
                       </div>
                     </div>
                   ))}
@@ -729,10 +739,15 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
             </div>
 
             <div className="space-y-4">
-              <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Shared Memories</h4>
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Shared Memories</h4>
+                {!state.isPro && state.memories.length > 3 && (
+                  <span className="text-[9px] font-bold text-amber-500">Free: 3 of {state.memories.length}</span>
+                )}
+              </div>
               {state.memories.length > 0 ? (
                 <div className="grid grid-cols-3 gap-2">
-                  {state.memories.slice(0, 6).map((memory) => (
+                  {state.memories.slice(0, state.isPro ? undefined : 3).map((memory) => (
                     <div key={memory.id} className="aspect-square rounded-xl overflow-hidden">
                       <img src={memory.photoUrl} className="w-full h-full object-cover" alt="" />
                     </div>
@@ -744,6 +759,18 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                 </div>
               )}
             </div>
+            
+            {!state.isPro && (state.favorites.length > 3 || state.memories.length > 3) && (
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl p-4 border border-amber-100">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">✨</span>
+                  <div>
+                    <p className="font-bold text-sm text-amber-800">Upgrade to Pro</p>
+                    <p className="text-xs text-amber-600">Unlimited shared favorites, memories & notes</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-4">
               <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Quick Notes</h4>

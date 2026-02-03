@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AppState, Child, PartnerLink } from '../types';
+import { AppState, Child, PartnerLink, Preferences, FOOD_PREFERENCES, ALLERGY_OPTIONS, ACCESSIBILITY_OPTIONS, ACTIVITY_PREFERENCES } from '../types';
 
 interface ProfileProps {
   state: AppState;
@@ -25,6 +25,29 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
   const [partnerCode, setPartnerCode] = useState('');
   const [showCodeInput, setShowCodeInput] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [editingChildId, setEditingChildId] = useState<string | null>(null);
+
+  const userPrefs = state.preferences || { foodPreferences: [], allergies: [], accessibility: [], activityPreferences: [] };
+
+  const toggleUserPref = (category: keyof Preferences, value: string) => {
+    const current = userPrefs[category] as string[] || [];
+    const updated = current.includes(value) 
+      ? current.filter(v => v !== value)
+      : [...current, value];
+    onUpdateState('preferences', { ...userPrefs, [category]: updated });
+  };
+
+  const toggleChildPref = (childId: string, category: keyof Preferences, value: string) => {
+    const children = state.children.map(c => {
+      if (c.id !== childId) return c;
+      const prefs = c.preferences || { foodPreferences: [], allergies: [], accessibility: [], activityPreferences: [] };
+      const current = prefs[category] as string[] || [];
+      const updated = current.includes(value) ? current.filter(v => v !== value) : [...current, value];
+      return { ...c, preferences: { ...prefs, [category]: updated } };
+    });
+    onUpdateState('children', children);
+  };
 
   const handleAddChild = () => {
     if (!childName || !childAge) return;
@@ -175,15 +198,101 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
           ) : (
             <div className="bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm space-y-6">
               <div className="space-y-3">
-                {state.children.map(child => (
-                  <div key={child.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-100/50">
-                    <div>
-                      <p className="font-black text-sm text-[#1E293B]">{child.name}</p>
-                      <p className="text-[9px] text-sky-500 font-black uppercase tracking-widest">Age {child.age}</p>
+                {state.children.map(child => {
+                  const childPrefs = child.preferences || { foodPreferences: [], allergies: [], accessibility: [], activityPreferences: [] };
+                  const prefsCount = childPrefs.foodPreferences.length + childPrefs.allergies.length + childPrefs.accessibility.length + childPrefs.activityPreferences.length;
+                  return (
+                    <div key={child.id} className="bg-slate-50 rounded-2xl border border-slate-100/50 overflow-hidden">
+                      <div className="flex justify-between items-center p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-lg">👶</div>
+                          <div>
+                            <p className="font-black text-sm text-[#1E293B]">{child.name}</p>
+                            <p className="text-[9px] text-sky-500 font-black uppercase tracking-widest">Age {child.age}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => setEditingChildId(editingChildId === child.id ? null : child.id)}
+                            className={`px-3 py-1.5 rounded-xl text-[9px] font-bold ${prefsCount > 0 ? 'bg-violet-100 text-violet-600' : 'bg-slate-200 text-slate-500'}`}
+                          >
+                            {prefsCount || '+'} prefs
+                          </button>
+                          <button onClick={() => handleRemoveChild(child.id)} className="text-slate-300 font-black text-[10px] uppercase hover:text-rose-500 transition-colors">×</button>
+                        </div>
+                      </div>
+
+                      {editingChildId === child.id && (
+                        <div className="px-4 pb-4 space-y-4 border-t border-slate-200 pt-3 bg-white">
+                          <div>
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Food</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {FOOD_PREFERENCES.map(pref => (
+                                <button
+                                  key={pref}
+                                  onClick={() => toggleChildPref(child.id, 'foodPreferences', pref)}
+                                  className={`px-2 py-1 rounded-lg text-[9px] font-bold ${
+                                    childPrefs.foodPreferences.includes(pref) ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-400'
+                                  }`}
+                                >
+                                  {pref}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Allergies</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {ALLERGY_OPTIONS.map(pref => (
+                                <button
+                                  key={pref}
+                                  onClick={() => toggleChildPref(child.id, 'allergies', pref)}
+                                  className={`px-2 py-1 rounded-lg text-[9px] font-bold ${
+                                    childPrefs.allergies.includes(pref) ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-400'
+                                  }`}
+                                >
+                                  {pref}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Accessibility</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {ACCESSIBILITY_OPTIONS.map(pref => (
+                                <button
+                                  key={pref}
+                                  onClick={() => toggleChildPref(child.id, 'accessibility', pref)}
+                                  className={`px-2 py-1 rounded-lg text-[9px] font-bold ${
+                                    childPrefs.accessibility.includes(pref) ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400'
+                                  }`}
+                                >
+                                  {pref}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Activities</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {ACTIVITY_PREFERENCES.map(pref => (
+                                <button
+                                  key={pref}
+                                  onClick={() => toggleChildPref(child.id, 'activityPreferences', pref)}
+                                  className={`px-2 py-1 rounded-lg text-[9px] font-bold ${
+                                    childPrefs.activityPreferences.includes(pref) ? 'bg-violet-500 text-white' : 'bg-slate-100 text-slate-400'
+                                  }`}
+                                >
+                                  {pref}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <button onClick={() => handleRemoveChild(child.id)} className="text-slate-300 font-black text-[10px] uppercase hover:text-rose-500 transition-colors">Remove</button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div className="flex gap-2">
@@ -211,6 +320,109 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
             </div>
           )}
         </div>
+
+        {!isGuest && (
+          <div className="space-y-6">
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Your Preferences</h3>
+            <div className="bg-white rounded-[40px] p-6 border border-slate-100 shadow-sm space-y-4">
+              <button 
+                onClick={() => setShowPreferences(!showPreferences)}
+                className="w-full flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center text-lg">⚙️</div>
+                  <div className="text-left">
+                    <p className="font-bold text-sm text-slate-800">Food, Activities & Accessibility</p>
+                    <p className="text-[10px] text-slate-400">
+                      {(userPrefs.foodPreferences.length + userPrefs.allergies.length + userPrefs.accessibility.length + userPrefs.activityPreferences.length) || 'No'} preferences set
+                    </p>
+                  </div>
+                </div>
+                <span className={`text-slate-300 transition-transform ${showPreferences ? 'rotate-180' : ''}`}>▼</span>
+              </button>
+
+              {showPreferences && (
+                <div className="space-y-5 pt-4 border-t border-slate-100">
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Food Preferences</p>
+                    <div className="flex flex-wrap gap-2">
+                      {FOOD_PREFERENCES.map(pref => (
+                        <button
+                          key={pref}
+                          onClick={() => toggleUserPref('foodPreferences', pref)}
+                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${
+                            userPrefs.foodPreferences.includes(pref) 
+                              ? 'bg-green-500 text-white' 
+                              : 'bg-slate-100 text-slate-500'
+                          }`}
+                        >
+                          {pref}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Allergies</p>
+                    <div className="flex flex-wrap gap-2">
+                      {ALLERGY_OPTIONS.map(pref => (
+                        <button
+                          key={pref}
+                          onClick={() => toggleUserPref('allergies', pref)}
+                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${
+                            userPrefs.allergies.includes(pref) 
+                              ? 'bg-rose-500 text-white' 
+                              : 'bg-slate-100 text-slate-500'
+                          }`}
+                        >
+                          {pref}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Accessibility Needs</p>
+                    <div className="flex flex-wrap gap-2">
+                      {ACCESSIBILITY_OPTIONS.map(pref => (
+                        <button
+                          key={pref}
+                          onClick={() => toggleUserPref('accessibility', pref)}
+                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${
+                            userPrefs.accessibility.includes(pref) 
+                              ? 'bg-blue-500 text-white' 
+                              : 'bg-slate-100 text-slate-500'
+                          }`}
+                        >
+                          {pref}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Activity Preferences</p>
+                    <div className="flex flex-wrap gap-2">
+                      {ACTIVITY_PREFERENCES.map(pref => (
+                        <button
+                          key={pref}
+                          onClick={() => toggleUserPref('activityPreferences', pref)}
+                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${
+                            userPrefs.activityPreferences.includes(pref) 
+                              ? 'bg-violet-500 text-white' 
+                              : 'bg-slate-100 text-slate-500'
+                          }`}
+                        >
+                          {pref}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {!isGuest && (
           <div className="space-y-6">

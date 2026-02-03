@@ -79,10 +79,41 @@ export const ACTIVITY_OPTIONS = {
   ]
 } as const;
 
+export const FOOD_PREFERENCES = [
+  'Vegetarian', 'Vegan', 'Halal', 'Kosher', 'Gluten-free', 
+  'Dairy-free', 'Pescatarian', 'No red meat', 'Organic preferred'
+] as const;
+
+export const ALLERGY_OPTIONS = [
+  'Nuts', 'Peanuts', 'Tree nuts', 'Dairy', 'Eggs', 'Wheat/Gluten', 
+  'Soy', 'Fish', 'Shellfish', 'Sesame', 'Bee stings'
+] as const;
+
+export const ACCESSIBILITY_OPTIONS = [
+  'Wheelchair user', 'Limited mobility', 'Visual impairment', 
+  'Hearing impairment', 'Autism-friendly needed', 'Sensory sensitivities',
+  'Service animal', 'Stroller/pram required'
+] as const;
+
+export const ACTIVITY_PREFERENCES = [
+  'Active/energetic', 'Calm/relaxed', 'Educational', 'Creative/arts',
+  'Nature/outdoors', 'Water activities', 'Animals', 'Sports',
+  'Indoor play', 'Music/performance', 'Food experiences'
+] as const;
+
+export interface Preferences {
+  foodPreferences: string[];
+  allergies: string[];
+  accessibility: string[];
+  activityPreferences: string[];
+  notes?: string;
+}
+
 export interface Child {
   id: string;
   name: string;
   age: number;
+  preferences?: Preferences;
 }
 
 export interface FamilyGroup {
@@ -166,6 +197,7 @@ export interface AppState {
   reviews: UserReview[];
   memories: Memory[];
   children: Child[];
+  preferences?: Preferences;
   spouseName?: string;
   linkedEmail?: string;
   partnerLink?: PartnerLink;

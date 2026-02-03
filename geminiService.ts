@@ -1,6 +1,14 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Place, ActivityType, Child } from "./types";
+import { Place, ActivityType, Child, Preferences } from "./types";
+
+export interface SearchContext {
+  userPreferences?: Preferences;
+  childrenPreferences?: Preferences[];
+  partnerPreferences?: Preferences;
+  circlePreferences?: Preferences[];
+  searchMode?: 'me' | 'family' | 'partner' | 'circle';
+}
 
 // Always create a fresh instance to ensure correct API key usage
 const getAI = () => new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || "" });
@@ -65,16 +73,22 @@ export async function fetchNearbyPlaces(
   type: ActivityType = 'all',
   children: Child[] = [],
   radiusKm: number = 10,
-  searchQuery?: string
+  searchQuery?: string,
+  searchContext?: SearchContext
 ): Promise<Place[]> {
   if (!import.meta.env.VITE_GEMINI_API_KEY) {
     throw new Error("Gemini API key missing – AI disabled");
   }
   
-  // Create cache key including children ages for proper family context
+  // Create cache key including children ages and preferences for proper family context
   const safeChildren = Array.isArray(children) ? children : [];
   const agesKey = safeChildren.map(c => c.age).sort().join(',') || 'none';
-  const cacheKey = `${lat.toFixed(2)}:${lng.toFixed(2)}:${type}:${radiusKm}:${searchQuery || ''}:ages:${agesKey}`;
+  const userPrefsKey = searchContext?.userPreferences ? 
+    `f:${(searchContext.userPreferences.foodPreferences || []).join(',')}|a:${(searchContext.userPreferences.allergies || []).join(',')}|ac:${(searchContext.userPreferences.accessibility || []).join(',')}` : '';
+  const childPrefsKey = safeChildren.map(c => 
+    c.preferences ? `${c.name}:a:${(c.preferences.allergies || []).join(',')}` : ''
+  ).filter(Boolean).join(';');
+  const cacheKey = `${lat.toFixed(2)}:${lng.toFixed(2)}:${type}:${radiusKm}:${searchQuery || ''}:ages:${agesKey}:uprefs:${userPrefsKey}:cprefs:${childPrefsKey}`;
   
   // Check localStorage cache first (persists across page refreshes)
   const cached = getCachedPlaces(cacheKey);
@@ -89,11 +103,36 @@ export async function fetchNearbyPlaces(
       ? ` The family has children with ages: ${safeChildren.map(c => c.age).join(', ')}. Recommend places appropriate for these ages.`
       : " Recommend generic kid-friendly spots.";
     
-    const searchContext = searchQuery 
+    const searchQueryContext = searchQuery 
       ? ` Focus on places matching: "${searchQuery}".`
       : "";
 
-    const prompt = `Find 5-10 kid and pet-friendly ${type === 'all' ? 'places' : type} within ${radiusKm}km of ${lat}, ${lng}.${ageContext}${searchContext}
+    // Build preferences context
+    let prefsContext = '';
+    if (searchContext?.userPreferences) {
+      const p = searchContext.userPreferences;
+      const parts = [];
+      if (p.foodPreferences?.length) parts.push(`Food: ${p.foodPreferences.join(', ')}`);
+      if (p.allergies?.length) parts.push(`AVOID due to allergies: ${p.allergies.join(', ')}`);
+      if (p.accessibility?.length) parts.push(`Accessibility needs: ${p.accessibility.join(', ')}`);
+      if (p.activityPreferences?.length) parts.push(`Preferred activities: ${p.activityPreferences.join(', ')}`);
+      if (parts.length) prefsContext += ` User preferences: ${parts.join('. ')}.`;
+    }
+    
+    // Add children's preferences
+    if (safeChildren.length > 0) {
+      safeChildren.forEach(child => {
+        if (child.preferences) {
+          const p = child.preferences;
+          const parts = [];
+          if (p.allergies?.length) parts.push(`allergies: ${p.allergies.join(', ')}`);
+          if (p.activityPreferences?.length) parts.push(`likes: ${p.activityPreferences.join(', ')}`);
+          if (parts.length) prefsContext += ` Child ${child.name} (age ${child.age}): ${parts.join(', ')}.`;
+        }
+      });
+    }
+
+    const prompt = `Find 5-10 kid and pet-friendly ${type === 'all' ? 'places' : type} within ${radiusKm}km of ${lat}, ${lng}.${ageContext}${searchQueryContext}${prefsContext}
     Return a strict JSON array of REAL places with actual contact info. Each place must have an id, name, description, address, rating (1-5), tags (array of strings), mapsUrl (Google Maps link), type, priceLevel ($, $$, $$$), imageUrl, distance (string), ageAppropriate string, phone (real phone number if known), and website (real website URL if known).`;
 
     const response = await ai.models.generateContent({
