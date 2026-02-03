@@ -15,8 +15,15 @@ import {
   setDoc,
   collection,
   query,
-  where
+  where,
+  getDoc
 } from 'firebase/firestore';
+import {
+  getStorage,
+  ref,
+  uploadBytes,
+  getDownloadURL
+} from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -32,12 +39,14 @@ const isConfigValid = firebaseConfig.apiKey && firebaseConfig.projectId && fireb
 let app = null;
 let auth: ReturnType<typeof getAuth> | null = null;
 let db: ReturnType<typeof getFirestore> | null = null;
+let storage: ReturnType<typeof getStorage> | null = null;
 let googleProvider: GoogleAuthProvider | null = null;
 
 if (isConfigValid) {
   app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
   auth = getAuth(app);
   db = getFirestore(app);
+  storage = getStorage(app);
   googleProvider = new GoogleAuthProvider();
 
   setPersistence(auth, browserLocalPersistence).catch((e) => {
@@ -53,6 +62,7 @@ export const firebaseConfigError = !isConfigValid
 export {
   auth,
   db,
+  storage,
   googleProvider,
   onAuthStateChanged,
   signInWithPopup,
@@ -60,7 +70,11 @@ export {
   doc,
   onSnapshot,
   setDoc,
+  getDoc,
   collection,
   query,
-  where
+  where,
+  ref,
+  uploadBytes,
+  getDownloadURL
 };

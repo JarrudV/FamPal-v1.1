@@ -124,6 +124,112 @@ export async function fetchNearbyPlaces(
   }
 }
 
+// In-memory cache for AI responses during the session (reduces API calls for repeated questions)
+const aiResponseCache: Map<string, string> = new Map();
+
+export async function askAboutPlace(
+  place: Place,
+  question: string,
+  userContext?: { childrenAges?: number[] }
+): Promise<string> {
+  if (!import.meta.env.VITE_GEMINI_API_KEY) {
+    throw new Error("Gemini API key missing – AI disabled");
+  }
+  
+  // Create a cache key from place ID, question, and family context
+  const agesKey = userContext?.childrenAges?.sort().join(',') || 'none';
+  const cacheKey = `${place.id}:${question.toLowerCase().trim()}:ages:${agesKey}`;
+  
+  // Check memory cache first
+  if (aiResponseCache.has(cacheKey)) {
+    return aiResponseCache.get(cacheKey)!;
+  }
+  
+  const ai = getAI();
+  
+  try {
+    const childContext = userContext?.childrenAges?.length 
+      ? `The family has children aged ${userContext.childrenAges.join(', ')}.`
+      : '';
+    
+    const prompt = `You are a helpful family travel assistant. A parent is asking about "${place.name}" located at ${place.address}.
+
+Place details:
+- Type: ${place.type}
+- Rating: ${place.rating}/5
+- Price: ${place.priceLevel}
+- Tags: ${place.tags.join(', ')}
+- Description: ${place.description}
+
+${childContext}
+
+Question: ${question}
+
+Provide a helpful, concise answer focused on family-friendliness, kid safety, and practical tips. Keep response under 150 words.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+    });
+
+    const answer = response.text || "Sorry, I couldn't generate an answer. Please try again.";
+    
+    // Cache the response
+    aiResponseCache.set(cacheKey, answer);
+    
+    return answer;
+  } catch (error: any) {
+    console.error("Gemini Ask Error:", error);
+    throw new Error("Failed to get AI response. Please try again.");
+  }
+}
+
+export async function generateFamilySummary(place: Place, childrenAges?: number[]): Promise<string> {
+  if (!import.meta.env.VITE_GEMINI_API_KEY) {
+    throw new Error("Gemini API key missing – AI disabled");
+  }
+  
+  const cacheKey = `summary:${place.id}:${childrenAges?.join(',') || 'general'}`;
+  
+  if (aiResponseCache.has(cacheKey)) {
+    return aiResponseCache.get(cacheKey)!;
+  }
+  
+  const ai = getAI();
+  
+  try {
+    const ageContext = childrenAges?.length 
+      ? `for a family with children aged ${childrenAges.join(', ')}`
+      : 'for families with young children';
+    
+    const prompt = `Generate a brief, enthusiastic family-friendly summary ${ageContext} for:
+
+"${place.name}" at ${place.address}
+Type: ${place.type} | Rating: ${place.rating}/5 | Price: ${place.priceLevel}
+Tags: ${place.tags.join(', ')}
+
+Include: 
+1. Why families love it (1 sentence)
+2. Best for ages (specific range)
+3. Pro tip for parents (1 sentence)
+
+Keep it under 80 words, warm and helpful tone.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+    });
+
+    const summary = response.text || place.description;
+    aiResponseCache.set(cacheKey, summary);
+    
+    return summary;
+  } catch (error: any) {
+    console.error("Gemini Summary Error:", error);
+    return place.description;
+  }
+}
+
 function getSeedData(type: string): Place[] {
   const base = [
     {

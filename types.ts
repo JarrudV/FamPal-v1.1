@@ -57,10 +57,22 @@ export interface Child {
 export interface FamilyGroup {
   id: string;
   name: string;
-  type: string;
+  type: 'partner' | 'family' | 'friends';
   members: string[];
+  memberEmails: string[];
   inviteCode: string;
   whatsappLink?: string;
+  sharedFavorites: string[];
+  sharedNotes: Record<string, string>;
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface PartnerLink {
+  partnerEmail: string;
+  partnerName: string;
+  linkedAt: string;
+  status: 'pending' | 'accepted';
 }
 
 export interface User {
@@ -81,5 +93,6 @@ export interface AppState {
   children: Child[];
   spouseName?: string;
   linkedEmail?: string;
+  partnerLink?: PartnerLink;
   groups: FamilyGroup[];
 }

@@ -1,22 +1,92 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Place, FavoriteData } from '../types';
+import { askAboutPlace, generateFamilySummary } from '../geminiService';
+import { storage, auth, ref, uploadBytes, getDownloadURL } from '../lib/firebase';
 
 interface VenueProfileProps {
   place: Place;
   isFavorite: boolean;
   favoriteData?: FavoriteData;
+  childrenAges?: number[];
   onClose: () => void;
   onToggleFavorite: () => void;
   onUpdateDetails: (data: Partial<FavoriteData>) => void;
 }
 
-const VenueProfile: React.FC<VenueProfileProps> = ({ place, isFavorite, favoriteData, onClose, onToggleFavorite, onUpdateDetails }) => {
+const VenueProfile: React.FC<VenueProfileProps> = ({ 
+  place, 
+  isFavorite, 
+  favoriteData, 
+  childrenAges = [],
+  onClose, 
+  onToggleFavorite, 
+  onUpdateDetails 
+}) => {
   const [activeTab, setActiveTab] = useState<'info' | 'parent'>('info');
+  const [aiQuestion, setAiQuestion] = useState('');
+  const [aiAnswer, setAiAnswer] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [showAiPanel, setShowAiPanel] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const quickQuestions = [
+    "Is this good for toddlers?",
+    "What should we bring?",
+    "Is it stroller friendly?",
+    "Best time to visit?"
+  ];
+
+  const handleAskAI = async (question: string) => {
+    if (!question.trim()) return;
+    setAiLoading(true);
+    setAiAnswer('');
+    try {
+      const answer = await askAboutPlace(place, question, { childrenAges });
+      setAiAnswer(answer);
+    } catch (error: any) {
+      setAiAnswer(error.message || 'Failed to get response. Please try again.');
+    }
+    setAiLoading(false);
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !storage || !auth?.currentUser) return;
+
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      alert('Photo must be under 5MB');
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    setUploadingPhoto(true);
+    try {
+      const timestamp = Date.now();
+      const fileName = `memories/${auth.currentUser.uid}/${place.id}/${timestamp}_${file.name}`;
+      const storageRef = ref(storage, fileName);
+      
+      await uploadBytes(storageRef, file);
+      const downloadUrl = await getDownloadURL(storageRef);
+      
+      const currentPhotos = favoriteData?.menuPhotos || [];
+      onUpdateDetails({ menuPhotos: [...currentPhotos, downloadUrl] });
+    } catch (error: any) {
+      console.error('Upload failed:', error);
+      alert('Failed to upload photo. Please try again.');
+    }
+    setUploadingPhoto(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   return (
     <div className="fixed inset-0 z-[100] bg-[#F8FAFC] overflow-y-auto animate-slide-up">
-      {/* Hero Header */}
       <div className="relative h-96">
         <img src={place.imageUrl} className="w-full h-full object-cover" alt={place.name} />
         <div className="absolute inset-0 bg-gradient-to-t from-[#F8FAFC] via-transparent to-black/20"></div>
@@ -35,7 +105,6 @@ const VenueProfile: React.FC<VenueProfileProps> = ({ place, isFavorite, favorite
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex px-5 gap-4">
         <TabBtn active={activeTab === 'info'} onClick={() => setActiveTab('info')} label="Information" />
         <TabBtn active={activeTab === 'parent'} onClick={() => setActiveTab('parent')} label="Parent's Notebook" />
@@ -60,6 +129,56 @@ const VenueProfile: React.FC<VenueProfileProps> = ({ place, isFavorite, favorite
             </section>
 
             <section className="space-y-4">
+              <button 
+                onClick={() => setShowAiPanel(!showAiPanel)}
+                className="w-full h-16 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-3xl font-extrabold shadow-xl shadow-purple-100 flex items-center justify-center gap-3 active:scale-95 transition-all"
+              >
+                <span className="text-xl">✨</span>
+                Ask AI About This Place
+              </button>
+              
+              {showAiPanel && (
+                <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-3xl p-6 space-y-4 border border-purple-100 animate-slide-up">
+                  <div className="flex flex-wrap gap-2">
+                    {quickQuestions.map(q => (
+                      <button 
+                        key={q}
+                        onClick={() => { setAiQuestion(q); handleAskAI(q); }}
+                        className="px-4 py-2 bg-white rounded-xl text-xs font-bold text-purple-600 hover:bg-purple-100 transition-colors shadow-sm"
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <input 
+                      type="text"
+                      value={aiQuestion}
+                      onChange={(e) => setAiQuestion(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAskAI(aiQuestion)}
+                      placeholder="Ask anything about this place..."
+                      className="flex-1 px-4 py-3 rounded-xl bg-white text-sm font-medium focus:ring-2 focus:ring-purple-500 outline-none"
+                    />
+                    <button 
+                      onClick={() => handleAskAI(aiQuestion)}
+                      disabled={aiLoading || !aiQuestion.trim()}
+                      className="px-6 py-3 bg-purple-600 text-white rounded-xl font-bold text-sm disabled:opacity-50 active:scale-95 transition-all"
+                    >
+                      {aiLoading ? '...' : 'Ask'}
+                    </button>
+                  </div>
+                  
+                  {aiAnswer && (
+                    <div className="bg-white rounded-2xl p-4 shadow-sm">
+                      <p className="text-sm text-slate-600 leading-relaxed">{aiAnswer}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+
+            <section className="space-y-4">
               <h3 className="text-xl font-extrabold text-[#1E293B]">Contact Details</h3>
               <div className="grid grid-cols-1 gap-3">
                 <ContactLink icon="📞" label="Phone" value={place.phone || '+1 555-0199'} />
@@ -71,7 +190,6 @@ const VenueProfile: React.FC<VenueProfileProps> = ({ place, isFavorite, favorite
                   Open in Maps 🚀
                 </button>
                 
-                {/* Share & Plan Actions */}
                 <div className="grid grid-cols-2 gap-3 mt-4">
                   <button 
                     onClick={() => {
@@ -89,9 +207,9 @@ const VenueProfile: React.FC<VenueProfileProps> = ({ place, isFavorite, favorite
                       const title = `Visit: ${place.name}`;
                       const details = `${place.description}\n\nAddress: ${place.address}\nRating: ⭐ ${place.rating}\nPrice: ${place.priceLevel}\n\n${place.mapsUrl}`;
                       const now = new Date();
-                      const startDate = new Date(now.getTime() + 24 * 60 * 60 * 1000); // Tomorrow
+                      const startDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
                       startDate.setHours(10, 0, 0, 0);
-                      const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000); // 2 hours
+                      const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
                       
                       const formatDate = (d: Date) => d.toISOString().replace(/-|:|\.\d{3}/g, '').slice(0, 15) + 'Z';
                       const calUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&details=${encodeURIComponent(details)}&location=${encodeURIComponent(place.address)}&dates=${formatDate(startDate)}/${formatDate(endDate)}`;
@@ -148,11 +266,37 @@ const VenueProfile: React.FC<VenueProfileProps> = ({ place, isFavorite, favorite
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <h3 className="text-xl font-extrabold text-sky-900">Family Photos</h3>
-                    <button className="text-sky-500 font-black text-[10px] uppercase tracking-widest bg-sky-50 px-4 py-2 rounded-xl">Upload +</button>
+                    <input 
+                      ref={fileInputRef}
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handlePhotoUpload}
+                      className="hidden"
+                      id="photo-upload"
+                    />
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingPhoto || !auth?.currentUser}
+                      className="text-sky-500 font-black text-[10px] uppercase tracking-widest bg-sky-50 px-4 py-2 rounded-xl disabled:opacity-50"
+                    >
+                      {uploadingPhoto ? 'Uploading...' : 'Upload +'}
+                    </button>
                   </div>
+                  <p className="text-xs text-slate-400">Max 5MB per photo. Photos are private to you.</p>
                   <div className="grid grid-cols-3 gap-4">
-                    <div className="aspect-square bg-slate-100 rounded-3xl border-2 border-dashed border-slate-200 flex items-center justify-center text-slate-300 text-2xl">📸</div>
-                    <div className="aspect-square bg-slate-100 rounded-3xl border-2 border-dashed border-slate-200 flex items-center justify-center text-slate-300 text-2xl">📸</div>
+                    {(favoriteData?.menuPhotos || []).map((url, idx) => (
+                      <div key={idx} className="aspect-square rounded-3xl overflow-hidden shadow-sm">
+                        <img src={url} alt={`Memory ${idx + 1}`} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                    {(!favoriteData?.menuPhotos || favoriteData.menuPhotos.length < 6) && (
+                      <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="aspect-square bg-slate-100 rounded-3xl border-2 border-dashed border-slate-200 flex items-center justify-center text-slate-300 text-2xl hover:bg-slate-50 transition-colors"
+                      >
+                        📸
+                      </button>
+                    )}
                   </div>
                 </div>
               </>

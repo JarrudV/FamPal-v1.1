@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AppState, Child } from '../types';
+import { AppState, Child, PartnerLink } from '../types';
 
 interface ProfileProps {
   state: AppState;
@@ -27,9 +27,22 @@ const Profile: React.FC<ProfileProps> = ({ state, onSignOut, setView, onUpdateSt
 
   const handleLinkSpouse = () => {
     if (!spouseEmail) return;
-    onUpdateState('spouseName', spouseEmail);
+    const partnerLink: PartnerLink = {
+      partnerEmail: spouseEmail,
+      partnerName: spouseEmail.split('@')[0],
+      linkedAt: new Date().toISOString(),
+      status: 'pending'
+    };
+    onUpdateState('partnerLink', partnerLink);
+    onUpdateState('spouseName', spouseEmail.split('@')[0]);
     onUpdateState('linkedEmail', spouseEmail);
     setSpouseEmail('');
+  };
+
+  const handleUnlinkPartner = () => {
+    onUpdateState('partnerLink', undefined);
+    onUpdateState('spouseName', undefined);
+    onUpdateState('linkedEmail', undefined);
   };
 
   const shareApp = async () => {
@@ -135,13 +148,24 @@ const Profile: React.FC<ProfileProps> = ({ state, onSignOut, setView, onUpdateSt
         <div className="space-y-6">
           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Connections</h3>
           <div className="bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm space-y-6">
-            {state.spouseName ? (
+            {state.partnerLink || state.spouseName ? (
               <div className="flex items-center gap-4 p-5 bg-sky-50 rounded-3xl border border-sky-100">
-                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-xl shadow-sm">👤</div>
-                <div>
-                  <p className="text-sm font-black text-sky-900">Partner Linked</p>
-                  <p className="text-[10px] text-sky-400 font-black uppercase tracking-widest">Syncing Adventures...</p>
+                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-xl shadow-sm">💑</div>
+                <div className="flex-1">
+                  <p className="text-sm font-black text-sky-900">{state.partnerLink?.partnerName || state.spouseName}</p>
+                  <p className="text-[10px] text-sky-400 font-black uppercase tracking-widest">
+                    {state.partnerLink?.status === 'accepted' ? 'Connected' : 'Invite Sent'}
+                  </p>
+                  {state.partnerLink?.partnerEmail && (
+                    <p className="text-[9px] text-slate-400 mt-1">{state.partnerLink.partnerEmail}</p>
+                  )}
                 </div>
+                <button 
+                  onClick={handleUnlinkPartner}
+                  className="text-slate-300 hover:text-rose-500 text-xs font-bold transition-colors"
+                >
+                  Unlink
+                </button>
               </div>
             ) : (
               <div className="flex gap-2">

@@ -132,6 +132,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onSignOut, setView, onUpda
           onUpdateState('favoriteDetails', newDetails);
         }}
         favoriteData={state.favoriteDetails[selectedPlace.id]}
+        childrenAges={state.children?.map(c => c.age) || []}
       />
     );
   }
