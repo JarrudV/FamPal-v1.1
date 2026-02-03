@@ -284,6 +284,7 @@ export interface AppState {
   spouseName?: string;
   linkedEmail?: string;
   partnerLink?: PartnerLink;
+  partnerSharedPlaces: GroupPlace[];
   groups: FamilyGroup[];
   friendCircles: FriendCircle[];
   entitlement: Entitlement;

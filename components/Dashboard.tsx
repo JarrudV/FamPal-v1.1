@@ -413,6 +413,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         isFavorite={state.favorites.includes(selectedPlace.id)}
         isVisited={(state.visitedPlaces || []).some(v => v.placeId === selectedPlace.id)}
         memories={state.memories}
+        memoryCount={state.memories.length}
         onToggleFavorite={() => toggleFavorite(selectedPlace.id)}
         onMarkVisited={() => markVisited(selectedPlace)}
         onClose={() => setSelectedPlace(null)}
@@ -425,6 +426,43 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         isGuest={isGuest}
         entitlement={state.entitlement}
         onIncrementAiRequests={handleIncrementAiRequests}
+        circles={state.friendCircles || []}
+        partnerLink={state.partnerLink}
+        userName={state.user?.displayName || 'You'}
+        userId={state.user?.uid || ''}
+        onAddToCircle={(circleId, groupPlace) => {
+          if (circleId === 'partner') {
+            const currentPartnerPlaces = state.partnerSharedPlaces || [];
+            if (currentPartnerPlaces.some(p => p.placeId === groupPlace.placeId)) {
+              alert('This place is already in Partner Plans!');
+              return;
+            }
+            onUpdateState('partnerSharedPlaces', [...currentPartnerPlaces, groupPlace]);
+            alert(`Added "${groupPlace.placeName}" to Partner Plans!`);
+          } else {
+            const circle = (state.friendCircles || []).find(c => c.id === circleId);
+            if (circle) {
+              // Check if already added
+              if (circle.sharedPlaces.some(p => p.placeId === groupPlace.placeId)) {
+                alert('This place is already in this circle!');
+                return;
+              }
+              const updatedCircle = {
+                ...circle,
+                sharedPlaces: [...circle.sharedPlaces, groupPlace]
+              };
+              const updatedCircles = (state.friendCircles || []).map(c => 
+                c.id === circleId ? updatedCircle : c
+              );
+              onUpdateState('friendCircles', updatedCircles);
+              alert(`Added "${groupPlace.placeName}" to ${circle.name}!`);
+            }
+          }
+        }}
+        onAddMemory={(memory) => {
+          const newMemory = { ...memory, id: Date.now().toString() };
+          onUpdateState('memories', [...state.memories, newMemory]);
+        }}
       />
     );
   }
