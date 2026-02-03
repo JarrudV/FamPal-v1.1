@@ -30,9 +30,18 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
 
   const userPrefs = state.preferences || { foodPreferences: [], allergies: [], accessibility: [], activityPreferences: [] };
 
+  const FREE_PREF_LIMIT = 3; // Free users can set 3 preferences per category
+  
   const toggleUserPref = (category: keyof Preferences, value: string) => {
     const current = userPrefs[category] as string[] || [];
-    const updated = current.includes(value) 
+    const isRemoving = current.includes(value);
+    
+    // Check if free user is at limit when adding
+    if (!isRemoving && !state.isPro && current.length >= FREE_PREF_LIMIT) {
+      return; // Don't add more if at limit for free users
+    }
+    
+    const updated = isRemoving 
       ? current.filter(v => v !== value)
       : [...current, value];
     onUpdateState('preferences', { ...userPrefs, [category]: updated });
@@ -43,7 +52,14 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
       if (c.id !== childId) return c;
       const prefs = c.preferences || { foodPreferences: [], allergies: [], accessibility: [], activityPreferences: [] };
       const current = prefs[category] as string[] || [];
-      const updated = current.includes(value) ? current.filter(v => v !== value) : [...current, value];
+      const isRemoving = current.includes(value);
+      
+      // Check if free user is at limit when adding
+      if (!isRemoving && !state.isPro && current.length >= FREE_PREF_LIMIT) {
+        return c; // Don't modify if at limit for free users
+      }
+      
+      const updated = isRemoving ? current.filter(v => v !== value) : [...current, value];
       return { ...c, preferences: { ...prefs, [category]: updated } };
     });
     onUpdateState('children', children);
@@ -342,23 +358,43 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
               </button>
 
               {showPreferences && (
-                <div className="space-y-5 pt-4 border-t border-slate-100">
+                <>
+                  {!state.isPro && (
+                    <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-3 border border-amber-100 mb-4 mt-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">✨</span>
+                        <div>
+                          <p className="font-bold text-xs text-amber-800">Free: 3 preferences per category</p>
+                          <p className="text-[10px] text-amber-600">Upgrade to Pro for unlimited preferences</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div className="space-y-5 pt-4 border-t border-slate-100">
                   <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Food Preferences</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Food Preferences</p>
+                      {!state.isPro && <span className="text-[9px] font-bold text-slate-400">{userPrefs.foodPreferences.length}/{FREE_PREF_LIMIT}</span>}
+                    </div>
                     <div className="flex flex-wrap gap-2">
-                      {FOOD_PREFERENCES.map(pref => (
-                        <button
-                          key={pref}
-                          onClick={() => toggleUserPref('foodPreferences', pref)}
-                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${
-                            userPrefs.foodPreferences.includes(pref) 
-                              ? 'bg-green-500 text-white' 
-                              : 'bg-slate-100 text-slate-500'
-                          }`}
-                        >
-                          {pref}
-                        </button>
-                      ))}
+                      {FOOD_PREFERENCES.map(pref => {
+                        const isSelected = userPrefs.foodPreferences.includes(pref);
+                        const isDisabled = !isSelected && !state.isPro && userPrefs.foodPreferences.length >= FREE_PREF_LIMIT;
+                        return (
+                          <button
+                            key={pref}
+                            onClick={() => toggleUserPref('foodPreferences', pref)}
+                            disabled={isDisabled}
+                            className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${
+                              isSelected 
+                                ? 'bg-green-500 text-white' 
+                                : isDisabled ? 'bg-slate-50 text-slate-300 cursor-not-allowed' : 'bg-slate-100 text-slate-500'
+                            }`}
+                          >
+                            {pref}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -419,6 +455,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
                     </div>
                   </div>
                 </div>
+                </>
               )}
             </div>
           </div>

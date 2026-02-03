@@ -142,9 +142,12 @@ For Google Sign-In to work:
   - Tabs now: Explore, Saved, Adventures, Memories, Partner (when linked), Groups
 - **V1.9 Preferences & Personalization**:
   - User preferences: Food (vegetarian, vegan, halal, etc.), allergies, accessibility needs, activity preferences
-  - Child preferences: Nested preferences per child with food, allergies, and activity preferences
+  - Child preferences: Nested preferences per child with food, allergies, accessibility, and activity preferences
   - Collapsible preferences section in Profile with toggle buttons
   - AI search now uses preferences to filter recommendations (avoids allergens, considers accessibility)
+  - **Free tier limits**: 3 preferences per category (food, allergies, accessibility, activities)
+  - Disabled state for preferences at limit (greyed out buttons)
+  - Pro upsell banner in preferences section
   - Partner Space limited to 3 favorites + 3 memories for free tier (Pro for unlimited)
   - Pro upsell banner when limits exceeded
 - **Guest Mode Restrictions**:
