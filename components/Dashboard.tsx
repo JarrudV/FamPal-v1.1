@@ -17,7 +17,8 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setView, onUpdateState }) => {
-  const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'groups'>('explore');
+  const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'groups' | 'partner'>('explore');
+  const hasLinkedPartner = state.partnerLink?.status === 'accepted';
   const [selectedFilter, setSelectedFilter] = useState<ActivityType>('all');
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(false);
@@ -360,10 +361,14 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
       />
       
       <div className="px-5 py-4">
-        <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar">
+        <div className="flex gap-1.5 mb-4 overflow-x-auto no-scrollbar pb-1">
           <TabButton label="Explore" active={activeTab === 'explore'} onClick={() => setActiveTab('explore')} />
           <TabButton label="Saved" count={state.favorites.length} active={activeTab === 'favorites'} onClick={() => setActiveTab('favorites')} />
           <TabButton label="Adventures" count={(state.visitedPlaces || []).length} active={activeTab === 'adventures'} onClick={() => setActiveTab('adventures')} />
+          <TabButton label="Memories" count={state.memories.length} active={activeTab === 'memories'} onClick={() => setActiveTab('memories')} />
+          {hasLinkedPartner && (
+            <TabButton label="Partner" active={activeTab === 'partner'} onClick={() => setActiveTab('partner')} />
+          )}
           <TabButton label="Groups" count={(state.friendCircles || []).length} active={activeTab === 'groups'} onClick={() => setActiveTab('groups')} />
         </div>
 
@@ -687,6 +692,75 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
             </div>
           )
         )}
+
+        {activeTab === 'partner' && hasLinkedPartner && (
+          <div className="space-y-6">
+            <div className="bg-gradient-to-br from-pink-50 to-rose-50 rounded-3xl p-6 border border-rose-100">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center text-2xl shadow-sm">
+                  💕
+                </div>
+                <div>
+                  <h3 className="font-black text-lg text-slate-800">{state.partnerLink?.partnerName || 'Your Partner'}</h3>
+                  <p className="text-xs text-slate-500">Linked {state.partnerLink?.linkedAt ? new Date(state.partnerLink.linkedAt).toLocaleDateString() : ''}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Shared Favorites</h4>
+              {state.favorites.length > 0 ? (
+                <div className="space-y-3">
+                  {state.favorites.slice(0, 3).map((fav) => (
+                    <div key={fav.id} className="bg-white rounded-2xl p-4 border border-slate-100 flex items-center gap-4">
+                      <div className="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center text-xl">📍</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm text-slate-800 truncate">{fav.name}</p>
+                        <p className="text-xs text-slate-400">Saved together</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-slate-50 rounded-2xl p-6 text-center">
+                  <p className="text-sm text-slate-500">No shared favorites yet</p>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Shared Memories</h4>
+              {state.memories.length > 0 ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {state.memories.slice(0, 6).map((memory) => (
+                    <div key={memory.id} className="aspect-square rounded-xl overflow-hidden">
+                      <img src={memory.photoUrl} className="w-full h-full object-cover" alt="" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-slate-50 rounded-2xl p-6 text-center">
+                  <p className="text-sm text-slate-500">No shared memories yet</p>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Quick Notes</h4>
+              <div className="bg-white rounded-2xl p-4 border border-slate-100">
+                <textarea 
+                  placeholder="Leave a note for your partner..."
+                  className="w-full h-20 text-sm resize-none outline-none text-slate-700 placeholder-slate-300"
+                />
+                <div className="flex justify-end">
+                  <button className="px-4 py-2 bg-rose-500 text-white rounded-xl text-xs font-bold">
+                    Send
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <nav className="fixed bottom-0 left-0 right-0 bottom-nav-blur border-t border-slate-100 px-6 py-4 safe-area-inset-bottom">
@@ -704,11 +778,11 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
 const TabButton = ({ label, count, active, onClick }: { label: string; count?: number; active: boolean; onClick: () => void }) => (
   <button 
     onClick={onClick}
-    className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${
+    className={`px-3 py-2 rounded-full text-[9px] font-black uppercase tracking-wider whitespace-nowrap transition-all shrink-0 ${
       active ? 'bg-sky-500 text-white shadow-lg shadow-sky-100' : 'bg-white text-slate-400 border border-slate-100'
     }`}
   >
-    {label} {count !== undefined && <span className="opacity-60">[{count}]</span>}
+    {label}{count !== undefined && count > 0 ? ` [${count}]` : ''}
   </button>
 );
 

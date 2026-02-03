@@ -137,6 +137,9 @@ For Google Sign-In to work:
   - Adding memory auto-marks venue as visited
   - Memories appear as activity feed on venue profile page
   - Venue selector shows saved places and nearby places
+  - **Partner Space**: Dedicated tab for linked partners with shared favorites, memories, and quick notes
+  - Tab bar: Smaller text, tighter spacing, Memories tab added back
+  - Tabs now: Explore, Saved, Adventures, Memories, Partner (when linked), Groups
 - **Guest Mode Restrictions**:
   - Memories tab: Sign-in required prompt
   - Profile family updates: Sign-in required prompt
