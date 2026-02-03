@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { AppState, Child, PartnerLink, Preferences, FOOD_PREFERENCES, ALLERGY_OPTIONS, ACCESSIBILITY_OPTIONS, ACTIVITY_PREFERENCES } from '../types';
+import { AppState, Child, PartnerLink, Preferences, FOOD_PREFERENCES, ALLERGY_OPTIONS, ACCESSIBILITY_OPTIONS, ACTIVITY_PREFERENCES, PLAN_LIMITS } from '../types';
+import PlanBilling from './PlanBilling';
+import { getLimits, getPlanDisplayName, canUseAI, isPaidTier } from '../lib/entitlements';
 
 interface ProfileProps {
   state: AppState;
@@ -27,10 +29,15 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
   const [codeCopied, setCodeCopied] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
+  const [showPlanBilling, setShowPlanBilling] = useState(false);
 
   const userPrefs = state.preferences || { foodPreferences: [], allergies: [], accessibility: [], activityPreferences: [] };
+  const limits = getLimits(state.entitlement);
+  const isPaid = isPaidTier(state.entitlement);
+  const aiInfo = canUseAI(state.entitlement);
+  const planTier = state.entitlement?.plan_tier || 'free';
 
-  const FREE_PREF_LIMIT = 3; // Free users can set 3 preferences per category
+  const FREE_PREF_LIMIT = limits.preferencesPerCategory;
   
   const toggleUserPref = (category: keyof Preferences, value: string) => {
     const current = userPrefs[category] as string[] || [];
@@ -559,6 +566,33 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
           </div>
         )}
 
+        {!isGuest && (
+          <div className="space-y-4">
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Plan & Billing</h3>
+            <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+              <button 
+                onClick={() => setShowPlanBilling(true)}
+                className="w-full flex items-center justify-between p-6 hover:bg-slate-50 transition-colors"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center text-xl">
+                    {planTier === 'lifetime' ? '👑' : planTier === 'pro' ? '⭐' : '🌱'}
+                  </div>
+                  <div className="text-left">
+                    <p className="font-bold text-slate-800">{getPlanDisplayName(planTier)} Plan</p>
+                    <p className="text-xs text-slate-400">
+                      {planTier === 'lifetime' ? 'Lifetime access' : 
+                       planTier === 'pro' ? 'Annual subscription' : 
+                       'Upgrade for unlimited features'}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-slate-400">→</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
           <button 
             onClick={onSignOut}
@@ -569,6 +603,14 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
           </button>
         </div>
       </div>
+
+      {showPlanBilling && (
+        <PlanBilling 
+          state={state} 
+          onClose={() => setShowPlanBilling(false)} 
+          onUpdateState={onUpdateState}
+        />
+      )}
     </div>
   );
 };

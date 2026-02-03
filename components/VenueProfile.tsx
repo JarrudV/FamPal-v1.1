@@ -1,9 +1,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Place, FavoriteData, ACTIVITY_OPTIONS, Memory } from '../types';
+import { Place, FavoriteData, ACTIVITY_OPTIONS, Memory, Entitlement } from '../types';
 import { askAboutPlace, generateFamilySummary } from '../geminiService';
 import { getPlaceDetails, PlaceDetails, PlaceReview } from '../placesService';
 import { storage, auth, ref, uploadBytes, getDownloadURL } from '../lib/firebase';
+import { canUseAI, getLimits } from '../lib/entitlements';
 
 function getNavigationUrl(place: Place, placeDetails?: PlaceDetails | null): string {
   const lat = (place as any).lat || placeDetails?.lat;
@@ -32,16 +33,13 @@ interface VenueProfileProps {
   favoriteData?: FavoriteData;
   childrenAges?: number[];
   isGuest?: boolean;
-  aiRequestsUsed?: number;
-  isPro?: boolean;
+  entitlement?: Entitlement;
   onClose: () => void;
   onToggleFavorite: () => void;
   onMarkVisited: () => void;
   onUpdateDetails: (data: Partial<FavoriteData>) => void;
   onIncrementAiRequests?: () => void;
 }
-
-const AI_REQUEST_LIMIT = 5;
 
 const VenueProfile: React.FC<VenueProfileProps> = ({ 
   place, 
@@ -51,14 +49,16 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   favoriteData, 
   childrenAges = [],
   isGuest = false,
-  aiRequestsUsed = 0,
-  isPro = false,
+  entitlement,
   onClose, 
   onToggleFavorite,
   onMarkVisited,
   onUpdateDetails,
   onIncrementAiRequests
 }) => {
+  const aiInfo = canUseAI(entitlement);
+  const limits = getLimits(entitlement);
+  const isPro = entitlement?.plan_tier === 'pro' || entitlement?.plan_tier === 'lifetime';
   const venueMemories = memories.filter(m => m.placeId === place.id);
   const [activeTab, setActiveTab] = useState<'info' | 'parent'>('info');
   const [aiQuestion, setAiQuestion] = useState('');
@@ -89,7 +89,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
     "Best time to visit?"
   ];
 
-  const aiLimitReached = !isPro && aiRequestsUsed >= AI_REQUEST_LIMIT;
+  const aiLimitReached = !aiInfo.allowed;
   
   const handleAskAI = async (question: string) => {
     if (!question.trim()) return;
@@ -231,9 +231,9 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                   >
                     <span className="text-xl">✨</span>
                     Ask AI About This Place
-                    {!isPro && (
+                    {aiInfo.limit !== -1 && (
                       <span className="text-xs bg-white/20 px-2 py-1 rounded-lg">
-                        {AI_REQUEST_LIMIT - aiRequestsUsed} left
+                        {aiInfo.remaining} left
                       </span>
                     )}
                   </button>
@@ -243,7 +243,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                       {aiLimitReached ? (
                         <div className="text-center py-4">
                           <p className="text-lg font-bold text-purple-700">AI Limit Reached</p>
-                          <p className="text-sm text-purple-500 mt-2">You've used all {AI_REQUEST_LIMIT} free AI requests</p>
+                          <p className="text-sm text-purple-500 mt-2">You've used all {aiInfo.limit} AI requests this month</p>
                           <button className="mt-4 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-bold text-sm shadow-lg">
                             Upgrade to Pro for Unlimited
                           </button>

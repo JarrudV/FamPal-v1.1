@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { AppState, Place, Memory, UserReview, ActivityType, FriendCircle, GroupMember, GroupPlace, VisitedPlace } from '../types';
+import { AppState, Place, Memory, UserReview, ActivityType, FriendCircle, GroupMember, GroupPlace, VisitedPlace, PLAN_LIMITS } from '../types';
 import Header from './Header';
 import PlaceCard from './PlaceCard';
 import Filters from './Filters';
 import VenueProfile from './VenueProfile';
 import GroupsList from './GroupsList';
 import GroupDetail from './GroupDetail';
+import PlanBilling from './PlanBilling';
+import { UpgradePrompt, LimitIndicator } from './UpgradePrompt';
 import { searchNearbyPlaces, textSearchPlaces } from '../placesService';
+import { getLimits, canSavePlace, canAddMemory, isPaidTier } from '../lib/entitlements';
 
 interface DashboardProps {
   state: AppState;
@@ -43,6 +46,13 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   // Groups state
   const [selectedGroup, setSelectedGroup] = useState<FriendCircle | null>(null);
   const [addToGroupPlace, setAddToGroupPlace] = useState<Place | null>(null);
+  
+  // Plan & Billing modal
+  const [showPlanBilling, setShowPlanBilling] = useState(false);
+  
+  // Entitlement limits
+  const limits = getLimits(state.entitlement);
+  const isPaid = isPaidTier(state.entitlement);
 
   // Get user's location on mount
   useEffect(() => {
@@ -225,7 +235,11 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   const favoritePlaces = places.filter(p => state.favorites.includes(p.id));
 
   const handleIncrementAiRequests = () => {
-    onUpdateState('aiRequestsUsed', (state.aiRequestsUsed || 0) + 1);
+    const current = state.entitlement?.ai_requests_this_month || 0;
+    onUpdateState('entitlement', {
+      ...state.entitlement,
+      ai_requests_this_month: current + 1
+    });
   };
 
   const generateInviteCode = () => {
@@ -343,8 +357,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         favoriteData={state.favoriteDetails[selectedPlace.id]}
         childrenAges={state.children?.map(c => c.age) || []}
         isGuest={isGuest}
-        aiRequestsUsed={state.aiRequestsUsed || 0}
-        isPro={state.isPro || false}
+        entitlement={state.entitlement}
         onIncrementAiRequests={handleIncrementAiRequests}
       />
     );
@@ -793,6 +806,14 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
           <NavButton icon="👤" label="Profile" active={false} onClick={() => setView('profile')} />
         </div>
       </nav>
+      
+      {showPlanBilling && (
+        <PlanBilling 
+          state={state} 
+          onClose={() => setShowPlanBilling(false)} 
+          onUpdateState={onUpdateState}
+        />
+      )}
     </div>
   );
 };

@@ -16,7 +16,7 @@ import {
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Profile from './components/Profile';
-import { AppState, User } from './types';
+import { AppState, User, getDefaultEntitlement } from './types';
 import type { User as FirebaseUser } from 'firebase/auth';
 
 // Convert Firebase Auth User to plain serializable object
@@ -42,6 +42,7 @@ const getInitialState = (user: User | null): AppState => ({
   linkedEmail: '',
   groups: [],
   friendCircles: [],
+  entitlement: getDefaultEntitlement(),
   aiRequestsUsed: 0,
   isPro: false,
 });
@@ -150,9 +151,10 @@ const App: React.FC = () => {
           if (snap.exists()) {
             const dbState = snap.data();
             // Deep merge to avoid undefined arrays
+            const loadedEntitlement = dbState.entitlement || getDefaultEntitlement();
             setState({
               ...initialState,
-              user: serializedUser, // Always use fresh user data from auth
+              user: serializedUser,
               ...dbState,
               favorites: dbState.favorites || [],
               favoriteDetails: dbState.favoriteDetails || {},
@@ -163,6 +165,8 @@ const App: React.FC = () => {
               children: dbState.children || [],
               groups: dbState.groups || [],
               friendCircles: dbState.friendCircles || [],
+              entitlement: loadedEntitlement,
+              isPro: loadedEntitlement.plan_tier === 'pro' || loadedEntitlement.plan_tier === 'lifetime',
             });
           } else {
             // Save only serializable data to Firestore
