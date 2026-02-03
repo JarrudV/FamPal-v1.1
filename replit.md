@@ -80,3 +80,9 @@ For Google Sign-In to work:
 - Added radius slider (1-200km) for search area
 - Fixed profile picture display with `referrerPolicy="no-referrer"`
 - Fixed Firestore persistence for profile data
+- **V1.1 Features**:
+  - AI "Ask about this place" with quick questions & custom input (in-memory cached per session)
+  - Photo uploads for memories (Firebase Storage, 5MB limit, user-scoped paths)
+  - Partner linking with PartnerLink data model (pending/accepted status, unlink option)
+  - Category-specific placeholder images from Unsplash
+  - Share to WhatsApp & Add to Google Calendar buttons
