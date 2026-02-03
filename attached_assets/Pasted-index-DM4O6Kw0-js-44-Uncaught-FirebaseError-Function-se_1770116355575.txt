@@ -1,0 +1,316 @@
+index-DM4O6Kw0.js:44 Uncaught FirebaseError: Function setDoc() called with invalid data. Unsupported field value: a custom ri object (found in field user in document users/mDITQMVhKccMLEuPExmsLRCNfhK2)
+setTimeout		
+Ou	@	index-DM4O6Kw0.js:43
+next	@	index-DM4O6Kw0.js:43
+ka	@	index-DM4O6Kw0.js:43
+va	@	index-DM4O6Kw0.js:43
+(anonymous)	@	index-DM4O6Kw0.js:43
+(anonymous)	@	index-DM4O6Kw0.js:31
+rr	@	index-DM4O6Kw0.js:31
+forEach	@	index-DM4O6Kw0.js:31
+(anonymous)	@	index-DM4O6Kw0.js:43
+gE	@	index-DM4O6Kw0.js:43
+(anonymous)	@	index-DM4O6Kw0.js:43
+ca	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:40
+(anonymous)	@	index-DM4O6Kw0.js:43
+(anonymous)	@	index-DM4O6Kw0.js:43
+Promise.then		
+cc	@	index-DM4O6Kw0.js:43
+enqueue	@	index-DM4O6Kw0.js:43
+enqueueAndForget	@	index-DM4O6Kw0.js:43
+handleDelayElapsed	@	index-DM4O6Kw0.js:40
+(anonymous)	@	index-DM4O6Kw0.js:40
+setTimeout		
+start	@	index-DM4O6Kw0.js:40
+createAndSchedule	@	index-DM4O6Kw0.js:40
+enqueueAfterDelay	@	index-DM4O6Kw0.js:43
+ua	@	index-DM4O6Kw0.js:39
+ag	@	index-DM4O6Kw0.js:40
+vD	@	index-DM4O6Kw0.js:40
+close	@	index-DM4O6Kw0.js:39
+z_	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:43
+(anonymous)	@	index-DM4O6Kw0.js:43
+Promise.then		
+cc	@	index-DM4O6Kw0.js:43
+enqueue	@	index-DM4O6Kw0.js:43
+enqueueAndForget	@	index-DM4O6Kw0.js:43
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+o_	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+Ts	@	index-DM4O6Kw0.js:23
+kt	@	index-DM4O6Kw0.js:23
+Yi.qa	@	index-DM4O6Kw0.js:31
+Ei	@	index-DM4O6Kw0.js:28
+Qn.Y	@	index-DM4O6Kw0.js:27
+Qn.ba	@	index-DM4O6Kw0.js:27
+Ts	@	index-DM4O6Kw0.js:23
+kt	@	index-DM4O6Kw0.js:23
+bo	@	index-DM4O6Kw0.js:30
+n.Xa	@	index-DM4O6Kw0.js:30
+n.Ca	@	index-DM4O6Kw0.js:30
+Zn	@	index-DM4O6Kw0.js:29
+n.Ma	@	index-DM4O6Kw0.js:28
+Promise.then		
+Er	@	index-DM4O6Kw0.js:28
+n.Pa	@	index-DM4O6Kw0.js:28
+Promise.then		
+n.send	@	index-DM4O6Kw0.js:28
+n.ea	@	index-DM4O6Kw0.js:30
+mr	@	index-DM4O6Kw0.js:27
+Gu	@	index-DM4O6Kw0.js:31
+n.Da	@	index-DM4O6Kw0.js:31
+b	@	index-DM4O6Kw0.js:23
+Promise.then		
+se	@	index-DM4O6Kw0.js:23
+Fu	@	index-DM4O6Kw0.js:31
+Ei	@	index-DM4O6Kw0.js:28
+Qn.Y	@	index-DM4O6Kw0.js:27
+Qn.ba	@	index-DM4O6Kw0.js:27
+Ts	@	index-DM4O6Kw0.js:23
+kt	@	index-DM4O6Kw0.js:23
+bo	@	index-DM4O6Kw0.js:30
+n.Xa	@	index-DM4O6Kw0.js:30
+n.Ca	@	index-DM4O6Kw0.js:30
+Zn	@	index-DM4O6Kw0.js:29
+n.Ma	@	index-DM4O6Kw0.js:28
+Promise.then		
+Er	@	index-DM4O6Kw0.js:28
+n.Pa	@	index-DM4O6Kw0.js:28
+Promise.then		
+n.send	@	index-DM4O6Kw0.js:28
+n.ea	@	index-DM4O6Kw0.js:30
+mr	@	index-DM4O6Kw0.js:27
+_i	@	index-DM4O6Kw0.js:27
+n.Ea	@	index-DM4O6Kw0.js:31
+b	@	index-DM4O6Kw0.js:23
+Promise.then		
+se	@	index-DM4O6Kw0.js:23
+bi	@	index-DM4O6Kw0.js:31
+n.connect	@	index-DM4O6Kw0.js:31
+ln.m	@	index-DM4O6Kw0.js:31
+Ho	@	index-DM4O6Kw0.js:39
+send	@	index-DM4O6Kw0.js:39
+K_	@	index-DM4O6Kw0.js:39
+Z_	@	index-DM4O6Kw0.js:39
+rg	@	index-DM4O6Kw0.js:40
+(anonymous)	@	index-DM4O6Kw0.js:40
+_D	@	index-DM4O6Kw0.js:40
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:43
+(anonymous)	@	index-DM4O6Kw0.js:43
+Promise.then		
+cc	@	index-DM4O6Kw0.js:43
+enqueue	@	index-DM4O6Kw0.js:43
+enqueueAndForget	@	index-DM4O6Kw0.js:43
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+s_	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+setTimeout		
+T_	@	index-DM4O6Kw0.js:39
+j_	@	index-DM4O6Kw0.js:39
+G_	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+Promise.then		
+auth	@	index-DM4O6Kw0.js:39
+start	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:40
+(anonymous)	@	index-DM4O6Kw0.js:43
+(anonymous)	@	index-DM4O6Kw0.js:43
+Promise.then		
+cc	@	index-DM4O6Kw0.js:43
+enqueue	@	index-DM4O6Kw0.js:43
+enqueueAndForget	@	index-DM4O6Kw0.js:43
+handleDelayElapsed	@	index-DM4O6Kw0.js:40
+(anonymous)	@	index-DM4O6Kw0.js:40
+setTimeout		
+start	@	index-DM4O6Kw0.js:40
+createAndSchedule	@	index-DM4O6Kw0.js:40
+enqueueAfterDelay	@	index-DM4O6Kw0.js:43
+p_	@	index-DM4O6Kw0.js:39
+N_	@	index-DM4O6Kw0.js:39
+start	@	index-DM4O6Kw0.js:39
+ag	@	index-DM4O6Kw0.js:40
+vD	@	index-DM4O6Kw0.js:40
+close	@	index-DM4O6Kw0.js:39
+z_	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:43
+(anonymous)	@	index-DM4O6Kw0.js:43
+Promise.then		
+cc	@	index-DM4O6Kw0.js:43
+enqueue	@	index-DM4O6Kw0.js:43
+enqueueAndForget	@	index-DM4O6Kw0.js:43
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+o_	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+Ts	@	index-DM4O6Kw0.js:23
+kt	@	index-DM4O6Kw0.js:23
+Yi.qa	@	index-DM4O6Kw0.js:31
+Ei	@	index-DM4O6Kw0.js:28
+Qn.Y	@	index-DM4O6Kw0.js:27
+Qn.ba	@	index-DM4O6Kw0.js:27
+Ts	@	index-DM4O6Kw0.js:23
+kt	@	index-DM4O6Kw0.js:23
+bo	@	index-DM4O6Kw0.js:30
+n.Xa	@	index-DM4O6Kw0.js:30
+n.Ca	@	index-DM4O6Kw0.js:30
+Zn	@	index-DM4O6Kw0.js:29
+n.Ma	@	index-DM4O6Kw0.js:28
+Promise.then		
+Er	@	index-DM4O6Kw0.js:28
+n.Pa	@	index-DM4O6Kw0.js:28
+Promise.then		
+n.send	@	index-DM4O6Kw0.js:28
+n.ea	@	index-DM4O6Kw0.js:30
+mr	@	index-DM4O6Kw0.js:27
+Gu	@	index-DM4O6Kw0.js:31
+n.Da	@	index-DM4O6Kw0.js:31
+b	@	index-DM4O6Kw0.js:23
+Promise.then		
+se	@	index-DM4O6Kw0.js:23
+Fu	@	index-DM4O6Kw0.js:31
+Ei	@	index-DM4O6Kw0.js:28
+Qn.Y	@	index-DM4O6Kw0.js:27
+Qn.ba	@	index-DM4O6Kw0.js:27
+Ts	@	index-DM4O6Kw0.js:23
+kt	@	index-DM4O6Kw0.js:23
+bo	@	index-DM4O6Kw0.js:30
+n.Xa	@	index-DM4O6Kw0.js:30
+n.Ca	@	index-DM4O6Kw0.js:30
+Zn	@	index-DM4O6Kw0.js:29
+n.Ma	@	index-DM4O6Kw0.js:28
+Promise.then		
+Er	@	index-DM4O6Kw0.js:28
+n.Pa	@	index-DM4O6Kw0.js:28
+Promise.then		
+n.send	@	index-DM4O6Kw0.js:28
+n.ea	@	index-DM4O6Kw0.js:30
+mr	@	index-DM4O6Kw0.js:27
+_i	@	index-DM4O6Kw0.js:27
+n.Ea	@	index-DM4O6Kw0.js:31
+b	@	index-DM4O6Kw0.js:23
+Promise.then		
+se	@	index-DM4O6Kw0.js:23
+bi	@	index-DM4O6Kw0.js:31
+n.connect	@	index-DM4O6Kw0.js:31
+ln.m	@	index-DM4O6Kw0.js:31
+Ho	@	index-DM4O6Kw0.js:39
+send	@	index-DM4O6Kw0.js:39
+K_	@	index-DM4O6Kw0.js:39
+Z_	@	index-DM4O6Kw0.js:39
+rg	@	index-DM4O6Kw0.js:40
+(anonymous)	@	index-DM4O6Kw0.js:40
+_D	@	index-DM4O6Kw0.js:40
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:43
+(anonymous)	@	index-DM4O6Kw0.js:43
+Promise.then		
+cc	@	index-DM4O6Kw0.js:43
+enqueue	@	index-DM4O6Kw0.js:43
+enqueueAndForget	@	index-DM4O6Kw0.js:43
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+s_	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+setTimeout		
+T_	@	index-DM4O6Kw0.js:39
+j_	@	index-DM4O6Kw0.js:39
+G_	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+Promise.then		
+auth	@	index-DM4O6Kw0.js:39
+start	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:40
+(anonymous)	@	index-DM4O6Kw0.js:43
+(anonymous)	@	index-DM4O6Kw0.js:43
+Promise.then		
+cc	@	index-DM4O6Kw0.js:43
+enqueue	@	index-DM4O6Kw0.js:43
+enqueueAndForget	@	index-DM4O6Kw0.js:43
+handleDelayElapsed	@	index-DM4O6Kw0.js:40
+(anonymous)	@	index-DM4O6Kw0.js:40
+setTimeout		
+start	@	index-DM4O6Kw0.js:40
+createAndSchedule	@	index-DM4O6Kw0.js:40
+enqueueAfterDelay	@	index-DM4O6Kw0.js:43
+p_	@	index-DM4O6Kw0.js:39
+N_	@	index-DM4O6Kw0.js:39
+start	@	index-DM4O6Kw0.js:39
+ag	@	index-DM4O6Kw0.js:40
+vD	@	index-DM4O6Kw0.js:40
+close	@	index-DM4O6Kw0.js:39
+z_	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:43
+(anonymous)	@	index-DM4O6Kw0.js:43
+Promise.then		
+cc	@	index-DM4O6Kw0.js:43
+enqueue	@	index-DM4O6Kw0.js:43
+enqueueAndForget	@	index-DM4O6Kw0.js:43
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+o_	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+(anonymous)	@	index-DM4O6Kw0.js:39
+Ts	@	index-DM4O6Kw0.js:23
+kt	@	index-DM4O6Kw0.js:23
+Yi.qa	@	index-DM4O6Kw0.js:31
+Ei	@	index-DM4O6Kw0.js:28
+Qn.Y	@	index-DM4O6Kw0.js:27
+Qn.ba	@	index-DM4O6Kw0.js:27
+Ts	@	index-DM4O6Kw0.js:23
+kt	@	index-DM4O6Kw0.js:23
+bo	@	index-DM4O6Kw0.js:30
+n.Xa	@	index-DM4O6Kw0.js:30
+n.Ca	@	index-DM4O6Kw0.js:30
+Zn	@	index-DM4O6Kw0.js:29
+n.Ma	@	index-DM4O6Kw0.js:28
+Promise.then		
+Er	@	index-DM4O6Kw0.js:28
+n.Pa	@	index-DM4O6Kw0.js:28
+Promise.then		
+n.send	@	index-DM4O6Kw0.js:28
+n.ea	@	index-DM4O6Kw0.js:30
+mr	@	index-DM4O6Kw0.js:27
+Gu	@	index-DM4O6Kw0.js:31
+n.Da	@	index-DM4O6Kw0.js:31
+b	@	index-DM4O6Kw0.js:23
+Promise.then		
+se	@	index-DM4O6Kw0.js:23
+Fu	@	index-DM4O6Kw0.js:31
+Ei	@	index-DM4O6Kw0.js:28
+Qn.Y	@	index-DM4O6Kw0.js:27
+Qn.ba	@	index-DM4O6Kw0.js:27
+Ts	@	index-DM4O6Kw0.js:23
+kt	@	index-DM4O6Kw0.js:23
+bo	@	index-DM4O6Kw0.js:30
+n.Xa	@	index-DM4O6Kw0.js:30
+n.Ca	@	index-DM4O6Kw0.js:30
+Zn	@	index-DM4O6Kw0.js:29
+n.Ma	@	index-DM4O6Kw0.js:28
+Promise.then		
+Er	@	index-DM4O6Kw0.js:28
+n.Pa	@	index-DM4O6Kw0.js:28
+
+(index):1 Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received
+(index):1 Unchecked runtime.lastError: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received
+﻿
+

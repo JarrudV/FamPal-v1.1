@@ -17,7 +17,15 @@ import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Profile from './components/Profile';
 import { AppState, User } from './types';
+import type { User as FirebaseUser } from 'firebase/auth';
 
+// Convert Firebase Auth User to plain serializable object
+const serializeUser = (firebaseUser: FirebaseUser): User => ({
+  uid: firebaseUser.uid,
+  email: firebaseUser.email,
+  displayName: firebaseUser.displayName,
+  photoURL: firebaseUser.photoURL,
+});
 
 // Returns a state object with all arrays guaranteed to be non-null
 const getInitialState = (user: User | null): AppState => ({
@@ -111,15 +119,19 @@ const App: React.FC = () => {
           setLoading(false);
           return;
         }
+        
+        // Convert Firebase Auth User to plain object for Firestore
+        const serializedUser = serializeUser(userAuth);
         const userDocRef = doc(db, 'users', userAuth.uid);
 
         const unsubscribeSnapshot = onSnapshot(userDocRef, (snap) => {
-          const initialState = getInitialState(userAuth);
+          const initialState = getInitialState(serializedUser);
           if (snap.exists()) {
             const dbState = snap.data();
             // Deep merge to avoid undefined arrays
             setState({
               ...initialState,
+              user: serializedUser, // Always use fresh user data from auth
               ...dbState,
               favorites: dbState.favorites || [],
               favoriteDetails: dbState.favoriteDetails || {},
@@ -130,7 +142,12 @@ const App: React.FC = () => {
               groups: dbState.groups || [],
             });
           } else {
-            setDoc(userDocRef, initialState, { merge: true });
+            // Save only serializable data to Firestore
+            const dataToSave = {
+              ...initialState,
+              user: serializedUser,
+            };
+            setDoc(userDocRef, dataToSave, { merge: true });
             setState(initialState);
           }
           setView('dashboard');
