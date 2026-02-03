@@ -70,10 +70,11 @@ export async function fetchNearbyPlaces(
   const agesKey = safeChildren.map(c => c.age).sort().join(',') || 'none';
   const cacheKey = `${lat.toFixed(2)}:${lng.toFixed(2)}:${type}:${radiusKm}:${searchQuery || ''}:ages:${agesKey}`;
   
-  // Check cache first
-  const cached = placesCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < PLACES_CACHE_TTL) {
-    return cached.places;
+  // Check localStorage cache first (persists across page refreshes)
+  const cached = getCachedPlaces(cacheKey);
+  if (cached) {
+    console.log('[FamPals] Loaded places from cache');
+    return cached;
   }
   
   const ai = getAI();
@@ -135,8 +136,9 @@ export async function fetchNearbyPlaces(
       imageUrl: getPlaceholderImage(place.type, place.name, index)
     }));
     
-    // Cache the results
-    placesCache.set(cacheKey, { places, timestamp: Date.now() });
+    // Cache the results to localStorage (persists across page refreshes)
+    setPlacesCache(cacheKey, { places, timestamp: Date.now() });
+    console.log('[FamPals] Cached places for faster loading');
     
     return places;
 
@@ -149,9 +151,52 @@ export async function fetchNearbyPlaces(
 // In-memory cache for AI responses during the session (reduces API calls for repeated questions)
 const aiResponseCache: Map<string, string> = new Map();
 
-// Cache for fetched places to avoid repeated API calls
-const placesCache: Map<string, { places: Place[]; timestamp: number }> = new Map();
-const PLACES_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+// Persistent localStorage cache for places (survives page refresh)
+const PLACES_CACHE_KEY = 'fampals_places_cache';
+const PLACES_CACHE_TTL = 30 * 60 * 1000; // 30 minutes for better UX
+
+interface CacheEntry {
+  places: Place[];
+  timestamp: number;
+}
+
+interface PlacesCacheData {
+  [key: string]: CacheEntry;
+}
+
+function getPlacesCache(): PlacesCacheData {
+  try {
+    const cached = localStorage.getItem(PLACES_CACHE_KEY);
+    return cached ? JSON.parse(cached) : {};
+  } catch {
+    return {};
+  }
+}
+
+function setPlacesCache(key: string, data: CacheEntry) {
+  try {
+    const cache = getPlacesCache();
+    cache[key] = data;
+    // Keep only last 10 cache entries to avoid storage bloat
+    const keys = Object.keys(cache);
+    if (keys.length > 10) {
+      const oldest = keys.sort((a, b) => cache[a].timestamp - cache[b].timestamp)[0];
+      delete cache[oldest];
+    }
+    localStorage.setItem(PLACES_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // Silently fail if localStorage is full
+  }
+}
+
+function getCachedPlaces(key: string): Place[] | null {
+  const cache = getPlacesCache();
+  const entry = cache[key];
+  if (entry && Date.now() - entry.timestamp < PLACES_CACHE_TTL) {
+    return entry.places;
+  }
+  return null;
+}
 
 export async function askAboutPlace(
   place: Place,
