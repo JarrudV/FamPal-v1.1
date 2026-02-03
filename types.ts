@@ -187,6 +187,75 @@ export interface User {
   photoURL: string | null;
 }
 
+export type PlanTier = 'free' | 'pro' | 'lifetime';
+export type PlanStatus = 'active' | 'cancelled' | 'expired';
+export type EntitlementSource = 'paystack' | 'apple' | 'google' | 'admin' | null;
+
+export interface Entitlement {
+  plan_tier: PlanTier;
+  plan_status: PlanStatus;
+  entitlement_source: EntitlementSource;
+  entitlement_start_date: string | null;
+  entitlement_end_date: string | null;
+  paystack_customer_code?: string;
+  paystack_subscription_code?: string;
+  last_payment_reference?: string;
+  ai_requests_this_month: number;
+  ai_requests_reset_date: string;
+}
+
+export const PLAN_LIMITS = {
+  free: {
+    savedPlaces: 25,
+    notebookEntries: 25,
+    memories: 10,
+    circles: 2,
+    aiRequestsPerMonth: 10,
+    preferencesPerCategory: 3,
+    partnerFavorites: 3,
+    partnerMemories: 3,
+  },
+  pro: {
+    savedPlaces: Infinity,
+    notebookEntries: Infinity,
+    memories: Infinity,
+    circles: Infinity,
+    aiRequestsPerMonth: 100,
+    preferencesPerCategory: Infinity,
+    partnerFavorites: Infinity,
+    partnerMemories: Infinity,
+  },
+  lifetime: {
+    savedPlaces: Infinity,
+    notebookEntries: Infinity,
+    memories: Infinity,
+    circles: Infinity,
+    aiRequestsPerMonth: 200,
+    preferencesPerCategory: Infinity,
+    partnerFavorites: Infinity,
+    partnerMemories: Infinity,
+  }
+} as const;
+
+export const PLAN_PRICES = {
+  pro: { amount: 7500, currency: 'ZAR', label: 'R75/year' },
+  lifetime: { amount: 39900, currency: 'ZAR', label: 'R399 once-off' }
+} as const;
+
+export function getDefaultEntitlement(): Entitlement {
+  const now = new Date();
+  const resetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  return {
+    plan_tier: 'free',
+    plan_status: 'active',
+    entitlement_source: null,
+    entitlement_start_date: null,
+    entitlement_end_date: null,
+    ai_requests_this_month: 0,
+    ai_requests_reset_date: resetDate.toISOString(),
+  };
+}
+
 export interface AppState {
   isAuthenticated: boolean;
   user: User | null;
@@ -203,6 +272,7 @@ export interface AppState {
   partnerLink?: PartnerLink;
   groups: FamilyGroup[];
   friendCircles: FriendCircle[];
+  entitlement: Entitlement;
   aiRequestsUsed: number;
   isPro?: boolean;
 }
