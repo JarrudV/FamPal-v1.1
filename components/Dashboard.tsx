@@ -47,6 +47,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   const [selectedGroup, setSelectedGroup] = useState<FriendCircle | null>(null);
   const [addToGroupPlace, setAddToGroupPlace] = useState<Place | null>(null);
   
+  // Upgrade prompt state
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState<'savedPlaces' | 'memories' | null>(null);
+  
   // Plan & Billing modal
   const [showPlanBilling, setShowPlanBilling] = useState(false);
   
@@ -157,7 +160,17 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   };
 
   const toggleFavorite = (placeId: string) => {
-    const newFavorites = state.favorites.includes(placeId)
+    const isRemoving = state.favorites.includes(placeId);
+    
+    if (!isRemoving) {
+      const saveCheck = canSavePlace(state.entitlement, state.favorites.length);
+      if (!saveCheck.allowed) {
+        setShowUpgradePrompt('savedPlaces');
+        return;
+      }
+    }
+    
+    const newFavorites = isRemoving
       ? state.favorites.filter(id => id !== placeId)
       : [...state.favorites, placeId];
     onUpdateState('favorites', newFavorites);
@@ -197,6 +210,13 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
 
   const captureMemory = () => {
     if (!caption || !memoryVenueId) return;
+    
+    const memoryCheck = canAddMemory(state.entitlement, state.memories?.length || 0);
+    if (!memoryCheck.allowed) {
+      setShowUpgradePrompt('memories');
+      return;
+    }
+    
     const newMemory: Memory = {
       id: Date.now().toString(),
       placeId: memoryVenueId,
@@ -812,6 +832,18 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
           state={state} 
           onClose={() => setShowPlanBilling(false)} 
           onUpdateState={onUpdateState}
+        />
+      )}
+      
+      {showUpgradePrompt && (
+        <UpgradePrompt 
+          feature={showUpgradePrompt}
+          entitlement={state.entitlement}
+          onClose={() => setShowUpgradePrompt(null)}
+          onUpgrade={() => {
+            setShowUpgradePrompt(null);
+            setShowPlanBilling(true);
+          }}
         />
       )}
     </div>

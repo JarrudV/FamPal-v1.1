@@ -17,24 +17,38 @@ export function isPaidTier(entitlement: Entitlement | undefined): boolean {
   return (plan_tier === 'pro' || plan_tier === 'lifetime') && plan_status === 'active';
 }
 
-export function canSavePlace(entitlement: Entitlement | undefined, currentCount: number): boolean {
-  const limits = getLimits(entitlement);
-  return currentCount < limits.savedPlaces;
+interface FeatureCheck {
+  allowed: boolean;
+  remaining: number;
+  limit: number;
 }
 
-export function canAddNotebookEntry(entitlement: Entitlement | undefined, currentCount: number): boolean {
+export function canSavePlace(entitlement: Entitlement | undefined, currentCount: number): FeatureCheck {
   const limits = getLimits(entitlement);
-  return currentCount < limits.notebookEntries;
+  const limit = limits.savedPlaces;
+  const remaining = Math.max(0, limit - currentCount);
+  return { allowed: currentCount < limit, remaining, limit };
 }
 
-export function canAddMemory(entitlement: Entitlement | undefined, currentCount: number): boolean {
+export function canAddNotebookEntry(entitlement: Entitlement | undefined, currentCount: number): FeatureCheck {
   const limits = getLimits(entitlement);
-  return currentCount < limits.memories;
+  const limit = limits.notebookEntries;
+  const remaining = Math.max(0, limit - currentCount);
+  return { allowed: currentCount < limit, remaining, limit };
 }
 
-export function canCreateCircle(entitlement: Entitlement | undefined, currentCount: number): boolean {
+export function canAddMemory(entitlement: Entitlement | undefined, currentCount: number): FeatureCheck {
   const limits = getLimits(entitlement);
-  return currentCount < limits.circles;
+  const limit = limits.memories;
+  const remaining = Math.max(0, limit - currentCount);
+  return { allowed: currentCount < limit, remaining, limit };
+}
+
+export function canCreateCircle(entitlement: Entitlement | undefined, currentCount: number): FeatureCheck {
+  const limits = getLimits(entitlement);
+  const limit = limits.circles;
+  const remaining = Math.max(0, limit - currentCount);
+  return { allowed: currentCount < limit, remaining, limit };
 }
 
 export function canUseAI(entitlement: Entitlement | undefined): { allowed: boolean; remaining: number; limit: number } {
@@ -50,9 +64,11 @@ export function canUseAI(entitlement: Entitlement | undefined): { allowed: boole
   };
 }
 
-export function canAddPreference(entitlement: Entitlement | undefined, currentCount: number): boolean {
+export function canAddPreference(entitlement: Entitlement | undefined, currentCount: number): FeatureCheck {
   const limits = getLimits(entitlement);
-  return currentCount < limits.preferencesPerCategory;
+  const limit = limits.preferencesPerCategory;
+  const remaining = Math.max(0, limit - currentCount);
+  return { allowed: currentCount < limit, remaining, limit };
 }
 
 export function shouldResetMonthlyAI(entitlement: Entitlement | undefined): boolean {
