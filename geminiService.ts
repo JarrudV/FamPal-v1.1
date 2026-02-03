@@ -58,20 +58,36 @@ export async function fetchNearbyPlaces(
   lng: number,
   type: ActivityType = 'all',
   children: Child[] = [],
-  radiusKm: number = 10
+  radiusKm: number = 10,
+  searchQuery?: string
 ): Promise<Place[]> {
   if (!import.meta.env.VITE_GEMINI_API_KEY) {
     throw new Error("Gemini API key missing – AI disabled");
   }
+  
+  // Create cache key including children ages for proper family context
+  const safeChildren = Array.isArray(children) ? children : [];
+  const agesKey = safeChildren.map(c => c.age).sort().join(',') || 'none';
+  const cacheKey = `${lat.toFixed(2)}:${lng.toFixed(2)}:${type}:${radiusKm}:${searchQuery || ''}:ages:${agesKey}`;
+  
+  // Check cache first
+  const cached = placesCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < PLACES_CACHE_TTL) {
+    return cached.places;
+  }
+  
   const ai = getAI();
   try {
-    const safeChildren = Array.isArray(children) ? children : [];
     const ageContext = safeChildren.length > 0
       ? ` The family has children with ages: ${safeChildren.map(c => c.age).join(', ')}. Recommend places appropriate for these ages.`
       : " Recommend generic kid-friendly spots.";
+    
+    const searchContext = searchQuery 
+      ? ` Focus on places matching: "${searchQuery}".`
+      : "";
 
-    const prompt = `Find 5-10 kid and pet-friendly ${type === 'all' ? 'places' : type} within ${radiusKm}km of ${lat}, ${lng}.${ageContext} 
-    Return a strict JSON array of places. Each place must have an id, name, description, address, rating (1-5), tags (array of strings), mapsUrl, type, priceLevel ($, $$, $$$), imageUrl, distance (string), and ageAppropriate string.`;
+    const prompt = `Find 5-10 kid and pet-friendly ${type === 'all' ? 'places' : type} within ${radiusKm}km of ${lat}, ${lng}.${ageContext}${searchContext}
+    Return a strict JSON array of REAL places with actual contact info. Each place must have an id, name, description, address, rating (1-5), tags (array of strings), mapsUrl (Google Maps link), type, priceLevel ($, $$, $$$), imageUrl, distance (string), ageAppropriate string, phone (real phone number if known), and website (real website URL if known).`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
@@ -95,6 +111,8 @@ export async function fetchNearbyPlaces(
               imageUrl: { type: Type.STRING },
               distance: { type: Type.STRING },
               ageAppropriate: { type: Type.STRING },
+              phone: { type: Type.STRING },
+              website: { type: Type.STRING },
             },
             required: ["id", "name", "description", "address", "rating", "tags", "mapsUrl", "type", "priceLevel", "imageUrl", "distance", "ageAppropriate"],
           },
@@ -111,12 +129,16 @@ export async function fetchNearbyPlaces(
     }
 
     // Post-process to ensure IDs are unique and use reliable placeholder images
-    return data.map((place: any, index: number) => ({
+    const places = data.map((place: any, index: number) => ({
       ...place,
       id: place.id || `gen-${Date.now()}-${index}`,
-      // Use Unsplash source for reliable, type-specific placeholder images
       imageUrl: getPlaceholderImage(place.type, place.name, index)
     }));
+    
+    // Cache the results
+    placesCache.set(cacheKey, { places, timestamp: Date.now() });
+    
+    return places;
 
   } catch (error: any) {
     console.error("Gemini Fetch Error:", error);
@@ -126,6 +148,10 @@ export async function fetchNearbyPlaces(
 
 // In-memory cache for AI responses during the session (reduces API calls for repeated questions)
 const aiResponseCache: Map<string, string> = new Map();
+
+// Cache for fetched places to avoid repeated API calls
+const placesCache: Map<string, { places: Place[]; timestamp: number }> = new Map();
+const PLACES_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export async function askAboutPlace(
   place: Place,

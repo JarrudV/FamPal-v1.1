@@ -29,6 +29,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onSignOut, setView, onUpda
   
   // Radius slider state (in km)
   const [radiusKm, setRadiusKm] = useState(10);
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Get user's location on mount
   useEffect(() => {
@@ -68,7 +71,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onSignOut, setView, onUpda
     );
   }, []);
 
-  // Fetch places when location, filter, or radius changes
+  // Fetch places when location, filter, radius, or search changes
   useEffect(() => {
     const fetchPlaces = async () => {
       if (!userLocation) return;
@@ -80,7 +83,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onSignOut, setView, onUpda
           userLocation.lng, 
           selectedFilter, 
           state.children,
-          radiusKm
+          radiusKm,
+          searchQuery
         );
         setPlaces(results);
       } catch (error) {
@@ -93,7 +97,43 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onSignOut, setView, onUpda
     if (activeTab === 'explore' && userLocation) {
       fetchPlaces();
     }
-  }, [selectedFilter, activeTab, state.children, userLocation, radiusKm]);
+  }, [selectedFilter, activeTab, state.children, userLocation, radiusKm, searchQuery]);
+  
+  // Handle search from header
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    setActiveTab('explore');
+  };
+  
+  // Handle location change from postcode input
+  const handleLocationChange = async (postcode: string): Promise<void> => {
+    setLocationName('Searching...');
+    setLocationError(null);
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(postcode)}&format=json&limit=1`,
+        {
+          headers: {
+            'User-Agent': 'FamPals/1.0 (Family Adventure App)'
+          }
+        }
+      );
+      const data = await response.json();
+      if (data && data.length > 0) {
+        const { lat, lon, display_name } = data[0];
+        setUserLocation({ lat: parseFloat(lat), lng: parseFloat(lon) });
+        const shortName = display_name.split(',')[0];
+        setLocationName(shortName);
+      } else {
+        setLocationError('Location not found. Try a different address.');
+        setLocationName('Unknown');
+      }
+    } catch (err) {
+      console.error('Geocoding error:', err);
+      setLocationError('Failed to find location. Please try again.');
+      setLocationName('Your Area');
+    }
+  };
 
   const toggleFavorite = (placeId: string) => {
     const newFavorites = state.favorites.includes(placeId)
@@ -139,7 +179,13 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onSignOut, setView, onUpda
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-24">
-      <Header setView={setView} user={state.user} locationName={locationName} />
+      <Header 
+        setView={setView} 
+        user={state.user} 
+        locationName={locationName} 
+        onSearch={handleSearch}
+        onLocationChange={handleLocationChange}
+      />
       
       <div className="px-5 py-4">
         <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar">

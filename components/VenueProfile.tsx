@@ -181,8 +181,27 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
             <section className="space-y-4">
               <h3 className="text-xl font-extrabold text-[#1E293B]">Contact Details</h3>
               <div className="grid grid-cols-1 gap-3">
-                <ContactLink icon="📞" label="Phone" value={place.phone || '+1 555-0199'} />
-                <ContactLink icon="🌐" label="Official Site" value={place.website || 'venue.com'} link={place.mapsUrl} />
+                {place.phone && (
+                  <a href={`tel:${place.phone}`} className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-100 hover:bg-sky-50 transition-colors">
+                    <span className="text-2xl">📞</span>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phone</p>
+                      <p className="text-sm font-bold text-sky-600">{place.phone}</p>
+                    </div>
+                  </a>
+                )}
+                {place.website && (
+                  <a href={place.website.startsWith('http') ? place.website : `https://${place.website}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-100 hover:bg-sky-50 transition-colors">
+                    <span className="text-2xl">🌐</span>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Website</p>
+                      <p className="text-sm font-bold text-sky-600 truncate max-w-[200px]">{place.website.replace(/^https?:\/\//, '')}</p>
+                    </div>
+                  </a>
+                )}
+                {!place.phone && !place.website && (
+                  <p className="text-sm text-slate-400 italic">Contact details not available</p>
+                )}
                 <button 
                   onClick={() => window.open(place.mapsUrl, '_blank')} 
                   className="w-full h-16 bg-[#0EA5E9] text-white rounded-3xl font-extrabold mt-4 shadow-xl shadow-sky-100 flex items-center justify-center gap-2 active:scale-95 transition-all"
