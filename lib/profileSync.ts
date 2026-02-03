@@ -113,7 +113,12 @@ async function flushPendingUpdates(): Promise<void> {
   
   try {
     const userDocRef = doc(db, 'users', userId);
-    await updateDoc(userDocRef, { userPreferences: pendingUpdates });
+    // Use dot-path notation to merge into userPreferences without overwriting other fields
+    const dotPathUpdates: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(pendingUpdates)) {
+      dotPathUpdates[`userPreferences.${key}`] = value;
+    }
+    await updateDoc(userDocRef, dotPathUpdates);
     pendingUpdates = {};
   } catch (error) {
     console.error('Failed to flush preference updates:', error);
