@@ -3,8 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   auth,
   googleProvider,
-  getRedirectResult,
-  signInWithRedirect,
+  signInWithPopup,
   onAuthStateChanged,
   signOut as firebaseSignOut,
   doc,
@@ -44,10 +43,10 @@ const App: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
-      await signInWithRedirect(auth, googleProvider);
+      await signInWithPopup(auth!, googleProvider!);
     } catch (e: any) {
       setError(`Login failed: ${e.message}`);
-      console.error("Login redirect error:", e);
+      console.error("Login popup error:", e);
       setLoading(false);
     }
   }, []);
@@ -117,23 +116,9 @@ const App: React.FC = () => {
 
         return () => unsubscribeSnapshot();
       } else {
-        getRedirectResult(auth)
-          .then((result) => {
-            if (!result) {
-              // No redirect result, so we are not in a login flow.
-              // Stop loading and show the login page.
-              setState(getInitialState(null));
-              setView('login');
-              setLoading(false);
-            }
-            // If there is a redirect result, onAuthStateChanged will
-            // fire again with a user. We just wait.
-          })
-          .catch((error) => {
-            console.error("Redirect result error:", error);
-            setError(`Login failed: ${error.message}`);
-            setLoading(false);
-          });
+        setState(getInitialState(null));
+        setView('login');
+        setLoading(false);
       }
     });
 
