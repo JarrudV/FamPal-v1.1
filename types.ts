@@ -63,10 +63,18 @@ export interface FamilyGroup {
   whatsappLink?: string;
 }
 
+export interface User {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+}
+
 export interface AppState {
   isAuthenticated: boolean;
+  user: User | null;
   favorites: string[]; 
-  favoriteDetails: Record<string, FavoriteData>; // Map of placeId to custom info
+  favoriteDetails: Record<string, FavoriteData>;
   visited: string[];
   reviews: UserReview[];
   memories: Memory[];
