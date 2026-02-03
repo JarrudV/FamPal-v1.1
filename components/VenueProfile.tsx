@@ -9,19 +9,29 @@ interface VenueProfileProps {
   isFavorite: boolean;
   favoriteData?: FavoriteData;
   childrenAges?: number[];
+  isGuest?: boolean;
+  aiRequestsUsed?: number;
+  isPro?: boolean;
   onClose: () => void;
   onToggleFavorite: () => void;
   onUpdateDetails: (data: Partial<FavoriteData>) => void;
+  onIncrementAiRequests?: () => void;
 }
+
+const AI_REQUEST_LIMIT = 5;
 
 const VenueProfile: React.FC<VenueProfileProps> = ({ 
   place, 
   isFavorite, 
   favoriteData, 
   childrenAges = [],
+  isGuest = false,
+  aiRequestsUsed = 0,
+  isPro = false,
   onClose, 
   onToggleFavorite, 
-  onUpdateDetails 
+  onUpdateDetails,
+  onIncrementAiRequests
 }) => {
   const [activeTab, setActiveTab] = useState<'info' | 'parent'>('info');
   const [aiQuestion, setAiQuestion] = useState('');
@@ -38,17 +48,38 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
     "Best time to visit?"
   ];
 
+  const aiLimitReached = !isPro && aiRequestsUsed >= AI_REQUEST_LIMIT;
+  
   const handleAskAI = async (question: string) => {
     if (!question.trim()) return;
+    if (isGuest) return;
+    if (aiLimitReached) return;
+    
     setAiLoading(true);
     setAiAnswer('');
     try {
       const answer = await askAboutPlace(place, question, { childrenAges });
       setAiAnswer(answer);
+      if (onIncrementAiRequests) {
+        onIncrementAiRequests();
+      }
     } catch (error: any) {
       setAiAnswer(error.message || 'Failed to get response. Please try again.');
     }
     setAiLoading(false);
+  };
+  
+  const [summarySaved, setSummarySaved] = useState(false);
+  
+  const handleSaveSummary = () => {
+    if (!aiAnswer) return;
+    const currentNotes = favoriteData?.notes || '';
+    const timestamp = new Date().toLocaleDateString();
+    const newNote = `\n\n--- AI Summary (${timestamp}) ---\n${aiAnswer}`;
+    const updatedNotes = currentNotes + newNote;
+    onUpdateDetails({ notes: updatedNotes.trim() });
+    setSummarySaved(true);
+    setTimeout(() => setSummarySaved(false), 2000);
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -129,52 +160,98 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
             </section>
 
             <section className="space-y-4">
-              <button 
-                onClick={() => setShowAiPanel(!showAiPanel)}
-                className="w-full h-16 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-3xl font-extrabold shadow-xl shadow-purple-100 flex items-center justify-center gap-3 active:scale-95 transition-all"
-              >
-                <span className="text-xl">✨</span>
-                Ask AI About This Place
-              </button>
-              
-              {showAiPanel && (
-                <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-3xl p-6 space-y-4 border border-purple-100 animate-slide-up">
-                  <div className="flex flex-wrap gap-2">
-                    {quickQuestions.map(q => (
-                      <button 
-                        key={q}
-                        onClick={() => { setAiQuestion(q); handleAskAI(q); }}
-                        className="px-4 py-2 bg-white rounded-xl text-xs font-bold text-purple-600 hover:bg-purple-100 transition-colors shadow-sm"
-                      >
-                        {q}
-                      </button>
-                    ))}
+              {isGuest ? (
+                <div className="relative">
+                  <button 
+                    disabled
+                    className="w-full h-16 bg-gradient-to-r from-slate-300 to-slate-400 text-white rounded-3xl font-extrabold shadow-lg flex items-center justify-center gap-3 opacity-60 cursor-not-allowed"
+                  >
+                    <span className="text-xl">✨</span>
+                    Ask AI About This Place
+                  </button>
+                  <div className="mt-3 bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center">
+                    <p className="text-sm font-bold text-amber-700">Sign in to unlock AI summaries</p>
+                    <p className="text-xs text-amber-600 mt-1">Get personalized insights for your family</p>
                   </div>
+                </div>
+              ) : (
+                <>
+                  <button 
+                    onClick={() => setShowAiPanel(!showAiPanel)}
+                    className="w-full h-16 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-3xl font-extrabold shadow-xl shadow-purple-100 flex items-center justify-center gap-3 active:scale-95 transition-all"
+                  >
+                    <span className="text-xl">✨</span>
+                    Ask AI About This Place
+                    {!isPro && (
+                      <span className="text-xs bg-white/20 px-2 py-1 rounded-lg">
+                        {AI_REQUEST_LIMIT - aiRequestsUsed} left
+                      </span>
+                    )}
+                  </button>
                   
-                  <div className="flex gap-2">
-                    <input 
-                      type="text"
-                      value={aiQuestion}
-                      onChange={(e) => setAiQuestion(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAskAI(aiQuestion)}
-                      placeholder="Ask anything about this place..."
-                      className="flex-1 px-4 py-3 rounded-xl bg-white text-sm font-medium focus:ring-2 focus:ring-purple-500 outline-none"
-                    />
-                    <button 
-                      onClick={() => handleAskAI(aiQuestion)}
-                      disabled={aiLoading || !aiQuestion.trim()}
-                      className="px-6 py-3 bg-purple-600 text-white rounded-xl font-bold text-sm disabled:opacity-50 active:scale-95 transition-all"
-                    >
-                      {aiLoading ? '...' : 'Ask'}
-                    </button>
-                  </div>
-                  
-                  {aiAnswer && (
-                    <div className="bg-white rounded-2xl p-4 shadow-sm">
-                      <p className="text-sm text-slate-600 leading-relaxed">{aiAnswer}</p>
+                  {showAiPanel && (
+                    <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-3xl p-6 space-y-4 border border-purple-100 animate-slide-up">
+                      {aiLimitReached ? (
+                        <div className="text-center py-4">
+                          <p className="text-lg font-bold text-purple-700">AI Limit Reached</p>
+                          <p className="text-sm text-purple-500 mt-2">You've used all {AI_REQUEST_LIMIT} free AI requests</p>
+                          <button className="mt-4 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-bold text-sm shadow-lg">
+                            Upgrade to Pro for Unlimited
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex flex-wrap gap-2">
+                            {quickQuestions.map(q => (
+                              <button 
+                                key={q}
+                                onClick={() => { setAiQuestion(q); handleAskAI(q); }}
+                                className="px-4 py-2 bg-white rounded-xl text-xs font-bold text-purple-600 hover:bg-purple-100 transition-colors shadow-sm"
+                              >
+                                {q}
+                              </button>
+                            ))}
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <input 
+                              type="text"
+                              value={aiQuestion}
+                              onChange={(e) => setAiQuestion(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && handleAskAI(aiQuestion)}
+                              placeholder="Ask anything about this place..."
+                              className="flex-1 px-4 py-3 rounded-xl bg-white text-sm font-medium focus:ring-2 focus:ring-purple-500 outline-none"
+                            />
+                            <button 
+                              onClick={() => handleAskAI(aiQuestion)}
+                              disabled={aiLoading || !aiQuestion.trim()}
+                              className="px-6 py-3 bg-purple-600 text-white rounded-xl font-bold text-sm disabled:opacity-50 active:scale-95 transition-all"
+                            >
+                              {aiLoading ? '...' : 'Ask'}
+                            </button>
+                          </div>
+                        </>
+                      )}
+                      
+                      {aiAnswer && (
+                        <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
+                          <p className="text-sm text-slate-600 leading-relaxed">{aiAnswer}</p>
+                          <button 
+                            onClick={handleSaveSummary}
+                            disabled={summarySaved}
+                            className={`w-full py-2 rounded-xl text-xs font-bold transition-colors ${
+                              summarySaved 
+                                ? 'bg-green-100 text-green-600' 
+                                : 'bg-purple-100 text-purple-600 hover:bg-purple-200'
+                            }`}
+                          >
+                            {summarySaved ? 'Saved!' : 'Save Summary to Notes'}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
-                </div>
+                </>
               )}
             </section>
 

@@ -8,12 +8,13 @@ import { fetchNearbyPlaces } from '../geminiService';
 
 interface DashboardProps {
   state: AppState;
+  isGuest: boolean;
   onSignOut: () => void;
   setView: (view: string) => void;
   onUpdateState: (key: keyof AppState, value: any) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ state, onSignOut, setView, onUpdateState }) => {
+const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setView, onUpdateState }) => {
   const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'memories'>('explore');
   const [selectedFilter, setSelectedFilter] = useState<ActivityType>('all');
   const [places, setPlaces] = useState<Place[]>([]);
@@ -160,6 +161,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onSignOut, setView, onUpda
 
   const favoritePlaces = places.filter(p => state.favorites.includes(p.id));
 
+  const handleIncrementAiRequests = () => {
+    onUpdateState('aiRequestsUsed', (state.aiRequestsUsed || 0) + 1);
+  };
+
   if (selectedPlace) {
     return (
       <VenueProfile 
@@ -173,6 +178,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, onSignOut, setView, onUpda
         }}
         favoriteData={state.favoriteDetails[selectedPlace.id]}
         childrenAges={state.children?.map(c => c.age) || []}
+        isGuest={isGuest}
+        aiRequestsUsed={state.aiRequestsUsed || 0}
+        isPro={state.isPro || false}
+        onIncrementAiRequests={handleIncrementAiRequests}
       />
     );
   }

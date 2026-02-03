@@ -95,4 +95,6 @@ export interface AppState {
   linkedEmail?: string;
   partnerLink?: PartnerLink;
   groups: FamilyGroup[];
+  aiRequestsUsed: number;
+  isPro?: boolean;
 }

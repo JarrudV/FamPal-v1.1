@@ -40,6 +40,8 @@ const getInitialState = (user: User | null): AppState => ({
   spouseName: '',
   linkedEmail: '',
   groups: [],
+  aiRequestsUsed: 0,
+  isPro: false,
 });
 
 const App: React.FC = () => {
@@ -189,7 +191,7 @@ const App: React.FC = () => {
 
     switch (view) {
       case 'dashboard':
-        return <Dashboard state={state} onSignOut={handleSignOut} setView={setView} onUpdateState={handleUpdateState} />;
+        return <Dashboard state={state} isGuest={isGuest} onSignOut={handleSignOut} setView={setView} onUpdateState={handleUpdateState} />;
       case 'profile':
         return <Profile state={state} onSignOut={handleSignOut} setView={setView} onUpdateState={handleUpdateState} />;
       default:
