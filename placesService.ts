@@ -49,11 +49,11 @@ export interface PlaceReview {
 const categoryToPlaceTypes: Record<ActivityType, string[]> = {
   all: ['tourist_attraction', 'park', 'restaurant', 'cafe', 'amusement_park', 'zoo', 'aquarium', 'museum'],
   restaurant: ['restaurant', 'cafe', 'bakery', 'ice_cream_shop'],
-  outdoor: ['park', 'campground', 'natural_feature', 'hiking_area'],
+  outdoor: ['park', 'national_park', 'campground', 'state_park'],
   indoor: ['museum', 'aquarium', 'bowling_alley', 'movie_theater', 'library'],
   active: ['gym', 'sports_complex', 'swimming_pool', 'playground'],
-  hike: ['hiking_area', 'national_park', 'trail_head', 'nature_reserve'],
-  wine: ['winery', 'vineyard'],
+  hike: ['national_park', 'state_park', 'park'],
+  wine: ['bar', 'restaurant'],
   golf: ['golf_course'],
 };
 
@@ -138,11 +138,11 @@ function getCached<T>(storageKey: string, cacheKey: string): T | null {
 
 function mapGoogleTypeToCategory(types: string[]): ActivityType {
   if (types.some(t => ['restaurant', 'cafe', 'bakery', 'food', 'meal_takeaway'].includes(t))) return 'restaurant';
-  if (types.some(t => ['park', 'campground', 'natural_feature'].includes(t))) return 'outdoor';
+  if (types.some(t => ['park', 'campground', 'state_park'].includes(t))) return 'outdoor';
   if (types.some(t => ['museum', 'aquarium', 'bowling_alley', 'movie_theater', 'library'].includes(t))) return 'indoor';
   if (types.some(t => ['gym', 'sports_complex', 'swimming_pool', 'playground'].includes(t))) return 'active';
-  if (types.some(t => ['hiking_area', 'national_park'].includes(t))) return 'hike';
-  if (types.some(t => ['winery', 'vineyard'].includes(t))) return 'wine';
+  if (types.some(t => ['national_park', 'state_park'].includes(t))) return 'hike';
+  if (types.some(t => ['bar', 'wine_bar'].includes(t))) return 'wine';
   if (types.some(t => ['golf_course'].includes(t))) return 'golf';
   return 'all';
 }
