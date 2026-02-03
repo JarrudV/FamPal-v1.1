@@ -1,8 +1,28 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Place, FavoriteData, ACTIVITY_OPTIONS, Memory } from '../types';
 import { askAboutPlace, generateFamilySummary } from '../geminiService';
+import { getPlaceDetails, PlaceDetails, PlaceReview } from '../placesService';
 import { storage, auth, ref, uploadBytes, getDownloadURL } from '../lib/firebase';
+
+function getNavigationUrl(place: Place, placeDetails?: PlaceDetails | null): string {
+  const lat = (place as any).lat || placeDetails?.lat;
+  const lng = (place as any).lng || placeDetails?.lng;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  
+  if (lat && lng) {
+    if (isIOS) {
+      return `https://maps.apple.com/?daddr=${lat},${lng}`;
+    }
+    return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+  }
+  
+  const address = encodeURIComponent(place.address || place.name);
+  if (isIOS) {
+    return `https://maps.apple.com/?daddr=${address}`;
+  }
+  return `https://www.google.com/maps/dir/?api=1&destination=${address}`;
+}
 
 interface VenueProfileProps {
   place: Place;
@@ -47,6 +67,20 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Fetch place details from Google Places for reviews and extra info
+  const [placeDetails, setPlaceDetails] = useState<PlaceDetails | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  
+  useEffect(() => {
+    const googlePlaceId = (place as any).googlePlaceId;
+    if (googlePlaceId) {
+      setLoadingDetails(true);
+      getPlaceDetails(googlePlaceId)
+        .then(details => setPlaceDetails(details))
+        .finally(() => setLoadingDetails(false));
+    }
+  }, [place]);
 
   const quickQuestions = [
     "Is this good for toddlers?",
@@ -295,10 +329,13 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                   <p className="text-sm text-slate-400 italic">Contact details not available</p>
                 )}
                 <button 
-                  onClick={() => window.open(place.mapsUrl, '_blank')} 
+                  onClick={() => {
+                    const navUrl = getNavigationUrl(place, placeDetails);
+                    window.open(navUrl, '_blank');
+                  }} 
                   className="w-full h-16 bg-[#0EA5E9] text-white rounded-3xl font-extrabold mt-4 shadow-xl shadow-sky-100 flex items-center justify-center gap-2 active:scale-95 transition-all"
                 >
-                  Open in Maps 🚀
+                  Navigate 🚀
                 </button>
                 
                 <div className="grid grid-cols-2 gap-3 mt-4">
@@ -334,6 +371,63 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                 </div>
               </div>
             </section>
+
+            {/* Google Reviews Section */}
+            {placeDetails?.reviews && placeDetails.reviews.length > 0 && (
+              <section className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-extrabold text-[#1E293B] flex items-center gap-2">
+                    <span>⭐</span> Reviews
+                    <span className="text-sm font-bold text-slate-400">
+                      ({placeDetails.userRatingsTotal || placeDetails.reviews.length} on Google)
+                    </span>
+                  </h3>
+                  <a 
+                    href={placeDetails.mapsUrl || place.mapsUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-xs font-bold text-sky-500 hover:underline"
+                  >
+                    See all on Google
+                  </a>
+                </div>
+                <div className="space-y-3">
+                  {placeDetails.reviews.slice(0, 3).map((review, idx) => (
+                    <div key={idx} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+                      <div className="flex items-start gap-3">
+                        {review.profilePhotoUrl ? (
+                          <img src={review.profilePhotoUrl} alt="" className="w-10 h-10 rounded-full" referrerPolicy="no-referrer" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-sm">
+                            {review.authorName.charAt(0)}
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-bold text-sm text-slate-700">{review.authorName}</span>
+                            <span className="text-xs text-slate-400">{review.relativeTimeDescription}</span>
+                          </div>
+                          <div className="flex gap-0.5 mb-2">
+                            {[...Array(5)].map((_, i) => (
+                              <span key={i} className={`text-sm ${i < review.rating ? 'text-amber-400' : 'text-slate-200'}`}>★</span>
+                            ))}
+                          </div>
+                          <p className="text-sm text-slate-600 line-clamp-3">{review.text}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <a 
+                  href={placeDetails.mapsUrl || place.mapsUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="block text-center text-sm font-bold text-sky-500 hover:underline py-2"
+                >
+                  Read more reviews on Google →
+                </a>
+              </section>
+            )}
 
             {venueMemories.length > 0 && (
               <section className="space-y-4">

@@ -152,7 +152,7 @@ export async function fetchNearbyPlaces(
               rating: { type: Type.NUMBER },
               tags: { type: Type.ARRAY, items: { type: Type.STRING } },
               mapsUrl: { type: Type.STRING },
-              type: { type: Type.STRING, enum: ["restaurant", "outdoor", "indoor", "active", "hike", "show", "all"] },
+              type: { type: Type.STRING, enum: ["restaurant", "outdoor", "indoor", "active", "hike", "wine", "golf", "all"] },
               priceLevel: { type: Type.STRING, enum: ["$", "$$", "$$$", "$$$$"] },
               imageUrl: { type: Type.STRING },
               distance: { type: Type.STRING },

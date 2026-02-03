@@ -11,12 +11,12 @@ const Filters: React.FC<FiltersProps> = ({ selected, onChange }) => {
   const categories: {id: ActivityType, label: string, icon: string}[] = [
     { id: 'all', label: 'All', icon: '✨' },
     { id: 'restaurant', label: 'Dine', icon: '🍕' },
+    { id: 'wine', label: 'Wine Farms', icon: '🍷' },
     { id: 'outdoor', label: 'Parks', icon: '🌳' },
     { id: 'hike', label: 'Hikes', icon: '⛰️' },
-    { id: 'wine', label: 'Wine', icon: '🍷' },
     { id: 'active', label: 'Active', icon: '⚽' },
-    { id: 'indoor', label: 'Play', icon: '🎲' },
-    { id: 'show', label: 'Shows', icon: '🎬' },
+    { id: 'indoor', label: 'Indoor', icon: '🏛️' },
+    { id: 'golf', label: 'Golf', icon: '⛳' },
   ];
 
   return (

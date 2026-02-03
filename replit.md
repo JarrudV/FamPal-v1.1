@@ -150,9 +150,34 @@ For Google Sign-In to work:
   - Pro upsell banner in preferences section
   - Partner Space limited to 3 favorites + 3 memories for free tier (Pro for unlimited)
   - Pro upsell banner when limits exceeded
+- **V2.0 Performance & Cost Optimization**:
+  - **NEW: Google Places API** for browsing - near-instant, no AI cost
+  - Browsing/Explore/Search uses Google Places API (not Gemini)
+  - AI (Gemini) now ONLY used for explicit "Ask AI" button actions
+  - Places cached by area+radius (30-min TTL in localStorage)
+  - Place details cached by place_id
+  - Categories updated: Removed "Shows", renamed "Play" to "Indoor", added "Golf"
+  - "Wine" renamed to "Wine Farms" and moved next to "Dine"
+  - Fixed "Open in Maps" for iPhone - uses Apple Maps deep links on iOS
+  - Navigate button uses coordinates when available for accurate directions
+  - Google Reviews section on venue profiles (shows 3 reviews + "See all on Google" link)
+  - Review source transparency: Shows total review count and links to Google
+  - New placesService.ts handles all Google Places API calls
+  - Cost reduction: Browsing is now free/cheap (Places API) instead of expensive (Gemini)
 - **Guest Mode Restrictions**:
   - Memories tab: Sign-in required prompt
   - Profile family updates: Sign-in required prompt
   - Connections/partner linking: Hidden for guests
   - Groups: Teaser UI with sample circles shown
   - Family info messaging: "Add children's ages for better AI recommendations"
+
+## Environment Variables (Secrets)
+All secrets are stored securely in Replit Secrets:
+- `VITE_FIREBASE_API_KEY` - Firebase API key
+- `VITE_FIREBASE_AUTH_DOMAIN` - Firebase auth domain
+- `VITE_FIREBASE_PROJECT_ID` - Firebase project ID
+- `VITE_FIREBASE_STORAGE_BUCKET` - Firebase storage bucket
+- `VITE_FIREBASE_MESSAGING_SENDER_ID` - Firebase messaging sender ID
+- `VITE_FIREBASE_APP_ID` - Firebase app ID
+- `VITE_GEMINI_API_KEY` - Google Gemini API key (AI features only)
+- `VITE_GOOGLE_PLACES_API_KEY` - Google Places API key (browsing/search)

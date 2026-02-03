@@ -6,7 +6,7 @@ import Filters from './Filters';
 import VenueProfile from './VenueProfile';
 import GroupsList from './GroupsList';
 import GroupDetail from './GroupDetail';
-import { fetchNearbyPlaces, SearchContext } from '../geminiService';
+import { searchNearbyPlaces, textSearchPlaces } from '../placesService';
 
 interface DashboardProps {
   state: AppState;
@@ -82,26 +82,21 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     );
   }, []);
 
-  // Fetch places when location, filter, radius, or search changes
+  // Fetch places when location, filter, radius, or search changes - uses Google Places API (fast, no AI cost)
   useEffect(() => {
     const fetchPlaces = async () => {
       if (!userLocation) return;
       
       setLoading(true);
       try {
-        const searchContext: SearchContext = {
-          userPreferences: state.preferences,
-          searchMode: 'family'
-        };
-        const results = await fetchNearbyPlaces(
-          userLocation.lat, 
-          userLocation.lng, 
-          selectedFilter, 
-          state.children,
-          radiusKm,
-          searchQuery,
-          searchContext
-        );
+        let results: Place[];
+        if (searchQuery.trim()) {
+          // Use text search for queries
+          results = await textSearchPlaces(searchQuery, userLocation.lat, userLocation.lng, radiusKm);
+        } else {
+          // Use nearby search for browsing - fast and cheap
+          results = await searchNearbyPlaces(userLocation.lat, userLocation.lng, selectedFilter, radiusKm);
+        }
         setPlaces(results);
       } catch (error) {
         console.error('Error fetching places:', error);
@@ -113,7 +108,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     if (activeTab === 'explore' && userLocation) {
       fetchPlaces();
     }
-  }, [selectedFilter, activeTab, state.children, state.preferences, userLocation, radiusKm, searchQuery]);
+  }, [selectedFilter, activeTab, userLocation, radiusKm, searchQuery]);
   
   // Handle search from header
   const handleSearch = (query: string) => {
