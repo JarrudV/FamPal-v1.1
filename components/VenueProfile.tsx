@@ -121,7 +121,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-[#F8FAFC] overflow-y-auto animate-slide-up">
+    <div className="fixed inset-0 z-[100] bg-[#F8FAFC] overflow-y-auto overflow-x-hidden animate-slide-up container-safe">
       <div className="relative h-96">
         <img src={place.imageUrl} className="w-full h-full object-cover" alt={place.name} />
         <div className="absolute inset-0 bg-gradient-to-t from-[#F8FAFC] via-transparent to-black/20"></div>
@@ -143,7 +143,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
            <div className="flex gap-2 mb-3">
              {place.tags.map(t => <span key={t} className="px-3 py-1 bg-white/40 backdrop-blur rounded-lg text-[9px] font-bold text-sky-900 uppercase tracking-widest">{t}</span>)}
            </div>
-           <h1 className="text-4xl font-black text-[#1E293B] tracking-tight leading-none">{place.name}</h1>
+           <h1 className="text-3xl sm:text-4xl font-black text-[#1E293B] tracking-tight leading-none break-words">{place.name}</h1>
            <p className="text-sm font-bold text-slate-500 mt-2">{place.address}</p>
         </div>
       </div>

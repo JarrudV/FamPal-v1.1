@@ -67,7 +67,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
   const userPhoto = state.user?.photoURL || 'https://picsum.photos/seed/guest/200';
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-24">
+    <div className="min-h-screen bg-[#F8FAFC] pb-24 container-safe">
       <header className="px-5 pt-8 pb-4 bg-white/80 backdrop-blur-lg sticky top-0 z-50 border-b border-slate-100">
         <div className="flex items-center gap-4">
           <button 

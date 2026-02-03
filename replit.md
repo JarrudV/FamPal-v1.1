@@ -113,6 +113,21 @@ For Google Sign-In to work:
   - 40+ predefined activity tags across 4 categories (Kids & Family, Nature & Outdoors, Food & Drink, Logistics & Vibes)
   - Toggle tags on/off per saved place for quick reference
   - Tags persist to Firestore with favoriteData
+- **V1.6 Past Adventures**:
+  - New "Adventures" tab to track places you've visited
+  - Adventure counter with trophy display showing total visits
+  - "Mark as Visited" button (map icon) on venue profiles
+  - Notes editing for each visited place
+  - Visit date tracking and remove option
+  - Shows heart for places that are also favorites
+  - Wine farms category added to activity filters
+- **V1.7 Mobile Layout Fixes (App Store Ready)**:
+  - iOS safe area insets for notch/home indicator
+  - Prevented horizontal overflow on all screens
+  - Added container-safe class for proper viewport handling
+  - Responsive text sizing for venue names
+  - Minimum 44px touch targets for buttons
+  - Word-break for long place names
 - **Guest Mode Restrictions**:
   - Memories tab: Sign-in required prompt
   - Profile family updates: Sign-in required prompt
