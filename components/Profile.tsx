@@ -376,7 +376,13 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
                 })}
               </div>
 
-              <div className="space-y-3">
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAddChild();
+                }}
+                className="space-y-3"
+              >
                 <div className="flex gap-3">
                   <input 
                     placeholder="Child's Name" 
@@ -393,13 +399,12 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
                   />
                 </div>
                 <button 
-                  type="button"
-                  onClick={handleAddChild}
+                  type="submit"
                   className="w-full h-12 bg-sky-500 text-white rounded-2xl font-bold text-sm shadow-lg shadow-sky-100 active-press flex items-center justify-center gap-2"
                 >
                   <span>+</span> Add Child
                 </button>
-              </div>
+              </form>
             </div>
           )}
         </div>
