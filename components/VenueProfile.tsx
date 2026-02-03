@@ -187,7 +187,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
 
       <div className="flex px-5 gap-4">
         <TabBtn active={activeTab === 'info'} onClick={() => setActiveTab('info')} label="Information" />
-        <TabBtn active={activeTab === 'parent'} onClick={() => setActiveTab('parent')} label="Parent's Notebook" />
+        <TabBtn active={activeTab === 'parent'} onClick={() => setActiveTab('parent')} label="Notebook" />
       </div>
 
       <div className="p-6 space-y-8 pb-32">
