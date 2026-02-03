@@ -48,6 +48,9 @@ A React-based family adventure app that helps parents find curated family-friend
 - **Profile Management**: Add children with ages, link partner
 - **Firestore Persistence**: All profile data saves to Firebase automatically
 - **AI Recommendations**: Uses Gemini to suggest family-friendly places
+- **Share to WhatsApp**: One-tap sharing of place details with friends/family
+- **Add to Calendar**: Quick "Plan This" button to add places to Google Calendar
+- **Reliable Images**: Category-specific placeholder images from Unsplash
 
 ## Environment Variables (Secrets)
 All secrets are stored securely in Replit Secrets:
