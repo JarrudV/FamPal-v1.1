@@ -2,6 +2,12 @@ import { Place, ActivityType } from "./types";
 
 const PLACES_API_KEY = import.meta.env.VITE_GOOGLE_PLACES_API_KEY || "";
 
+if (!PLACES_API_KEY) {
+  console.error('[FamPals] CRITICAL: Google Places API key is missing! Places will not load.');
+} else {
+  console.log('[FamPals] Places API configured:', PLACES_API_KEY.substring(0, 8) + '...');
+}
+
 const PLACES_CACHE_KEY = 'fampals_google_places_cache';
 const DETAILS_CACHE_KEY = 'fampals_place_details_cache';
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
