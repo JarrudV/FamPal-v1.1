@@ -1,0 +1,101 @@
+(index):64 cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation
+(anonymous) @ (index):64
+(index):1 <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes">
+(index):1 Unchecked runtime.lastError: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received
+(index):1 Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received
+index-CaYMpZsU.js:23 Cross-Origin-Opener-Policy policy would block the window.closed call.
+e @ index-CaYMpZsU.js:23
+index-CaYMpZsU.js:23 Cross-Origin-Opener-Policy policy would block the window.closed call.
+e @ index-CaYMpZsU.js:23
+index-CaYMpZsU.js:23 Cross-Origin-Opener-Policy policy would block the window.close call.
+close @ index-CaYMpZsU.js:23
+index-CaYMpZsU.js:23 Cross-Origin-Opener-Policy policy would block the window.close call.
+close @ index-CaYMpZsU.js:23
+index-CaYMpZsU.js:48  POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent 400 (Bad Request)
+apiCall @ index-CaYMpZsU.js:48
+unaryApiCall @ index-CaYMpZsU.js:44
+request @ index-CaYMpZsU.js:44
+await in request
+generateContentInternal @ index-CaYMpZsU.js:48
+generateContent @ index-CaYMpZsU.js:48
+await in generateContent
+Y4 @ index-CaYMpZsU.js:57
+(anonymous) @ index-CaYMpZsU.js:57
+(anonymous) @ index-CaYMpZsU.js:57
+Al @ index-CaYMpZsU.js:8
+V_ @ index-CaYMpZsU.js:8
+si @ index-CaYMpZsU.js:8
+V_ @ index-CaYMpZsU.js:8
+si @ index-CaYMpZsU.js:8
+V_ @ index-CaYMpZsU.js:8
+si @ index-CaYMpZsU.js:8
+V_ @ index-CaYMpZsU.js:8
+nv @ index-CaYMpZsU.js:8
+(anonymous) @ index-CaYMpZsU.js:8
+k @ index-CaYMpZsU.js:1
+installHook.js:1 Gemini Fetch Error: ApiError: {"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT","details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID","domain":"googleapis.com","metadata":{"service":"generativelanguage.googleapis.com"}},{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"API key not valid. Please pass a valid API key."}]}}
+    at Z0 (index-CaYMpZsU.js:48:3731)
+    at async index-CaYMpZsU.js:44:182614
+    at async nO.generateContent (index-CaYMpZsU.js:48:14815)
+    at async Y4 (index-CaYMpZsU.js:57:238)
+    at async index-CaYMpZsU.js:57:2386
+overrideMethod @ installHook.js:1
+Y4 @ index-CaYMpZsU.js:57
+await in Y4
+(anonymous) @ index-CaYMpZsU.js:57
+(anonymous) @ index-CaYMpZsU.js:57
+Al @ index-CaYMpZsU.js:8
+V_ @ index-CaYMpZsU.js:8
+si @ index-CaYMpZsU.js:8
+V_ @ index-CaYMpZsU.js:8
+si @ index-CaYMpZsU.js:8
+V_ @ index-CaYMpZsU.js:8
+si @ index-CaYMpZsU.js:8
+V_ @ index-CaYMpZsU.js:8
+nv @ index-CaYMpZsU.js:8
+(anonymous) @ index-CaYMpZsU.js:8
+k @ index-CaYMpZsU.js:1
+index-CaYMpZsU.js:48  POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent 400 (Bad Request)
+apiCall @ index-CaYMpZsU.js:48
+unaryApiCall @ index-CaYMpZsU.js:44
+request @ index-CaYMpZsU.js:44
+await in request
+generateContentInternal @ index-CaYMpZsU.js:48
+generateContent @ index-CaYMpZsU.js:48
+await in generateContent
+Y4 @ index-CaYMpZsU.js:57
+(anonymous) @ index-CaYMpZsU.js:57
+(anonymous) @ index-CaYMpZsU.js:57
+Al @ index-CaYMpZsU.js:8
+V_ @ index-CaYMpZsU.js:8
+si @ index-CaYMpZsU.js:8
+V_ @ index-CaYMpZsU.js:8
+si @ index-CaYMpZsU.js:8
+V_ @ index-CaYMpZsU.js:8
+si @ index-CaYMpZsU.js:8
+V_ @ index-CaYMpZsU.js:8
+nv @ index-CaYMpZsU.js:8
+(anonymous) @ index-CaYMpZsU.js:8
+k @ index-CaYMpZsU.js:1
+installHook.js:1 Gemini Fetch Error: ApiError: {"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT","details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID","domain":"googleapis.com","metadata":{"service":"generativelanguage.googleapis.com"}},{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"API key not valid. Please pass a valid API key."}]}}
+    at Z0 (index-CaYMpZsU.js:48:3731)
+    at async index-CaYMpZsU.js:44:182614
+    at async nO.generateContent (index-CaYMpZsU.js:48:14815)
+    at async Y4 (index-CaYMpZsU.js:57:238)
+    at async index-CaYMpZsU.js:57:2386
+overrideMethod @ installHook.js:1
+Y4 @ index-CaYMpZsU.js:57
+await in Y4
+(anonymous) @ index-CaYMpZsU.js:57
+(anonymous) @ index-CaYMpZsU.js:57
+Al @ index-CaYMpZsU.js:8
+V_ @ index-CaYMpZsU.js:8
+si @ index-CaYMpZsU.js:8
+V_ @ index-CaYMpZsU.js:8
+si @ index-CaYMpZsU.js:8
+V_ @ index-CaYMpZsU.js:8
+si @ index-CaYMpZsU.js:8
+V_ @ index-CaYMpZsU.js:8
+nv @ index-CaYMpZsU.js:8
+(anonymous) @ index-CaYMpZsU.js:8
+k @ index-CaYMpZsU.js:1
