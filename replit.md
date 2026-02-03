@@ -177,6 +177,16 @@ For Google Sign-In to work:
   - Connections/partner linking: Hidden for guests
   - Groups: Teaser UI with sample circles shown
   - Family info messaging: "Add children's ages for better AI recommendations"
+- **V2.2 Venue Profile Enhancements**:
+  - "Parent's Notebook" renamed to just "Notebook"
+  - Notebook now available for ANY saved or visited place (not just favorites)
+  - "Add to Partner Plans" button on venue profile (persists to partnerSharedPlaces)
+  - "Add to Circle" buttons for each friend circle on venue profile
+  - "Add Memory" button directly on venue profile with photo upload
+  - Adding a memory auto-marks the venue as visited
+  - Memory entitlement checks enforced (canAddMemory gating)
+  - Share Memory feature with Web Share API, clipboard fallback, and share to circles
+  - partnerSharedPlaces added to AppState for partner-specific place sharing
 
 ## Environment Variables (Secrets)
 All secrets are stored securely in Replit Secrets:
