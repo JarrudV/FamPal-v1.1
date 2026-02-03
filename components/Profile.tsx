@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AppState, Child, PartnerLink, Preferences, FOOD_PREFERENCES, ALLERGY_OPTIONS, ACCESSIBILITY_OPTIONS, ACTIVITY_PREFERENCES, PLAN_LIMITS } from '../types';
 import PlanBilling from './PlanBilling';
 import { getLimits, getPlanDisplayName, canUseAI, isPaidTier } from '../lib/entitlements';
+import { storage, auth, ref, uploadBytes, getDownloadURL } from '../lib/firebase';
 
 interface ProfileProps {
   state: AppState;
@@ -30,6 +31,8 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
   const [showPreferences, setShowPreferences] = useState(false);
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
   const [showPlanBilling, setShowPlanBilling] = useState(false);
+  const [uploadingProfilePic, setUploadingProfilePic] = useState(false);
+  const profilePicInputRef = React.useRef<HTMLInputElement>(null);
 
   const userPrefs = state.preferences || { foodPreferences: [], allergies: [], accessibility: [], activityPreferences: [] };
   const limits = getLimits(state.entitlement);
@@ -147,6 +150,39 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
 
   const userName = state.user?.displayName || 'Guest User';
   const userPhoto = state.user?.photoURL || 'https://picsum.photos/seed/guest/200';
+  
+  const handleProfilePicUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !storage || !auth?.currentUser) return;
+    
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Photo must be under 5MB');
+      return;
+    }
+    
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+    
+    setUploadingProfilePic(true);
+    try {
+      const fileName = `profile_pictures/${auth.currentUser.uid}/avatar_${Date.now()}`;
+      const storageRef = ref(storage, fileName);
+      await uploadBytes(storageRef, file);
+      const downloadUrl = await getDownloadURL(storageRef);
+      
+      // Update user state with new photo URL
+      if (state.user) {
+        onUpdateState('user', { ...state.user, photoURL: downloadUrl });
+      }
+    } catch (error) {
+      console.error('Profile picture upload failed:', error);
+      alert('Failed to upload photo. Please try again.');
+    }
+    setUploadingProfilePic(false);
+    if (profilePicInputRef.current) profilePicInputRef.current.value = '';
+  };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-24 container-safe">
@@ -165,12 +201,34 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
       <div className="px-5 py-10 space-y-12 animate-slide-up">
         <div className="flex flex-col items-center gap-6">
           <div className="relative">
-            <div className="w-36 h-36 rounded-[56px] overflow-hidden border-8 border-white shadow-2xl shadow-slate-200">
-              <img src={userPhoto} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
+            <input
+              ref={profilePicInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleProfilePicUpload}
+              className="hidden"
+            />
+            <div 
+              onClick={() => !isGuest && profilePicInputRef.current?.click()}
+              className={`w-36 h-36 rounded-[56px] overflow-hidden border-8 border-white shadow-2xl shadow-slate-200 ${!isGuest ? 'cursor-pointer' : ''}`}
+            >
+              {uploadingProfilePic ? (
+                <div className="w-full h-full bg-slate-100 flex items-center justify-center">
+                  <span className="text-slate-400 text-sm font-bold">Uploading...</span>
+                </div>
+              ) : (
+                <img src={userPhoto} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
+              )}
             </div>
-            <div className="absolute -bottom-2 -right-2 w-12 h-12 bg-sky-500 rounded-2xl flex items-center justify-center text-white border-4 border-[#F8FAFC] shadow-lg">
+            <button 
+              onClick={() => !isGuest && profilePicInputRef.current?.click()}
+              disabled={isGuest || uploadingProfilePic}
+              className={`absolute -bottom-2 -right-2 w-12 h-12 rounded-2xl flex items-center justify-center text-white border-4 border-[#F8FAFC] shadow-lg ${
+                isGuest ? 'bg-slate-300 cursor-not-allowed' : 'bg-sky-500 hover:bg-sky-600 cursor-pointer'
+              }`}
+            >
               📸
-            </div>
+            </button>
           </div>
           <div className="text-center">
             <h2 className="text-3xl font-black text-[#1E293B]">{userName}</h2>
@@ -318,26 +376,28 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
                 })}
               </div>
 
-              <div className="flex gap-2">
-                <input 
-                  placeholder="Child's Name" 
-                  className="flex-1 h-14 bg-slate-50 border-none rounded-2xl px-5 text-sm font-bold outline-none focus:bg-white focus:ring-2 focus:ring-sky-100"
-                  value={childName}
-                  onChange={e => setChildName(e.target.value)}
-                />
-                <input 
-                  placeholder="Age" 
-                  type="number"
-                  className="w-20 h-14 bg-slate-50 border-none rounded-2xl px-4 text-sm font-bold text-center outline-none focus:bg-white focus:ring-2 focus:ring-sky-100"
-                  value={childAge}
-                  onChange={e => setChildAge(e.target.value)}
-                />
+              <div className="space-y-3">
+                <div className="flex gap-3">
+                  <input 
+                    placeholder="Child's Name" 
+                    className="flex-1 h-14 bg-slate-50 border-none rounded-2xl px-5 text-sm font-bold outline-none focus:bg-white focus:ring-2 focus:ring-sky-100"
+                    value={childName}
+                    onChange={e => setChildName(e.target.value)}
+                  />
+                  <input 
+                    placeholder="Age" 
+                    type="number"
+                    className="w-24 h-14 bg-slate-50 border-none rounded-2xl px-4 text-sm font-bold text-center outline-none focus:bg-white focus:ring-2 focus:ring-sky-100"
+                    value={childAge}
+                    onChange={e => setChildAge(e.target.value)}
+                  />
+                </div>
                 <button 
                   type="button"
                   onClick={handleAddChild}
-                  className="w-14 h-14 bg-sky-500 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-sky-100 active-press"
+                  className="w-full h-12 bg-sky-500 text-white rounded-2xl font-bold text-sm shadow-lg shadow-sky-100 active-press flex items-center justify-center gap-2"
                 >
-                  +
+                  <span>+</span> Add Child
                 </button>
               </div>
             </div>
