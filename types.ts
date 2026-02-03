@@ -256,6 +256,19 @@ export function getDefaultEntitlement(): Entitlement {
   };
 }
 
+export interface SavedLocation {
+  lat: number;
+  lng: number;
+  label: string;
+}
+
+export interface UserPreferences {
+  lastLocation?: SavedLocation;
+  lastRadius?: number;
+  lastCategory?: ActivityType;
+  activeCircleId?: string;
+}
+
 export interface AppState {
   isAuthenticated: boolean;
   user: User | null;
@@ -267,6 +280,7 @@ export interface AppState {
   memories: Memory[];
   children: Child[];
   preferences?: Preferences;
+  userPreferences?: UserPreferences;
   spouseName?: string;
   linkedEmail?: string;
   partnerLink?: PartnerLink;

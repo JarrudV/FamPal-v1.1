@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { AppState, Place, Memory, UserReview, ActivityType, FriendCircle, GroupMember, GroupPlace, VisitedPlace, PLAN_LIMITS } from '../types';
+import React, { useState, useEffect, useCallback } from 'react';
+import { AppState, Place, Memory, UserReview, ActivityType, FriendCircle, GroupMember, GroupPlace, VisitedPlace, PLAN_LIMITS, UserPreferences, SavedLocation } from '../types';
 import Header from './Header';
 import PlaceCard from './PlaceCard';
 import Filters from './Filters';
@@ -10,6 +10,7 @@ import PlanBilling from './PlanBilling';
 import { UpgradePrompt, LimitIndicator } from './UpgradePrompt';
 import { searchNearbyPlaces, textSearchPlaces } from '../placesService';
 import { getLimits, canSavePlace, canAddMemory, isPaidTier } from '../lib/entitlements';
+import { updateLocation, updateRadius, updateCategory, updateActiveCircle } from '../lib/profileSync';
 
 interface DashboardProps {
   state: AppState;
@@ -20,9 +21,10 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setView, onUpdateState }) => {
+  const userPrefs = state.userPreferences || {};
   const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'groups' | 'partner'>('explore');
   const hasLinkedPartner = state.partnerLink?.status === 'accepted';
-  const [selectedFilter, setSelectedFilter] = useState<ActivityType>('all');
+  const [selectedFilter, setSelectedFilter] = useState<ActivityType>(userPrefs.lastCategory || 'all');
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
@@ -32,16 +34,34 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   const [memoryVenueId, setMemoryVenueId] = useState<string>('');
   const [memoryVenueName, setMemoryVenueName] = useState<string>('');
   
-  // Location state
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [locationName, setLocationName] = useState('Locating...');
+  // Location state - hydrate from saved preferences
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(
+    userPrefs.lastLocation ? { lat: userPrefs.lastLocation.lat, lng: userPrefs.lastLocation.lng } : null
+  );
+  const [locationName, setLocationName] = useState(userPrefs.lastLocation?.label || 'Locating...');
   const [locationError, setLocationError] = useState<string | null>(null);
   
-  // Radius slider state (in km)
-  const [radiusKm, setRadiusKm] = useState(10);
+  // Radius slider state (in km) - hydrate from saved preferences
+  const [radiusKm, setRadiusKm] = useState(userPrefs.lastRadius || 10);
   
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Preference update callbacks - persist to database with debouncing
+  const persistLocation = useCallback((lat: number, lng: number, label: string) => {
+    const newPrefs = updateLocation({ lat, lng, label }, isGuest, userPrefs);
+    onUpdateState('userPreferences', newPrefs);
+  }, [isGuest, userPrefs, onUpdateState]);
+  
+  const persistRadius = useCallback((radius: number) => {
+    const newPrefs = updateRadius(radius, isGuest, userPrefs);
+    onUpdateState('userPreferences', newPrefs);
+  }, [isGuest, userPrefs, onUpdateState]);
+  
+  const persistCategory = useCallback((category: ActivityType) => {
+    const newPrefs = updateCategory(category, isGuest, userPrefs);
+    onUpdateState('userPreferences', newPrefs);
+  }, [isGuest, userPrefs, onUpdateState]);
   
   // Groups state
   const [selectedGroup, setSelectedGroup] = useState<FriendCircle | null>(null);
@@ -57,12 +77,16 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   const limits = getLimits(state.entitlement);
   const isPaid = isPaidTier(state.entitlement);
 
-  // Get user's location on mount
+  // Get user's location on mount (only if not already saved)
   useEffect(() => {
+    // If we have saved preferences, don't re-fetch geolocation
+    if (userPrefs.lastLocation) {
+      return;
+    }
+    
     if (!navigator.geolocation) {
       setLocationError('Geolocation not supported');
       setLocationName('Unknown Location');
-      // Fallback to default location
       setUserLocation({ lat: 37.7749, lng: -122.4194 });
       return;
     }
@@ -80,20 +104,22 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
           const data = await response.json();
           const city = data.address?.city || data.address?.town || data.address?.village || data.address?.suburb || 'Your Area';
           setLocationName(city);
+          // Persist the detected location
+          persistLocation(latitude, longitude, city);
         } catch (err) {
           setLocationName('Your Area');
+          persistLocation(latitude, longitude, 'Your Area');
         }
       },
       (error) => {
         console.error('Location error:', error);
         setLocationError('Unable to get location');
         setLocationName('Unknown Location');
-        // Fallback to default location
         setUserLocation({ lat: 37.7749, lng: -122.4194 });
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
     );
-  }, []);
+  }, [userPrefs.lastLocation, persistLocation]);
 
   // Fetch places when location, filter, radius, or search changes - uses Google Places API (fast, no AI cost)
   useEffect(() => {
@@ -145,9 +171,13 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
       const data = await response.json();
       if (data && data.length > 0) {
         const { lat, lon, display_name } = data[0];
-        setUserLocation({ lat: parseFloat(lat), lng: parseFloat(lon) });
+        const parsedLat = parseFloat(lat);
+        const parsedLng = parseFloat(lon);
         const shortName = display_name.split(',')[0];
+        setUserLocation({ lat: parsedLat, lng: parsedLng });
         setLocationName(shortName);
+        // Persist the new location
+        persistLocation(parsedLat, parsedLng, shortName);
       } else {
         setLocationError('Location not found. Try a different address.');
         setLocationName('Unknown');
@@ -157,6 +187,18 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
       setLocationError('Failed to find location. Please try again.');
       setLocationName('Your Area');
     }
+  };
+  
+  // Handler for radius slider that also persists
+  const handleRadiusSliderChange = (newRadius: number) => {
+    setRadiusKm(newRadius);
+    persistRadius(newRadius);
+  };
+  
+  // Handler for category filter that also persists
+  const handleFilterChange = (category: ActivityType) => {
+    setSelectedFilter(category);
+    persistCategory(category);
   };
 
   const toggleFavorite = (placeId: string) => {
@@ -407,7 +449,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
 
         {activeTab === 'explore' && (
           <>
-            <Filters selected={selectedFilter} onChange={setSelectedFilter} />
+            <Filters selected={selectedFilter} onChange={handleFilterChange} />
             
             {/* Radius Slider */}
             <div className="bg-white rounded-3xl p-5 mt-4 border border-slate-100 shadow-sm">
@@ -420,7 +462,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                 min="1"
                 max="200"
                 value={radiusKm}
-                onChange={(e) => setRadiusKm(parseInt(e.target.value))}
+                onChange={(e) => handleRadiusSliderChange(parseInt(e.target.value))}
                 className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-sky-500"
               />
               <div className="flex justify-between mt-2">

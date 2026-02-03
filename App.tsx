@@ -16,7 +16,8 @@ import {
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Profile from './components/Profile';
-import { AppState, User, getDefaultEntitlement } from './types';
+import { AppState, User, getDefaultEntitlement, UserPreferences } from './types';
+import { getGuestPreferences, syncGuestPreferencesToUser } from './lib/profileSync';
 import type { User as FirebaseUser } from 'firebase/auth';
 
 // Convert Firebase Auth User to plain serializable object
@@ -28,7 +29,7 @@ const serializeUser = (firebaseUser: FirebaseUser): User => ({
 });
 
 // Returns a state object with all arrays guaranteed to be non-null
-const getInitialState = (user: User | null): AppState => ({
+const getInitialState = (user: User | null, guestPrefs?: UserPreferences): AppState => ({
   isAuthenticated: !!user,
   user,
   favorites: [],
@@ -45,6 +46,7 @@ const getInitialState = (user: User | null): AppState => ({
   entitlement: getDefaultEntitlement(),
   aiRequestsUsed: 0,
   isPro: false,
+  userPreferences: guestPrefs || {},
 });
 
 const App: React.FC = () => {
@@ -80,7 +82,8 @@ const App: React.FC = () => {
 
   const handleGuestLogin = () => {
     setIsGuest(true);
-    setState(getInitialState(null));
+    const guestPrefs = getGuestPreferences();
+    setState(getInitialState(null, guestPrefs));
     setView('dashboard');
   };
 
@@ -152,6 +155,13 @@ const App: React.FC = () => {
             const dbState = snap.data();
             // Deep merge to avoid undefined arrays
             const loadedEntitlement = dbState.entitlement || getDefaultEntitlement();
+            const guestPrefs = getGuestPreferences();
+            const hasGuestPrefs = Object.keys(guestPrefs).length > 0;
+            
+            if (hasGuestPrefs && !dbState.userPreferences) {
+              syncGuestPreferencesToUser(userAuth.uid);
+            }
+            
             setState({
               ...initialState,
               user: serializedUser,
@@ -167,6 +177,7 @@ const App: React.FC = () => {
               friendCircles: dbState.friendCircles || [],
               entitlement: loadedEntitlement,
               isPro: loadedEntitlement.plan_tier === 'pro' || loadedEntitlement.plan_tier === 'lifetime',
+              userPreferences: dbState.userPreferences || guestPrefs || {},
             });
           } else {
             // Save only serializable data to Firestore

@@ -164,6 +164,13 @@ For Google Sign-In to work:
   - Review source transparency: Shows total review count and links to Google
   - New placesService.ts handles all Google Places API calls
   - Cost reduction: Browsing is now free/cheap (Places API) instead of expensive (Gemini)
+- **V2.1 Profile Sync & Persistence**:
+  - New UserPreferences interface: lastLocation, lastRadius, lastCategory, activeCircleId
+  - lib/profileSync.ts service with debounced saves (1.5s delay to batch rapid changes)
+  - User preferences persist to Firestore for logged-in users
+  - Guest users persist to localStorage, synced to account on login
+  - Location, radius, and category restored on app restart
+  - Geolocation only fetches if no saved location exists
 - **Guest Mode Restrictions**:
   - Memories tab: Sign-in required prompt
   - Profile family updates: Sign-in required prompt
