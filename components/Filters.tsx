@@ -13,6 +13,7 @@ const Filters: React.FC<FiltersProps> = ({ selected, onChange }) => {
     { id: 'restaurant', label: 'Dine', icon: '🍕' },
     { id: 'outdoor', label: 'Parks', icon: '🌳' },
     { id: 'hike', label: 'Hikes', icon: '⛰️' },
+    { id: 'wine', label: 'Wine', icon: '🍷' },
     { id: 'active', label: 'Active', icon: '⚽' },
     { id: 'indoor', label: 'Play', icon: '🎲' },
     { id: 'show', label: 'Shows', icon: '🎬' },

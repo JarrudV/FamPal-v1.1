@@ -39,6 +39,12 @@ const placeholderImages: Record<string, string[]> = {
     "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=400&fit=crop",
     "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?w=600&h=400&fit=crop",
   ],
+  wine: [
+    "https://images.unsplash.com/photo-1506377247377-2a5b3b417ebb?w=600&h=400&fit=crop",
+    "https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=600&h=400&fit=crop",
+    "https://images.unsplash.com/photo-1543418219-44e30b057fea?w=600&h=400&fit=crop",
+    "https://images.unsplash.com/photo-1474722883778-792e7990302f?w=600&h=400&fit=crop",
+  ],
   all: [
     "https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=600&h=400&fit=crop",
     "https://images.unsplash.com/photo-1476234251651-f353703a034d?w=600&h=400&fit=crop",

@@ -17,7 +17,18 @@ export interface Place {
   fullSummary?: string;
 }
 
-export type ActivityType = 'restaurant' | 'outdoor' | 'indoor' | 'active' | 'hike' | 'show' | 'all';
+export type ActivityType = 'restaurant' | 'outdoor' | 'indoor' | 'active' | 'hike' | 'show' | 'wine' | 'all';
+
+export interface VisitedPlace {
+  placeId: string;
+  placeName: string;
+  placeType: ActivityType;
+  imageUrl?: string;
+  visitedAt: string;
+  notes: string;
+  rating?: number;
+  isFavorite: boolean;
+}
 
 export interface UserReview {
   id: string;
@@ -149,6 +160,7 @@ export interface AppState {
   favorites: string[]; 
   favoriteDetails: Record<string, FavoriteData>;
   visited: string[];
+  visitedPlaces: VisitedPlace[];
   reviews: UserReview[];
   memories: Memory[];
   children: Child[];

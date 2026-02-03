@@ -7,6 +7,7 @@ import { storage, auth, ref, uploadBytes, getDownloadURL } from '../lib/firebase
 interface VenueProfileProps {
   place: Place;
   isFavorite: boolean;
+  isVisited: boolean;
   favoriteData?: FavoriteData;
   childrenAges?: number[];
   isGuest?: boolean;
@@ -14,6 +15,7 @@ interface VenueProfileProps {
   isPro?: boolean;
   onClose: () => void;
   onToggleFavorite: () => void;
+  onMarkVisited: () => void;
   onUpdateDetails: (data: Partial<FavoriteData>) => void;
   onIncrementAiRequests?: () => void;
 }
@@ -23,13 +25,15 @@ const AI_REQUEST_LIMIT = 5;
 const VenueProfile: React.FC<VenueProfileProps> = ({ 
   place, 
   isFavorite, 
+  isVisited,
   favoriteData, 
   childrenAges = [],
   isGuest = false,
   aiRequestsUsed = 0,
   isPro = false,
   onClose, 
-  onToggleFavorite, 
+  onToggleFavorite,
+  onMarkVisited,
   onUpdateDetails,
   onIncrementAiRequests
 }) => {
@@ -126,6 +130,14 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
         </button>
         <button onClick={onToggleFavorite} className="absolute top-10 right-5 w-12 h-12 bg-white/20 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/20">
           <span className="text-xl">{isFavorite ? '💙' : '🤍'}</span>
+        </button>
+        <button 
+          onClick={onMarkVisited} 
+          className={`absolute top-10 right-20 w-12 h-12 backdrop-blur-xl rounded-2xl flex items-center justify-center border ${
+            isVisited ? 'bg-green-500/80 border-green-400' : 'bg-white/20 border-white/20'
+          }`}
+        >
+          <span className="text-xl">{isVisited ? '✅' : '🗺️'}</span>
         </button>
         <div className="absolute bottom-10 left-6 right-6">
            <div className="flex gap-2 mb-3">

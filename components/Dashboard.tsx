@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AppState, Place, Memory, UserReview, ActivityType, FriendCircle, GroupMember, GroupPlace } from '../types';
+import { AppState, Place, Memory, UserReview, ActivityType, FriendCircle, GroupMember, GroupPlace, VisitedPlace } from '../types';
 import Header from './Header';
 import PlaceCard from './PlaceCard';
 import Filters from './Filters';
@@ -17,7 +17,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setView, onUpdateState }) => {
-  const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'memories' | 'groups'>('explore');
+  const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'groups'>('explore');
   const [selectedFilter, setSelectedFilter] = useState<ActivityType>('all');
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(false);
@@ -149,6 +149,27 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     onUpdateState('favorites', newFavorites);
   };
 
+  const markVisited = (place: Place) => {
+    const visitedPlaces = state.visitedPlaces || [];
+    const isAlreadyVisited = visitedPlaces.some(v => v.placeId === place.id);
+    
+    if (isAlreadyVisited) {
+      const updated = visitedPlaces.filter(v => v.placeId !== place.id);
+      onUpdateState('visitedPlaces', updated);
+    } else {
+      const newVisit: VisitedPlace = {
+        placeId: place.id,
+        placeName: place.name,
+        placeType: place.type,
+        imageUrl: place.imageUrl,
+        visitedAt: new Date().toISOString(),
+        notes: '',
+        isFavorite: state.favorites.includes(place.id),
+      };
+      onUpdateState('visitedPlaces', [...visitedPlaces, newVisit]);
+    }
+  };
+
   const captureMemory = () => {
     if (!caption) return;
     const newMemory: Memory = {
@@ -274,7 +295,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
       <VenueProfile 
         place={selectedPlace} 
         isFavorite={state.favorites.includes(selectedPlace.id)}
+        isVisited={(state.visitedPlaces || []).some(v => v.placeId === selectedPlace.id)}
         onToggleFavorite={() => toggleFavorite(selectedPlace.id)}
+        onMarkVisited={() => markVisited(selectedPlace)}
         onClose={() => setSelectedPlace(null)}
         onUpdateDetails={(data) => {
           const newDetails = { ...state.favoriteDetails, [selectedPlace.id]: { ...state.favoriteDetails[selectedPlace.id], ...data, placeId: selectedPlace.id } };
@@ -304,8 +327,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar">
           <TabButton label="Explore" active={activeTab === 'explore'} onClick={() => setActiveTab('explore')} />
           <TabButton label="Saved" count={state.favorites.length} active={activeTab === 'favorites'} onClick={() => setActiveTab('favorites')} />
+          <TabButton label="Adventures" count={(state.visitedPlaces || []).length} active={activeTab === 'adventures'} onClick={() => setActiveTab('adventures')} />
           <TabButton label="Groups" count={(state.friendCircles || []).length} active={activeTab === 'groups'} onClick={() => setActiveTab('groups')} />
-          <TabButton label="Memories" count={state.memories.length} active={activeTab === 'memories'} onClick={() => setActiveTab('memories')} />
         </div>
 
         {activeTab === 'explore' && (
@@ -419,6 +442,91 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                 Cancel
               </button>
             </div>
+          </div>
+        )}
+
+        {activeTab === 'adventures' && (
+          <div className="space-y-4 mt-4">
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-3xl p-6 text-white shadow-lg mb-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-widest opacity-80 font-bold">Adventures Completed</p>
+                  <p className="text-4xl font-black mt-1">{(state.visitedPlaces || []).length}</p>
+                </div>
+                <div className="text-5xl">🏆</div>
+              </div>
+            </div>
+
+            {isGuest ? (
+              <div className="py-16 text-center bg-white rounded-[40px] border border-slate-100">
+                <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mb-4 mx-auto">
+                  <span className="text-2xl">🗺️</span>
+                </div>
+                <h3 className="text-base font-semibold text-slate-700 mb-2">Track Your Adventures</h3>
+                <p className="text-sm text-slate-500 max-w-xs mx-auto">
+                  Sign in to keep a record of places you've visited and add notes about your experiences.
+                </p>
+              </div>
+            ) : (state.visitedPlaces || []).length > 0 ? (
+              <div className="space-y-3">
+                {(state.visitedPlaces || []).map(visit => (
+                  <div key={visit.placeId} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+                    <div className="flex gap-4">
+                      <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 shrink-0">
+                        {visit.imageUrl && <img src={visit.imageUrl} className="w-full h-full object-cover" alt="" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="font-bold text-slate-800 truncate">{visit.placeName}</h3>
+                          {visit.isFavorite && <span className="text-sky-500 shrink-0">💙</span>}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Visited {new Date(visit.visitedAt).toLocaleDateString()}
+                        </p>
+                        {visit.notes && (
+                          <p className="text-sm text-slate-600 mt-2 line-clamp-2">{visit.notes}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-3 pt-3 border-t border-slate-100">
+                      <button
+                        onClick={() => {
+                          const note = prompt('Add/update notes:', visit.notes);
+                          if (note !== null) {
+                            const updated = (state.visitedPlaces || []).map(v =>
+                              v.placeId === visit.placeId ? { ...v, notes: note } : v
+                            );
+                            onUpdateState('visitedPlaces', updated);
+                          }
+                        }}
+                        className="flex-1 py-2 text-xs font-bold text-slate-500 bg-slate-50 rounded-lg hover:bg-slate-100"
+                      >
+                        Edit Notes
+                      </button>
+                      <button
+                        onClick={() => {
+                          const updated = (state.visitedPlaces || []).filter(v => v.placeId !== visit.placeId);
+                          onUpdateState('visitedPlaces', updated);
+                        }}
+                        className="px-4 py-2 text-xs font-bold text-rose-500 bg-rose-50 rounded-lg hover:bg-rose-100"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-16 text-center bg-white rounded-[40px] border border-slate-100">
+                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 mx-auto">
+                  <span className="text-2xl">🗺️</span>
+                </div>
+                <h3 className="text-base font-semibold text-slate-700 mb-2">No adventures yet</h3>
+                <p className="text-sm text-slate-500 max-w-xs mx-auto">
+                  Mark places as visited to track your family adventures!
+                </p>
+              </div>
+            )}
           </div>
         )}
 
