@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { AppState, Place, Memory, UserReview, ActivityType } from '../types';
+import { AppState, Place, Memory, UserReview, ActivityType, FriendCircle, GroupMember, GroupPlace } from '../types';
 import Header from './Header';
 import PlaceCard from './PlaceCard';
 import Filters from './Filters';
 import VenueProfile from './VenueProfile';
+import GroupsList from './GroupsList';
+import GroupDetail from './GroupDetail';
 import { fetchNearbyPlaces } from '../geminiService';
 
 interface DashboardProps {
@@ -15,7 +17,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setView, onUpdateState }) => {
-  const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'memories'>('explore');
+  const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'memories' | 'groups'>('explore');
   const [selectedFilter, setSelectedFilter] = useState<ActivityType>('all');
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(false);
@@ -33,6 +35,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Groups state
+  const [selectedGroup, setSelectedGroup] = useState<FriendCircle | null>(null);
 
   // Get user's location on mount
   useEffect(() => {
@@ -165,6 +170,104 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     onUpdateState('aiRequestsUsed', (state.aiRequestsUsed || 0) + 1);
   };
 
+  const generateInviteCode = () => {
+    return Math.random().toString(36).substring(2, 8).toUpperCase();
+  };
+
+  const handleCreateGroup = (name: string) => {
+    if (!state.user) return;
+    const newGroup: FriendCircle = {
+      id: Date.now().toString(),
+      name,
+      ownerId: state.user.uid,
+      ownerName: state.user.displayName || state.user.email || 'You',
+      members: [{
+        userId: state.user.uid,
+        email: state.user.email || '',
+        displayName: state.user.displayName || 'You',
+        role: 'owner',
+        joinedAt: new Date().toISOString(),
+      }],
+      sharedPlaces: [],
+      plans: [],
+      inviteCode: generateInviteCode(),
+      createdAt: new Date().toISOString(),
+    };
+    const updatedCircles = [...(state.friendCircles || []), newGroup];
+    onUpdateState('friendCircles', updatedCircles);
+  };
+
+  const handleAddPlaceToGroup = (groupId: string, placeId: string, placeName: string) => {
+    if (!state.user) return;
+    const updatedCircles = (state.friendCircles || []).map(g => {
+      if (g.id === groupId) {
+        const newPlace: GroupPlace = {
+          placeId,
+          placeName,
+          addedBy: state.user!.uid,
+          addedByName: state.user!.displayName || 'You',
+          addedAt: new Date().toISOString(),
+        };
+        return { ...g, sharedPlaces: [...g.sharedPlaces, newPlace] };
+      }
+      return g;
+    });
+    onUpdateState('friendCircles', updatedCircles);
+    const updatedGroup = updatedCircles.find(g => g.id === groupId);
+    if (updatedGroup) setSelectedGroup(updatedGroup);
+  };
+
+  const handleRemovePlaceFromGroup = (groupId: string, placeId: string) => {
+    const updatedCircles = (state.friendCircles || []).map(g => {
+      if (g.id === groupId) {
+        return { ...g, sharedPlaces: g.sharedPlaces.filter(sp => sp.placeId !== placeId) };
+      }
+      return g;
+    });
+    onUpdateState('friendCircles', updatedCircles);
+    const updatedGroup = updatedCircles.find(g => g.id === groupId);
+    if (updatedGroup) setSelectedGroup(updatedGroup);
+  };
+
+  const handleDeleteGroup = (groupId: string) => {
+    const updatedCircles = (state.friendCircles || []).filter(g => g.id !== groupId);
+    onUpdateState('friendCircles', updatedCircles);
+    setSelectedGroup(null);
+  };
+
+  const handleLeaveGroup = (groupId: string) => {
+    if (!state.user) return;
+    const updatedCircles = (state.friendCircles || []).map(g => {
+      if (g.id === groupId) {
+        return { ...g, members: g.members.filter(m => m.userId !== state.user!.uid) };
+      }
+      return g;
+    }).filter(g => g.members.length > 0);
+    onUpdateState('friendCircles', updatedCircles);
+    setSelectedGroup(null);
+  };
+
+  const handleInviteMember = (groupId: string, email: string) => {
+    console.log('Invite sent to:', email, 'for group:', groupId);
+  };
+
+  if (selectedGroup) {
+    return (
+      <GroupDetail
+        group={selectedGroup}
+        userId={state.user?.uid || ''}
+        userFavorites={state.favorites}
+        allPlaces={places}
+        onClose={() => setSelectedGroup(null)}
+        onAddPlace={(placeId, placeName) => handleAddPlaceToGroup(selectedGroup.id, placeId, placeName)}
+        onRemovePlace={(placeId) => handleRemovePlaceFromGroup(selectedGroup.id, placeId)}
+        onInviteMember={(email) => handleInviteMember(selectedGroup.id, email)}
+        onLeaveGroup={() => handleLeaveGroup(selectedGroup.id)}
+        onDeleteGroup={() => handleDeleteGroup(selectedGroup.id)}
+      />
+    );
+  }
+
   if (selectedPlace) {
     return (
       <VenueProfile 
@@ -200,6 +303,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar">
           <TabButton label="Explore" active={activeTab === 'explore'} onClick={() => setActiveTab('explore')} />
           <TabButton label="Saved" count={state.favorites.length} active={activeTab === 'favorites'} onClick={() => setActiveTab('favorites')} />
+          <TabButton label="Groups" count={(state.friendCircles || []).length} active={activeTab === 'groups'} onClick={() => setActiveTab('groups')} />
           <TabButton label="Memories" count={state.memories.length} active={activeTab === 'memories'} onClick={() => setActiveTab('memories')} />
         </div>
 
@@ -275,6 +379,15 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
           </div>
         )}
 
+        {activeTab === 'groups' && (
+          <GroupsList
+            friendCircles={state.friendCircles || []}
+            onCreateGroup={handleCreateGroup}
+            onSelectGroup={setSelectedGroup}
+            isGuest={isGuest}
+          />
+        )}
+
         {activeTab === 'memories' && (
           <div className="space-y-4 mt-4">
             <button 
@@ -320,8 +433,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
 
       <nav className="fixed bottom-0 left-0 right-0 bottom-nav-blur border-t border-slate-100 px-6 py-4 safe-area-inset-bottom">
         <div className="flex justify-around">
-          <NavButton icon="🏠" label="Home" active={true} onClick={() => {}} />
-          <NavButton icon="💙" label="Saved" active={false} onClick={() => setActiveTab('favorites')} />
+          <NavButton icon="🏠" label="Home" active={activeTab === 'explore'} onClick={() => setActiveTab('explore')} />
+          <NavButton icon="💙" label="Saved" active={activeTab === 'favorites'} onClick={() => setActiveTab('favorites')} />
+          <NavButton icon="👥" label="Groups" active={activeTab === 'groups'} onClick={() => setActiveTab('groups')} />
           <NavButton icon="👤" label="Profile" active={false} onClick={() => setView('profile')} />
         </div>
       </nav>

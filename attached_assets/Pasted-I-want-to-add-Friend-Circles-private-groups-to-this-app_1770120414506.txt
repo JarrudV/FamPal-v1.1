@@ -1,0 +1,87 @@
+I want to add “Friend Circles” (private groups) to this app. This is a core feature for retention, but it must be implemented incrementally and simply.
+
+High-level goal
+Allow users to create small private groups (partner, family, friends) where they can:
+- Share saved places
+- Share notes or comments about places (optional at first)
+- Plan activities together
+
+Important constraints
+- Do NOT build public social features
+- Do NOT build real-time chat
+- Do NOT rebuild WhatsApp or messaging
+- Keep data minimal and private
+- Groups are invitation-based only
+
+Core concepts to introduce
+1. Friend Circle (Group)
+   - id
+   - name (e.g. “Our Family”, “Date Nights”, “Braai Crew”)
+   - owner (user id)
+   - members (user ids + role)
+   - created_at
+
+2. Membership
+   - owner
+   - member
+   - invited (optional for later)
+
+3. Group content (V1)
+   - shared_saved_places (references to place_id only)
+   - shared_notes (short text comments tied to place_id)
+   - shared_plans (place_id + date/time + optional note)
+
+What to build now (V1)
+UI
+- Add a new top-level tab or section called “Groups”
+- Groups list screen:
+  - Show groups the user belongs to
+  - Button: “Create new group”
+- Create group flow:
+  - Enter group name
+  - Group is private by default
+- Group detail screen:
+  - Group name
+  - Members list
+  - Shared places list (empty state friendly)
+  - “Add place to group” button (from existing saved places)
+
+Inviting members (simple version)
+- Use email-based invites or shareable invite link
+- No notifications system yet
+- Invited users must already have an account to join
+
+Data rules
+- A group never owns place data
+- All places are referenced by place_id only
+- Notes stored are lightweight text only
+- All group content is visible only to group members
+
+What NOT to build yet
+- Real-time chat
+- Notifications
+- Reactions, likes, emojis
+- Public groups or discovery
+- Role complexity beyond owner/member
+
+Engineering expectations
+- Reuse existing auth and user model
+- Clearly define new data models (Group, GroupMember, GroupPlace, GroupPlan)
+- Keep database queries simple and indexed
+- Provide exact file changes and schema updates
+- Do not refactor unrelated code
+
+UX guidance
+- Groups should feel calm and personal, not social-media-like
+- Empty states should guide users gently (“Add your first place”, “Invite your partner”)
+- This feature should reduce planning friction, not add setup work
+
+After implementation
+- Ensure groups work both on desktop and mobile
+- Ensure no performance impact on Explore or Saved views
+
+Start by:
+1. Proposing the data models
+2. Adding the Groups tab and empty list UI
+3. Implementing Create Group
+4. Implementing Add Place to Group

@@ -40,6 +40,7 @@ const getInitialState = (user: User | null): AppState => ({
   spouseName: '',
   linkedEmail: '',
   groups: [],
+  friendCircles: [],
   aiRequestsUsed: 0,
   isPro: false,
 });
@@ -159,6 +160,7 @@ const App: React.FC = () => {
               memories: dbState.memories || [],
               children: dbState.children || [],
               groups: dbState.groups || [],
+              friendCircles: dbState.friendCircles || [],
             });
           } else {
             // Save only serializable data to Firestore

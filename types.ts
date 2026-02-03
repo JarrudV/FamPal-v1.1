@@ -75,6 +75,47 @@ export interface PartnerLink {
   status: 'pending' | 'accepted';
 }
 
+export interface GroupMember {
+  userId: string;
+  email: string;
+  displayName: string;
+  role: 'owner' | 'member';
+  joinedAt: string;
+}
+
+export interface GroupPlace {
+  placeId: string;
+  placeName: string;
+  addedBy: string;
+  addedByName: string;
+  addedAt: string;
+  note?: string;
+}
+
+export interface GroupPlan {
+  id: string;
+  placeId: string;
+  placeName: string;
+  date: string;
+  time?: string;
+  note?: string;
+  createdBy: string;
+  createdByName: string;
+  createdAt: string;
+}
+
+export interface FriendCircle {
+  id: string;
+  name: string;
+  ownerId: string;
+  ownerName: string;
+  members: GroupMember[];
+  sharedPlaces: GroupPlace[];
+  plans: GroupPlan[];
+  inviteCode: string;
+  createdAt: string;
+}
+
 export interface User {
   uid: string;
   email: string | null;
@@ -95,6 +136,7 @@ export interface AppState {
   linkedEmail?: string;
   partnerLink?: PartnerLink;
   groups: FamilyGroup[];
+  friendCircles: FriendCircle[];
   aiRequestsUsed: number;
   isPro?: boolean;
 }

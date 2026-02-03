@@ -1,0 +1,140 @@
+I want to add “Friend Circles” (private groups) and a “Parents Notebook Activities” list to this app. Implement incrementally without rewriting the app.
+
+Friend Circles goals
+Allow users to create small private groups (partner, family, friends) to share saved places and light planning.
+
+Critical constraints and gating
+1. Guest mode
+   - Guest users cannot create or join circles
+   - Guest users should still see a “Groups” section that showcases the feature (teaser state) with:
+     - Sample circles UI (not real data)
+     - Locked state messaging
+     - A clear CTA button: “Log in to create up to 2 circles”
+2. Logged-in users
+   - Limit to a maximum of 2 circles per user
+   - If user already has 2 circles, disable “Create new group” and show a friendly message explaining the limit
+   - Circles are invitation-only, private by default
+
+Do NOT build yet
+- Public social features
+- Real-time chat
+- Notifications system
+- Reactions/likes
+- Complex roles beyond owner/member
+
+Data model (propose and implement)
+1. Group (Friend Circle)
+   - id
+   - name
+   - owner_user_id
+   - created_at
+2. GroupMember
+   - id
+   - group_id
+   - user_id
+   - role (owner/member)
+   - created_at
+3. GroupPlace (shared places)
+   - id
+   - group_id
+   - place_id (from places provider)
+   - added_by_user_id
+   - created_at
+Optional later: GroupPlan (place_id + date/time)
+
+Data rules
+- Groups never store place details, only place_id references
+- All group content is visible only to group members
+
+UI requirements for Friend Circles
+- Add a top-level “Groups” tab/section
+- Guest mode Groups screen:
+  - show teaser UI (fake sample circles like “Date Nights”, “Kids Weekends”)
+  - show example shared places cards in a blurred/locked style
+  - clear CTA to log in
+- Logged-in Groups screen:
+  - show user’s circles list
+  - “Create circle” button (disabled when limit reached)
+  - Circle detail screen:
+    - group name
+    - members list
+    - shared places list
+    - “Add place to circle” action (from existing saved places OR from place detail page)
+
+Invites (simple V1)
+- Use shareable invite link or email invite
+- Keep it minimal; invited users must be logged in
+- No notification system yet
+
+Parents Notebook Activities feature
+On the “Parents Notebook” page (or equivalent section for parents notes), add a list of “Activities/Attributes” that can be attached to a place and saved for personal use.
+
+Activity list requirements
+- Provide a predefined multi-select list of activities/attributes that users can toggle on/off for a place
+- Store these selections per user per place (private, not public)
+- Also allow optional custom activity tags (free text) but keep it simple
+
+Default activities/attributes list (starter set)
+Kids and family features:
+- Jumping castle
+- Outdoor play area
+- Indoor play area
+- Jungle gym
+- Water features (splash pad)
+- Pool
+- Petting zoo
+- Animal encounters
+- Kid-friendly menu
+- High chair available
+- Changing facilities
+- Pram friendly
+- Shaded seating
+- Safe parking
+- Birthday party friendly
+
+Nature and outdoors:
+- Hike
+- Easy walk
+- Trail running
+- Picnic spot
+- Beach
+- Dam/lake
+- Farm visit
+
+Food and drink:
+- Coffee spot
+- Breakfast
+- Lunch
+- Dinner
+- Wine tasting
+- Beer tasting
+- Craft gin tasting
+
+Logistics and vibes:
+- Free entry
+- Paid entry
+- Booking required
+- Dog friendly
+- Wheelchair accessible
+- Quiet
+- Busy/noisy
+
+UI placement for Activities
+- On place detail page, add a “Parents Notebook” section with:
+  - private notes textarea
+  - activities multi-select list (chips/toggles)
+  - save/update button
+- In saved places list, show small badges for selected activities (optional, minimal)
+
+Implementation instructions
+- Do not refactor unrelated code
+- Provide exact file names and code changes
+- Ensure guest mode gating is consistent across UI routes and actions
+- Add simple validation for group limit (max 2 circles per user) both in UI and server/database logic
+
+Start with:
+1. Data models and persistence
+2. Groups tab with guest teaser state and logged-in list
+3. Create group flow with 2-circle limit
+4. Add place to group
+5. Parents Notebook Activities section tied to place_id
