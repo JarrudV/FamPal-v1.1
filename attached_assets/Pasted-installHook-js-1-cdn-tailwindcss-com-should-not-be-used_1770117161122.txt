@@ -1,0 +1,99 @@
+installHook.js:1 cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation
+overrideMethod @ installHook.js:1
+(index):1 <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes">
+index-BLR8uQLx.js:23 Cross-Origin-Opener-Policy policy would block the window.closed call.
+e @ index-BLR8uQLx.js:23
+index-BLR8uQLx.js:23 Cross-Origin-Opener-Policy policy would block the window.closed call.
+e @ index-BLR8uQLx.js:23
+index-BLR8uQLx.js:23 Cross-Origin-Opener-Policy policy would block the window.close call.
+close @ index-BLR8uQLx.js:23
+index-BLR8uQLx.js:23 Cross-Origin-Opener-Policy policy would block the window.close call.
+close @ index-BLR8uQLx.js:23
+index-BLR8uQLx.js:48  POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent 403 (Forbidden)
+apiCall @ index-BLR8uQLx.js:48
+unaryApiCall @ index-BLR8uQLx.js:44
+request @ index-BLR8uQLx.js:44
+await in request
+generateContentInternal @ index-BLR8uQLx.js:48
+generateContent @ index-BLR8uQLx.js:48
+await in generateContent
+Y4 @ index-BLR8uQLx.js:57
+(anonymous) @ index-BLR8uQLx.js:57
+(anonymous) @ index-BLR8uQLx.js:57
+Al @ index-BLR8uQLx.js:8
+V_ @ index-BLR8uQLx.js:8
+si @ index-BLR8uQLx.js:8
+V_ @ index-BLR8uQLx.js:8
+si @ index-BLR8uQLx.js:8
+V_ @ index-BLR8uQLx.js:8
+si @ index-BLR8uQLx.js:8
+V_ @ index-BLR8uQLx.js:8
+nv @ index-BLR8uQLx.js:8
+(anonymous) @ index-BLR8uQLx.js:8
+k @ index-BLR8uQLx.js:1
+installHook.js:1 Gemini Fetch Error: ApiError: {"error":{"code":403,"message":"Your API key was reported as leaked. Please use another API key.","status":"PERMISSION_DENIED"}}
+    at Z0 (index-BLR8uQLx.js:48:3731)
+    at async index-BLR8uQLx.js:44:182614
+    at async nO.generateContent (index-BLR8uQLx.js:48:14815)
+    at async Y4 (index-BLR8uQLx.js:57:238)
+    at async index-BLR8uQLx.js:57:2386
+overrideMethod @ installHook.js:1
+Y4 @ index-BLR8uQLx.js:57
+await in Y4
+(anonymous) @ index-BLR8uQLx.js:57
+(anonymous) @ index-BLR8uQLx.js:57
+Al @ index-BLR8uQLx.js:8
+V_ @ index-BLR8uQLx.js:8
+si @ index-BLR8uQLx.js:8
+V_ @ index-BLR8uQLx.js:8
+si @ index-BLR8uQLx.js:8
+V_ @ index-BLR8uQLx.js:8
+si @ index-BLR8uQLx.js:8
+V_ @ index-BLR8uQLx.js:8
+nv @ index-BLR8uQLx.js:8
+(anonymous) @ index-BLR8uQLx.js:8
+k @ index-BLR8uQLx.js:1
+index-BLR8uQLx.js:48  POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent 403 (Forbidden)
+apiCall @ index-BLR8uQLx.js:48
+unaryApiCall @ index-BLR8uQLx.js:44
+request @ index-BLR8uQLx.js:44
+await in request
+generateContentInternal @ index-BLR8uQLx.js:48
+generateContent @ index-BLR8uQLx.js:48
+await in generateContent
+Y4 @ index-BLR8uQLx.js:57
+(anonymous) @ index-BLR8uQLx.js:57
+(anonymous) @ index-BLR8uQLx.js:57
+Al @ index-BLR8uQLx.js:8
+V_ @ index-BLR8uQLx.js:8
+si @ index-BLR8uQLx.js:8
+V_ @ index-BLR8uQLx.js:8
+si @ index-BLR8uQLx.js:8
+V_ @ index-BLR8uQLx.js:8
+si @ index-BLR8uQLx.js:8
+V_ @ index-BLR8uQLx.js:8
+nv @ index-BLR8uQLx.js:8
+(anonymous) @ index-BLR8uQLx.js:8
+k @ index-BLR8uQLx.js:1
+installHook.js:1 Gemini Fetch Error: ApiError: {"error":{"code":403,"message":"Your API key was reported as leaked. Please use another API key.","status":"PERMISSION_DENIED"}}
+    at Z0 (index-BLR8uQLx.js:48:3731)
+    at async index-BLR8uQLx.js:44:182614
+    at async nO.generateContent (index-BLR8uQLx.js:48:14815)
+    at async Y4 (index-BLR8uQLx.js:57:238)
+    at async index-BLR8uQLx.js:57:2386
+overrideMethod @ installHook.js:1
+Y4 @ index-BLR8uQLx.js:57
+await in Y4
+(anonymous) @ index-BLR8uQLx.js:57
+(anonymous) @ index-BLR8uQLx.js:57
+Al @ index-BLR8uQLx.js:8
+V_ @ index-BLR8uQLx.js:8
+si @ index-BLR8uQLx.js:8
+V_ @ index-BLR8uQLx.js:8
+si @ index-BLR8uQLx.js:8
+V_ @ index-BLR8uQLx.js:8
+si @ index-BLR8uQLx.js:8
+V_ @ index-BLR8uQLx.js:8
+nv @ index-BLR8uQLx.js:8
+(anonymous) @ index-BLR8uQLx.js:8
+k @ index-BLR8uQLx.js:1
