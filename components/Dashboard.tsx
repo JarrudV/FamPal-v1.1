@@ -796,22 +796,31 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
               )}
 
               <div className="grid grid-cols-2 gap-4">
-                {state.memories.map(memory => (
-                  <div key={memory.id} className="bg-white rounded-[32px] overflow-hidden shadow-sm relative group aspect-square">
-                    <img src={memory.photoUrl} className="w-full h-full object-cover" alt="" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-sky-950/80 via-transparent flex flex-col justify-end p-5 text-white">
-                      <p className="text-[10px] font-black leading-tight mb-1">{memory.caption}</p>
-                      <p className="text-[8px] font-bold opacity-60 uppercase tracking-widest">@{memory.placeName}</p>
+                {state.memories.map(memory => {
+                  const photos = memory.photoUrls || (memory.photoUrl ? [memory.photoUrl] : []);
+                  const mainPhoto = photos[0] || 'https://picsum.photos/seed/memory/400/400';
+                  return (
+                    <div key={memory.id} className="bg-white rounded-[32px] overflow-hidden shadow-sm relative group aspect-square">
+                      <img src={mainPhoto} className="w-full h-full object-cover" alt="" />
+                      {photos.length > 1 && (
+                        <div className="absolute top-3 left-3 bg-black/60 text-white text-[9px] px-2 py-1 rounded-full font-bold">
+                          {photos.length} photos
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-sky-950/80 via-transparent flex flex-col justify-end p-5 text-white">
+                        <p className="text-[10px] font-black leading-tight mb-1">{memory.caption}</p>
+                        <p className="text-[8px] font-bold opacity-60 uppercase tracking-widest">@{memory.placeName}</p>
+                      </div>
+                      <button
+                        onClick={() => setShareMemory(memory)}
+                        className="absolute top-3 right-3 w-9 h-9 bg-white/90 backdrop-blur-sm text-sky-600 rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Share memory"
+                      >
+                        📤
+                      </button>
                     </div>
-                    <button
-                      onClick={() => setShareMemory(memory)}
-                      className="absolute top-3 right-3 w-9 h-9 bg-white/90 backdrop-blur-sm text-sky-600 rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Share memory"
-                    >
-                      📤
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )
@@ -866,11 +875,15 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
               </div>
               {state.memories.length > 0 ? (
                 <div className="grid grid-cols-3 gap-2">
-                  {state.memories.slice(0, state.isPro ? undefined : 3).map((memory) => (
-                    <div key={memory.id} className="aspect-square rounded-xl overflow-hidden">
-                      <img src={memory.photoUrl} className="w-full h-full object-cover" alt="" />
-                    </div>
-                  ))}
+                  {state.memories.slice(0, state.isPro ? undefined : 3).map((memory) => {
+                    const photos = memory.photoUrls || (memory.photoUrl ? [memory.photoUrl] : []);
+                    const mainPhoto = photos[0] || 'https://picsum.photos/seed/memory/400/400';
+                    return (
+                      <div key={memory.id} className="aspect-square rounded-xl overflow-hidden">
+                        <img src={mainPhoto} className="w-full h-full object-cover" alt="" />
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="bg-slate-50 rounded-2xl p-6 text-center">

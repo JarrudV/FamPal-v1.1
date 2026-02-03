@@ -187,6 +187,12 @@ For Google Sign-In to work:
   - Memory entitlement checks enforced (canAddMemory gating)
   - Share Memory feature with Web Share API, clipboard fallback, and share to circles
   - partnerSharedPlaces added to AppState for partner-specific place sharing
+- **V2.3 UX Improvements**:
+  - Removed "Family Photos" section from Notebook (memories only)
+  - Up to 3 photos per memory (photoUrls array with backward compat)
+  - Floating home button at bottom of VenueProfile (bigger, easier to tap)
+  - Swipe right gesture to go back from VenueProfile
+  - Fixed add children form to prevent page navigation on submit
 
 ## Environment Variables (Secrets)
 All secrets are stored securely in Replit Secrets:

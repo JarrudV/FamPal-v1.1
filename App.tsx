@@ -47,6 +47,7 @@ const getInitialState = (user: User | null, guestPrefs?: UserPreferences): AppSt
   aiRequestsUsed: 0,
   isPro: false,
   userPreferences: guestPrefs || {},
+  partnerSharedPlaces: [],
 });
 
 const App: React.FC = () => {

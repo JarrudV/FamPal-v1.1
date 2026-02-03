@@ -80,9 +80,30 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   const [aiAnswer, setAiAnswer] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [showAiPanel, setShowAiPanel] = useState(false);
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const memoryFileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Swipe gesture handling
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const minSwipeDistance = 100;
+  
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+  
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+  
+  const onTouchEnd = () => {
+    if (touchStart === null || touchEnd === null) return;
+    const distance = touchEnd - touchStart;
+    const isRightSwipe = distance > minSwipeDistance;
+    if (isRightSwipe) {
+      onClose();
+    }
+  };
   
   // Add Memory state
   const [showAddMemory, setShowAddMemory] = useState(false);
@@ -145,42 +166,13 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
     setTimeout(() => setSummarySaved(false), 2000);
   };
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !storage || !auth?.currentUser) return;
-
-    const maxSize = 5 * 1024 * 1024;
-    if (file.size > maxSize) {
-      alert('Photo must be under 5MB');
-      return;
-    }
-
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file');
-      return;
-    }
-
-    setUploadingPhoto(true);
-    try {
-      const timestamp = Date.now();
-      const fileName = `memories/${auth.currentUser.uid}/${place.id}/${timestamp}_${file.name}`;
-      const storageRef = ref(storage, fileName);
-      
-      await uploadBytes(storageRef, file);
-      const downloadUrl = await getDownloadURL(storageRef);
-      
-      const currentPhotos = favoriteData?.menuPhotos || [];
-      onUpdateDetails({ menuPhotos: [...currentPhotos, downloadUrl] });
-    } catch (error: any) {
-      console.error('Upload failed:', error);
-      alert('Failed to upload photo. Please try again.');
-    }
-    setUploadingPhoto(false);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
   return (
-    <div className="fixed inset-0 z-[100] bg-[#F8FAFC] overflow-y-auto overflow-x-hidden animate-slide-up container-safe">
+    <div 
+      className="fixed inset-0 z-[100] bg-[#F8FAFC] overflow-y-auto overflow-x-hidden animate-slide-up container-safe"
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+    >
       <div className="relative h-96">
         <img src={place.imageUrl} className="w-full h-full object-cover" alt={place.name} />
         <div className="absolute inset-0 bg-gradient-to-t from-[#F8FAFC] via-transparent to-black/20"></div>
@@ -509,27 +501,34 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                   <span>📸</span> Your Memories
                 </h3>
                 <div className="space-y-3">
-                  {venueMemories.map(memory => (
-                    <div key={memory.id} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100">
-                      <div className="flex gap-4 p-4">
-                        {memory.photoUrl && (
-                          <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0">
-                            <img src={memory.photoUrl} className="w-full h-full object-cover" alt="" />
+                  {venueMemories.map(memory => {
+                    const photos = memory.photoUrls || (memory.photoUrl ? [memory.photoUrl] : []);
+                    return (
+                      <div key={memory.id} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100">
+                        <div className="flex gap-3 p-4">
+                          {photos.length > 0 && (
+                            <div className="flex gap-2 shrink-0">
+                              {photos.slice(0, 3).map((url, idx) => (
+                                <div key={idx} className="w-16 h-16 rounded-xl overflow-hidden">
+                                  <img src={url} className="w-full h-full object-cover" alt="" />
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-slate-700">{memory.caption}</p>
+                            <p className="text-xs text-slate-400 mt-2">
+                              {new Date(memory.date).toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric', 
+                                year: 'numeric' 
+                              })}
+                            </p>
                           </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-slate-700">{memory.caption}</p>
-                          <p className="text-xs text-slate-400 mt-2">
-                            {new Date(memory.date).toLocaleDateString('en-US', { 
-                              month: 'short', 
-                              day: 'numeric', 
-                              year: 'numeric' 
-                            })}
-                          </p>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             )}
@@ -757,15 +756,26 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                     <div className="space-y-3">
                       <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Your Memories Here</p>
                       <div className="grid grid-cols-2 gap-3">
-                        {venueMemories.map(memory => (
-                          <div key={memory.id} className="bg-white rounded-2xl overflow-hidden shadow-sm">
-                            <img src={memory.photoUrl} className="w-full aspect-square object-cover" alt="" />
-                            <div className="p-3">
-                              <p className="text-xs font-semibold text-slate-700 line-clamp-2">{memory.caption}</p>
-                              <p className="text-[10px] text-slate-400 mt-1">{new Date(memory.date).toLocaleDateString()}</p>
+                        {venueMemories.map(memory => {
+                          const photos = memory.photoUrls || (memory.photoUrl ? [memory.photoUrl] : []);
+                          const mainPhoto = photos[0] || 'https://picsum.photos/seed/memory/400/400';
+                          return (
+                            <div key={memory.id} className="bg-white rounded-2xl overflow-hidden shadow-sm">
+                              <div className="relative">
+                                <img src={mainPhoto} className="w-full aspect-square object-cover" alt="" />
+                                {photos.length > 1 && (
+                                  <div className="absolute bottom-1 right-1 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">
+                                    +{photos.length - 1}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="p-3">
+                                <p className="text-xs font-semibold text-slate-700 line-clamp-2">{memory.caption}</p>
+                                <p className="text-[10px] text-slate-400 mt-1">{new Date(memory.date).toLocaleDateString()}</p>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -775,6 +785,14 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
           </div>
         )}
       </div>
+      
+      {/* Floating Home Button */}
+      <button
+        onClick={onClose}
+        className="fixed bottom-8 left-1/2 transform -translate-x-1/2 w-16 h-16 bg-sky-500 rounded-full shadow-xl shadow-sky-200 flex items-center justify-center text-white text-2xl z-50 active:scale-95 transition-transform safe-area-inset-bottom"
+      >
+        🏠
+      </button>
     </div>
   );
 };
