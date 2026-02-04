@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AppState, Child, PartnerLink, Preferences, FOOD_PREFERENCES, ALLERGY_OPTIONS, ACCESSIBILITY_OPTIONS, ACTIVITY_PREFERENCES, PLAN_LIMITS } from '../types';
 import PlanBilling from './PlanBilling';
 import { getLimits, getPlanDisplayName, canUseAI, isPaidTier } from '../lib/entitlements';
-import { storage, auth, ref, uploadBytes, getDownloadURL } from '../lib/firebase';
+import { storage, auth, db, collection, query, where, getDocs, doc, setDoc, ref, uploadBytes, getDownloadURL } from '../lib/firebase';
 
 interface ProfileProps {
   state: AppState;
@@ -112,17 +112,65 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
     }
   };
 
-  const handleJoinWithCode = () => {
+  const handleJoinWithCode = async () => {
     if (!partnerCode || partnerCode.length !== 6) return;
-    const partnerLink: PartnerLink = {
-      inviteCode: partnerCode.toUpperCase(),
-      linkedAt: new Date().toISOString(),
-      status: 'accepted',
-      partnerName: 'Partner'
-    };
-    onUpdateState('partnerLink', partnerLink);
-    setPartnerCode('');
-    setShowCodeInput(false);
+    if (!db || !auth?.currentUser) {
+      return;
+    }
+
+    const normalizedCode = partnerCode.toUpperCase();
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('partnerLink.inviteCode', '==', normalizedCode));
+      const snap = await getDocs(q);
+      const match = snap.docs.find(docSnap => docSnap.id !== auth.currentUser?.uid);
+
+      if (!match) {
+        setPartnerCode('');
+        setShowCodeInput(false);
+        return;
+      }
+
+      const partnerData = match.data() || {};
+      const partnerProfile = partnerData.profile || {};
+      const partnerName = partnerProfile.displayName || partnerProfile.email || 'Partner';
+      const partnerEmail = partnerProfile.email || undefined;
+      const partnerPhotoURL = partnerProfile.photoURL || undefined;
+      const partnerUserId = match.id;
+
+      const partnerLink: PartnerLink = {
+        inviteCode: normalizedCode,
+        linkedAt: new Date().toISOString(),
+        status: 'accepted',
+        partnerName,
+        partnerEmail,
+        partnerPhotoURL,
+        partnerUserId,
+      };
+      onUpdateState('partnerLink', partnerLink);
+      setPartnerCode('');
+      setShowCodeInput(false);
+
+      // Best-effort update to mark the inviter as linked to this user.
+      try {
+        const selfProfileName = state.user?.displayName || state.user?.email || 'Partner';
+        await setDoc(doc(db, 'users', partnerUserId), {
+          partnerLink: {
+            status: 'accepted',
+            linkedAt: new Date().toISOString(),
+            partnerUserId: auth.currentUser.uid,
+            partnerName: selfProfileName,
+            partnerEmail: state.user?.email || undefined,
+            partnerPhotoURL: state.user?.photoURL || undefined,
+            inviteCode: normalizedCode,
+          }
+        }, { merge: true });
+      } catch (err) {
+        console.warn('Unable to update partner record.', err);
+      }
+    } catch (err) {
+      console.warn('Partner lookup failed.', err);
+    }
   };
 
   const handleUnlinkPartner = () => {

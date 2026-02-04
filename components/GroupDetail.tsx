@@ -1,42 +1,77 @@
-import React, { useState } from 'react';
-import { FriendCircle, GroupPlace, Place, AppState } from '../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Place } from '../types';
+import {
+  CircleDoc,
+  CircleMemberDoc,
+  CirclePlaceDoc,
+  CircleCommentDoc,
+  CircleMemoryDoc,
+  listenToCircleMembers,
+  listenToCirclePlaces,
+  listenToCircleComments,
+  listenToCircleMemories,
+  saveCirclePlace,
+  removeCirclePlace,
+  addCircleComment,
+} from '../lib/circles';
 
 interface GroupDetailProps {
-  group: FriendCircle;
+  circle: CircleDoc;
   userId: string;
+  userName: string;
+  userEmail?: string | null;
   userFavorites: string[];
   allPlaces: Place[];
   onClose: () => void;
-  onAddPlace: (placeId: string, placeName: string) => void;
-  onRemovePlace: (placeId: string) => void;
-  onInviteMember: (email: string) => void;
-  onLeaveGroup: () => void;
-  onDeleteGroup: () => void;
+  onOpenPlace: (place: Place) => void;
 }
 
 const GroupDetail: React.FC<GroupDetailProps> = ({
-  group,
+  circle,
   userId,
+  userName,
+  userEmail,
   userFavorites,
   allPlaces,
   onClose,
-  onAddPlace,
-  onRemovePlace,
-  onInviteMember,
-  onLeaveGroup,
-  onDeleteGroup,
+  onOpenPlace,
 }) => {
   const [showAddPlace, setShowAddPlace] = useState(false);
-  const [showInvite, setShowInvite] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
+  const [members, setMembers] = useState<CircleMemberDoc[]>([]);
+  const [places, setPlaces] = useState<CirclePlaceDoc[]>([]);
+  const [memories, setMemories] = useState<CircleMemoryDoc[]>([]);
+  const [expandedPlaceId, setExpandedPlaceId] = useState<string | null>(null);
+  const [comments, setComments] = useState<CircleCommentDoc[]>([]);
+  const [commentInput, setCommentInput] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
 
-  const isOwner = group.ownerId === userId;
-  const inviteLink = `${window.location.origin}/join/${group.inviteCode}`;
+  const inviteLink = `${window.location.origin}/join/${circle.joinCode}`;
+  const isOwner = circle.createdBy === userId;
 
-  const availablePlaces = allPlaces.filter(
-    p => userFavorites.includes(p.id) && !group.sharedPlaces.some(sp => sp.placeId === p.id)
-  );
+  const availablePlaces = useMemo(() => {
+    const sharedIds = new Set(places.map(p => p.placeId));
+    return allPlaces.filter(p => userFavorites.includes(p.id) && !sharedIds.has(p.id));
+  }, [allPlaces, userFavorites, places]);
+
+  useEffect(() => {
+    const unsubMembers = listenToCircleMembers(circle.id, setMembers);
+    const unsubPlaces = listenToCirclePlaces(circle.id, setPlaces);
+    const unsubMemories = listenToCircleMemories(circle.id, setMemories);
+    return () => {
+      unsubMembers();
+      unsubPlaces();
+      unsubMemories();
+    };
+  }, [circle.id]);
+
+  useEffect(() => {
+    if (!expandedPlaceId) {
+      setComments([]);
+      return;
+    }
+    const unsub = listenToCircleComments(circle.id, expandedPlaceId, setComments);
+    return () => unsub();
+  }, [circle.id, expandedPlaceId]);
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(inviteLink);
@@ -44,12 +79,54 @@ const GroupDetail: React.FC<GroupDetailProps> = ({
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
-  const handleInvite = () => {
-    if (inviteEmail.trim()) {
-      onInviteMember(inviteEmail.trim());
-      setInviteEmail('');
-      setShowInvite(false);
-    }
+  const handleAddPlace = async (place: Place) => {
+    const note = window.prompt('Why are we saving this?') || '';
+    await saveCirclePlace(circle.id, {
+      placeId: place.id,
+      savedByUid: userId,
+      savedByName: userName || userEmail || 'Member',
+      savedAt: new Date().toISOString(),
+      note: note.trim(),
+      placeSummary: {
+        placeId: place.id,
+        name: place.name,
+        imageUrl: place.imageUrl,
+        type: place.type,
+        mapsUrl: place.mapsUrl,
+      },
+    });
+    setShowAddPlace(false);
+  };
+
+  const handleRemovePlace = async (placeId: string) => {
+    await removeCirclePlace(circle.id, placeId);
+  };
+
+  const handleAddComment = async () => {
+    if (!expandedPlaceId || !commentInput.trim()) return;
+    await addCircleComment(circle.id, expandedPlaceId, {
+      uid: userId,
+      text: commentInput.trim(),
+      createdAt: new Date().toISOString(),
+      displayName: userName || userEmail || 'Member',
+    });
+    setCommentInput('');
+  };
+
+  const resolvePlace = (placeDoc: CirclePlaceDoc): Place => {
+    const found = allPlaces.find(p => p.id === placeDoc.placeId);
+    if (found) return found;
+    return {
+      id: placeDoc.placeId,
+      name: placeDoc.placeSummary.name,
+      description: 'Family-friendly place',
+      address: '',
+      rating: undefined,
+      tags: [],
+      imageUrl: placeDoc.placeSummary.imageUrl,
+      mapsUrl: placeDoc.placeSummary.mapsUrl || `https://www.google.com/maps/place/?q=place_id:${placeDoc.placeId}`,
+      type: (placeDoc.placeSummary.type as any) || 'all',
+    };
   };
 
   return (
@@ -61,7 +138,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h1 className="text-lg font-bold text-slate-800">{group.name}</h1>
+          <h1 className="text-lg font-bold text-slate-800">{circle.name}</h1>
           <div className="w-9" />
         </div>
       </div>
@@ -69,73 +146,26 @@ const GroupDetail: React.FC<GroupDetailProps> = ({
       <div className="p-4 space-y-6">
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-slate-800">Members ({group.members.length})</h2>
+            <h2 className="font-semibold text-slate-800">Members ({members.length})</h2>
             <button
-              onClick={() => setShowInvite(true)}
+              onClick={handleCopyLink}
               className="text-sm text-purple-600 font-medium hover:text-purple-700"
             >
-              + Invite
+              {copiedLink ? 'Copied!' : 'Copy invite code'}
             </button>
           </div>
-          
-          {showInvite && (
-            <div className="bg-purple-50 rounded-xl p-4 mb-4">
-              <p className="text-xs text-slate-600 mb-2">Share this link to invite members:</p>
-              <div className="flex gap-2 mb-3">
-                <input
-                  type="text"
-                  value={inviteLink}
-                  readOnly
-                  className="flex-1 px-3 py-2 bg-white rounded-lg text-xs text-slate-600 border border-purple-200"
-                />
-                <button
-                  onClick={handleCopyLink}
-                  className={`px-3 py-2 text-xs font-semibold rounded-lg transition-colors ${
-                    copiedLink ? 'bg-green-500 text-white' : 'bg-purple-500 text-white hover:bg-purple-600'
-                  }`}
-                >
-                  {copiedLink ? 'Copied!' : 'Copy'}
-                </button>
-              </div>
-              <div className="border-t border-purple-200 pt-3">
-                <p className="text-xs text-slate-600 mb-2">Or invite by email:</p>
-                <div className="flex gap-2">
-                  <input
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="friend@email.com"
-                    className="flex-1 px-3 py-2 bg-white rounded-lg text-sm placeholder-slate-400 border border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-300"
-                  />
-                  <button
-                    onClick={handleInvite}
-                    disabled={!inviteEmail.trim()}
-                    className="px-4 py-2 bg-purple-500 text-white text-sm font-semibold rounded-lg hover:bg-purple-600 disabled:opacity-50"
-                  >
-                    Send
-                  </button>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowInvite(false)}
-                className="mt-3 text-xs text-slate-500 hover:text-slate-700"
-              >
-                Close
-              </button>
-            </div>
-          )}
-
+          <p className="text-xs text-slate-500 mb-3">Join code: {circle.joinCode}</p>
           <div className="space-y-2">
-            {group.members.map((member) => (
-              <div key={member.userId} className="flex items-center justify-between py-2">
+            {members.map((member) => (
+              <div key={member.uid} className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
                     <span className="text-sm font-semibold text-purple-600">
-                      {member.displayName?.charAt(0) || member.email?.charAt(0) || '?'}
+                      {(member.displayName || member.email || '?').charAt(0)}
                     </span>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-slate-700">{member.displayName || member.email}</p>
+                    <p className="text-sm font-medium text-slate-700">{member.displayName || member.email || 'Member'}</p>
                     <p className="text-xs text-slate-400">{member.role}</p>
                   </div>
                 </div>
@@ -146,7 +176,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({
 
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-slate-800">Shared Places ({group.sharedPlaces.length})</h2>
+            <h2 className="font-semibold text-slate-800">Circle Places ({places.length})</h2>
             {userFavorites.length > 0 && (
               <button
                 onClick={() => setShowAddPlace(true)}
@@ -167,7 +197,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({
                   {availablePlaces.map((place) => (
                     <button
                       key={place.id}
-                      onClick={() => { onAddPlace(place.id, place.name); setShowAddPlace(false); }}
+                      onClick={() => handleAddPlace(place)}
                       className="w-full flex items-center justify-between p-3 bg-white rounded-xl hover:bg-slate-50 transition-colors"
                     >
                       <span className="text-sm text-slate-700">{place.name}</span>
@@ -187,50 +217,108 @@ const GroupDetail: React.FC<GroupDetailProps> = ({
             </div>
           )}
 
-          {group.sharedPlaces.length === 0 ? (
+          {places.length === 0 ? (
             <div className="text-center py-6">
               <p className="text-sm text-slate-500">No places shared yet.</p>
-              <p className="text-xs text-slate-400 mt-1">Save some places first, then add them here!</p>
+              <p className="text-xs text-slate-400 mt-1">Save some places first, then add them here.</p>
             </div>
           ) : (
-            <div className="space-y-2">
-              {group.sharedPlaces.map((sp) => (
-                <div key={sp.placeId} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                  <div>
-                    <p className="text-sm font-medium text-slate-700">{sp.placeName}</p>
-                    <p className="text-xs text-slate-400">Added by {sp.addedByName}</p>
+            <div className="space-y-3">
+              {places.map((sp) => {
+                const place = resolvePlace(sp);
+                return (
+                  <div key={sp.placeId} className="bg-slate-50 rounded-xl p-3">
+                    <div className="flex items-center justify-between">
+                      <button
+                        onClick={() => onOpenPlace(place)}
+                        className="text-left"
+                      >
+                        <p className="text-sm font-medium text-slate-700">{sp.placeSummary.name}</p>
+                        <p className="text-xs text-slate-400">Added by {sp.savedByName}</p>
+                      </button>
+                      {(sp.savedByUid === userId || isOwner) && (
+                        <button
+                          onClick={() => handleRemovePlace(sp.placeId)}
+                          className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                    {sp.note && (
+                      <p className="text-xs text-slate-500 mt-2">{sp.note}</p>
+                    )}
+                    <div className="mt-3">
+                      <button
+                        onClick={() => setExpandedPlaceId(expandedPlaceId === sp.placeId ? null : sp.placeId)}
+                        className="text-xs text-purple-600 font-semibold"
+                      >
+                        {expandedPlaceId === sp.placeId ? 'Hide comments' : 'Comments'}
+                      </button>
+                      {expandedPlaceId === sp.placeId && (
+                        <div className="mt-2 space-y-2">
+                          {comments.length === 0 ? (
+                            <p className="text-xs text-slate-400">No comments yet.</p>
+                          ) : (
+                            comments.map(comment => (
+                              <div key={comment.id} className="bg-white rounded-lg px-3 py-2 border border-slate-100">
+                                <p className="text-xs text-slate-700">{comment.text}</p>
+                                <p className="text-[10px] text-slate-400 mt-1">{comment.displayName}</p>
+                              </div>
+                            ))
+                          )}
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={commentInput}
+                              onChange={(e) => setCommentInput(e.target.value)}
+                              placeholder="Add a quick note"
+                              className="flex-1 px-3 py-2 bg-white rounded-lg text-xs placeholder-slate-400 border border-slate-200"
+                            />
+                            <button
+                              onClick={handleAddComment}
+                              disabled={!commentInput.trim()}
+                              className="px-3 py-2 bg-purple-500 text-white text-xs font-semibold rounded-lg disabled:opacity-50"
+                            >
+                              Send
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  {(sp.addedBy === userId || isOwner) && (
-                    <button
-                      onClick={() => onRemovePlace(sp.placeId)}
-                      className="p-1 text-slate-400 hover:text-red-500 transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
 
-        <div className="pt-4 border-t border-slate-200">
-          {isOwner ? (
-            <button
-              onClick={onDeleteGroup}
-              className="w-full py-3 text-red-500 text-sm font-medium hover:bg-red-50 rounded-xl transition-colors"
-            >
-              Delete Group
-            </button>
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
+          <h2 className="font-semibold text-slate-800 mb-3">Circle Memories ({memories.length})</h2>
+          {memories.length === 0 ? (
+            <p className="text-sm text-slate-500">No memories tagged yet.</p>
           ) : (
-            <button
-              onClick={onLeaveGroup}
-              className="w-full py-3 text-slate-500 text-sm font-medium hover:bg-slate-100 rounded-xl transition-colors"
-            >
-              Leave Group
-            </button>
+            <div className="grid grid-cols-2 gap-3">
+              {memories.map((memory) => {
+                const photos = memory.memorySnapshot.photoThumbUrls || memory.memorySnapshot.photoUrls || (memory.memorySnapshot.photoThumbUrl ? [memory.memorySnapshot.photoThumbUrl] : (memory.memorySnapshot.photoUrl ? [memory.memorySnapshot.photoUrl] : []));
+                const mainPhoto = photos[0];
+                return (
+                  <div key={memory.id} className="bg-slate-50 rounded-xl overflow-hidden">
+                    {mainPhoto ? (
+                      <img src={mainPhoto} className="w-full h-32 object-cover" alt="" />
+                    ) : (
+                      <div className="w-full h-32 bg-slate-100 flex items-center justify-center text-slate-400 text-xs font-bold">Text Memory</div>
+                    )}
+                    <div className="p-3">
+                      <p className="text-xs font-semibold text-slate-700 line-clamp-2">{memory.memorySnapshot.caption}</p>
+                      <p className="text-[10px] text-slate-400 mt-1">{memory.createdByName}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>

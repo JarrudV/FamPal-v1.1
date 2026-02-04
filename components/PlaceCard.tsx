@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Place, FriendCircle } from '../types';
+import { Place } from '../types';
 
 interface PlaceCardProps {
   place: Place;
@@ -12,7 +12,7 @@ interface PlaceCardProps {
   showAddToGroup?: boolean;
 }
 
-const PlaceCard: React.FC<PlaceCardProps> = ({ place, variant, isFavorite, onToggleFavorite, onClick, onAddToGroup, showAddToGroup }) => {
+  const PlaceCard: React.FC<PlaceCardProps> = ({ place, variant, isFavorite, onToggleFavorite, onClick, onAddToGroup, showAddToGroup }) => {
   if (variant === 'hero') {
     return (
       <div 
@@ -69,7 +69,7 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place, variant, isFavorite, onTog
               <button 
                 onClick={(e) => { e.stopPropagation(); onAddToGroup(); }}
                 className="w-9 h-9 rounded-full flex items-center justify-center transition-colors text-purple-500 bg-purple-50 hover:bg-purple-100"
-                title="Add to group"
+                title="Add to circle"
               >
                 👥
               </button>

@@ -6,16 +6,14 @@ import {
   signInWithPopup,
   onAuthStateChanged,
   signOut as firebaseSignOut,
-  doc,
-  setDoc,
-  onSnapshot,
-  db,
   isFirebaseConfigured,
   firebaseConfigError,
 } from './lib/firebase';
+import { listenToUserDoc, upsertUserProfile, saveUserField } from './lib/userData';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Profile from './components/Profile';
+import HomeFab from './components/HomeFab';
 import { AppState, User, getDefaultEntitlement, UserPreferences } from './types';
 import { getGuestPreferences, syncGuestPreferencesToUser } from './lib/profileSync';
 import type { User as FirebaseUser } from 'firebase/auth';
@@ -113,12 +111,9 @@ const App: React.FC = () => {
       // Save to Firestore if user is logged in (not guest)
       // Use auth.currentUser for more reliable UID access
       const uid = auth?.currentUser?.uid || prev.user?.uid;
-      if (!isGuest && uid && db) {
-        const userDocRef = doc(db, 'users', uid);
-        // Only save the data fields, not the full state
-        const dataToSave: Record<string, any> = {};
-        dataToSave[key] = value;
-        setDoc(userDocRef, dataToSave, { merge: true }).catch(err => {
+      if (!isGuest && uid) {
+        // Centralised save via userData service
+        saveUserField(uid, key as string, value).catch(err => {
           console.error('Failed to save to Firestore:', err);
         });
       }
@@ -140,29 +135,28 @@ const App: React.FC = () => {
     }
 
     const unsubscribe = onAuthStateChanged(auth, (userAuth) => {
+      console.time('auth:resolved');
       if (userAuth) {
-        if (!db) {
-          setLoading(false);
-          return;
-        }
-        
-        // Convert Firebase Auth User to plain object for Firestore
+        // Immediately show the dashboard shell so UI is responsive
         const serializedUser = serializeUser(userAuth);
-        const userDocRef = doc(db, 'users', userAuth.uid);
+        setState(prev => ({ ...prev, isAuthenticated: true, user: serializedUser }));
+        setView('dashboard');
+        setLoading(false);
 
-        const unsubscribeSnapshot = onSnapshot(userDocRef, (snap) => {
+        // Upsert profile (non-blocking) and start listening for data
+        upsertUserProfile(userAuth.uid, serializedUser).catch(err => console.error(err));
+
+        // Listen to user doc and merge data when available
+        const unsubProfile = listenToUserDoc(userAuth.uid, (dbState) => {
+          console.timeEnd('auth:resolved');
           const initialState = getInitialState(serializedUser);
-          if (snap.exists()) {
-            const dbState = snap.data();
-            // Deep merge to avoid undefined arrays
+          if (dbState) {
             const loadedEntitlement = dbState.entitlement || getDefaultEntitlement();
             const guestPrefs = getGuestPreferences();
             const hasGuestPrefs = Object.keys(guestPrefs).length > 0;
-            
             if (hasGuestPrefs && !dbState.userPreferences) {
               syncGuestPreferencesToUser(userAuth.uid);
             }
-            
             setState({
               ...initialState,
               user: serializedUser,
@@ -181,23 +175,16 @@ const App: React.FC = () => {
               userPreferences: dbState.userPreferences || guestPrefs || {},
             });
           } else {
-            // Save only serializable data to Firestore
-            const dataToSave = {
-              ...initialState,
-              user: serializedUser,
-            };
-            setDoc(userDocRef, dataToSave, { merge: true });
             setState(initialState);
           }
-          setView('dashboard');
-          setLoading(false);
         });
 
-        return () => unsubscribeSnapshot();
+        return () => unsubProfile();
       } else {
         setState(getInitialState(null));
         setView('login');
         setLoading(false);
+        console.timeEnd('auth:resolved');
       }
     });
 
@@ -219,7 +206,12 @@ const App: React.FC = () => {
     }
   };
 
-  return <div>{renderView()}</div>;
+  return (
+    <div>
+      {renderView()}
+      <HomeFab visible={view !== 'dashboard' && view !== 'login'} onClick={() => setView('dashboard')} />
+    </div>
+  );
 };
 
 export default App;

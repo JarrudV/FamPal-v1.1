@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FriendCircle } from '../types';
+import { CircleDoc } from '../lib/circles';
 
 const MAX_CIRCLES = 2;
 
@@ -9,24 +9,32 @@ const SAMPLE_CIRCLES = [
 ];
 
 interface GroupsListProps {
-  friendCircles: FriendCircle[];
-  onCreateGroup: (name: string) => void;
-  onSelectGroup: (group: FriendCircle) => void;
+  circles: CircleDoc[];
+  onCreateCircle: (name: string) => void;
+  onJoinCircle: (code: string) => void;
+  onSelectCircle: (circle: CircleDoc) => void;
   isGuest: boolean;
 }
 
-const GroupsList: React.FC<GroupsListProps> = ({ friendCircles, onCreateGroup, onSelectGroup, isGuest }) => {
+const GroupsList: React.FC<GroupsListProps> = ({ circles, onCreateCircle, onJoinCircle, onSelectCircle, isGuest }) => {
   const [showCreate, setShowCreate] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
+  const [joinCode, setJoinCode] = useState('');
 
-  const canCreateMore = friendCircles.length < MAX_CIRCLES;
+  const canCreateMore = circles.length < MAX_CIRCLES;
 
   const handleCreate = () => {
     if (newGroupName.trim() && canCreateMore) {
-      onCreateGroup(newGroupName.trim());
+      onCreateCircle(newGroupName.trim());
       setNewGroupName('');
       setShowCreate(false);
     }
+  };
+
+  const handleJoin = () => {
+    if (!joinCode.trim()) return;
+    onJoinCircle(joinCode.trim().toUpperCase());
+    setJoinCode('');
   };
 
   if (isGuest) {
@@ -38,9 +46,9 @@ const GroupsList: React.FC<GroupsListProps> = ({ friendCircles, onCreateGroup, o
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
           </div>
-          <h3 className="text-lg font-semibold text-slate-800 mb-2">Friend Circles</h3>
+          <h3 className="text-lg font-semibold text-slate-800 mb-2">Circles</h3>
           <p className="text-sm text-slate-500 max-w-xs mx-auto mb-6">
-            Create private groups to share and plan activities with your partner, family, or friends.
+            Create private circles to share and plan activities with your partner, family, or friends.
           </p>
         </div>
 
@@ -55,7 +63,7 @@ const GroupsList: React.FC<GroupsListProps> = ({ friendCircles, onCreateGroup, o
                 <div>
                   <h3 className="font-semibold text-slate-800">{sample.name}</h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    {sample.members} members • {sample.places} places
+                    {sample.members} members � {sample.places} places
                   </p>
                 </div>
                 <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
@@ -70,10 +78,10 @@ const GroupsList: React.FC<GroupsListProps> = ({ friendCircles, onCreateGroup, o
 
         <div className="bg-purple-50 rounded-2xl p-5 text-center mt-6">
           <p className="text-sm font-semibold text-purple-700 mb-3">
-            Log in to create up to {MAX_CIRCLES} circles
+            Log in to create or join circles
           </p>
           <p className="text-xs text-purple-500">
-            Share places with your partner, plan outings with friends, and coordinate family adventures.
+            Share places, add notes, and plan adventures together.
           </p>
         </div>
       </div>
@@ -83,13 +91,13 @@ const GroupsList: React.FC<GroupsListProps> = ({ friendCircles, onCreateGroup, o
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-lg font-bold text-slate-800">Your Groups</h2>
+        <h2 className="text-lg font-bold text-slate-800">Your Circles</h2>
         {canCreateMore ? (
           <button
             onClick={() => setShowCreate(true)}
             className="px-4 py-2 bg-purple-500 text-white text-sm font-semibold rounded-xl hover:bg-purple-600 transition-colors"
           >
-            + New Group
+            + New Circle
           </button>
         ) : (
           <span className="text-xs text-slate-400 bg-slate-100 px-3 py-1.5 rounded-lg">
@@ -100,13 +108,13 @@ const GroupsList: React.FC<GroupsListProps> = ({ friendCircles, onCreateGroup, o
 
       {!canCreateMore && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
-          You've reached the maximum of {MAX_CIRCLES} circles. Delete a group to create a new one.
+          You've reached the maximum of {MAX_CIRCLES} circles. Delete a circle to create a new one.
         </div>
       )}
 
       {showCreate && canCreateMore && (
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-purple-100">
-          <h3 className="text-sm font-semibold text-slate-700 mb-3">Create a new group</h3>
+          <h3 className="text-sm font-semibold text-slate-700 mb-3">Create a new circle</h3>
           <input
             type="text"
             value={newGroupName}
@@ -121,7 +129,7 @@ const GroupsList: React.FC<GroupsListProps> = ({ friendCircles, onCreateGroup, o
               disabled={!newGroupName.trim()}
               className="flex-1 py-2 bg-purple-500 text-white text-sm font-semibold rounded-xl hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Create Group
+              Create Circle
             </button>
             <button
               onClick={() => { setShowCreate(false); setNewGroupName(''); }}
@@ -133,37 +141,37 @@ const GroupsList: React.FC<GroupsListProps> = ({ friendCircles, onCreateGroup, o
         </div>
       )}
 
-      {friendCircles.length === 0 && !showCreate ? (
+      {circles.length === 0 && !showCreate ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
             <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
           </div>
-          <h3 className="text-base font-semibold text-slate-700 mb-2">No groups yet</h3>
+          <h3 className="text-base font-semibold text-slate-700 mb-2">No circles yet</h3>
           <p className="text-sm text-slate-500 max-w-xs mb-4">
-            Create your first group to share places and plan activities with your loved ones.
+            Create your first circle to share places and plan activities with your loved ones.
           </p>
           <button
             onClick={() => setShowCreate(true)}
             className="px-6 py-2 bg-purple-500 text-white text-sm font-semibold rounded-xl hover:bg-purple-600 transition-colors"
           >
-            Create Your First Group
+            Create Your First Circle
           </button>
         </div>
       ) : (
         <div className="space-y-3">
-          {friendCircles.map((group) => (
+          {circles.map((circle) => (
             <button
-              key={group.id}
-              onClick={() => onSelectGroup(group)}
+              key={circle.id}
+              onClick={() => onSelectCircle(circle)}
               className="w-full bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow text-left"
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="font-semibold text-slate-800">{group.name}</h3>
+                  <h3 className="font-semibold text-slate-800">{circle.name}</h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    {group.members.length} member{group.members.length !== 1 ? 's' : ''} • {group.sharedPlaces.length} place{group.sharedPlaces.length !== 1 ? 's' : ''}
+                    Tap to view members and places
                   </p>
                 </div>
                 <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -174,6 +182,26 @@ const GroupsList: React.FC<GroupsListProps> = ({ friendCircles, onCreateGroup, o
           ))}
         </div>
       )}
+
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-purple-100">
+        <h3 className="text-sm font-semibold text-slate-700 mb-3">Join a circle</h3>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={joinCode}
+            onChange={(e) => setJoinCode(e.target.value)}
+            placeholder="Enter join code"
+            className="flex-1 px-4 py-3 bg-slate-50 rounded-xl text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-300"
+          />
+          <button
+            onClick={handleJoin}
+            disabled={!joinCode.trim()}
+            className="px-4 py-3 bg-purple-500 text-white text-sm font-semibold rounded-xl hover:bg-purple-600 disabled:opacity-50"
+          >
+            Join
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

@@ -1,10 +1,11 @@
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Place, FavoriteData, ACTIVITY_OPTIONS, Memory, Entitlement, FriendCircle, PartnerLink, GroupPlace } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Place, FavoriteData, ACTIVITY_OPTIONS, Memory, Entitlement, PartnerLink, GroupPlace } from '../types';
 import { askAboutPlace, generateFamilySummary } from '../geminiService';
 import { getPlaceDetails, PlaceDetails, PlaceReview } from '../placesService';
-import { storage, auth, ref, uploadBytes, getDownloadURL } from '../lib/firebase';
-import { canUseAI, getLimits, canAddMemory } from '../lib/entitlements';
+import { canUseAI } from '../lib/entitlements';
+import MemoryCreate from './MemoryCreate';
+import { CircleDoc } from '../lib/circles';
 
 function getNavigationUrl(place: Place, placeDetails?: PlaceDetails | null): string {
   const lat = (place as any).lat || placeDetails?.lat;
@@ -35,7 +36,7 @@ interface VenueProfileProps {
   childrenAges?: number[];
   isGuest?: boolean;
   entitlement?: Entitlement;
-  circles?: FriendCircle[];
+  circles?: CircleDoc[];
   partnerLink?: PartnerLink;
   userName?: string;
   userId?: string;
@@ -46,6 +47,7 @@ interface VenueProfileProps {
   onIncrementAiRequests?: () => void;
   onAddToCircle?: (circleId: string, place: GroupPlace) => void;
   onAddMemory?: (memory: Omit<Memory, 'id'>) => void;
+  onTagMemoryToCircle?: (circleId: string, memory: Omit<Memory, 'id'>) => void;
 }
 
 const VenueProfile: React.FC<VenueProfileProps> = ({ 
@@ -68,19 +70,16 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   onUpdateDetails,
   onIncrementAiRequests,
   onAddToCircle,
-  onAddMemory
+  onAddMemory,
+  onTagMemoryToCircle
 }) => {
   const aiInfo = canUseAI(entitlement);
-  const memoryInfo = canAddMemory(entitlement, memoryCount);
-  const limits = getLimits(entitlement);
-  const isPro = entitlement?.plan_tier === 'pro' || entitlement?.plan_tier === 'lifetime';
   const venueMemories = memories.filter(m => m.placeId === place.id);
   const [activeTab, setActiveTab] = useState<'info' | 'parent'>('info');
   const [aiQuestion, setAiQuestion] = useState('');
   const [aiAnswer, setAiAnswer] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [showAiPanel, setShowAiPanel] = useState(false);
-  const memoryFileInputRef = useRef<HTMLInputElement>(null);
   
   // Swipe gesture handling
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -104,12 +103,6 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
       onClose();
     }
   };
-  
-  // Add Memory state
-  const [showAddMemory, setShowAddMemory] = useState(false);
-  const [memoryCaption, setMemoryCaption] = useState('');
-  const [memoryPhotos, setMemoryPhotos] = useState<string[]>([]);
-  const [uploadingMemoryPhoto, setUploadingMemoryPhoto] = useState(false);
   
   // Fetch place details from Google Places for reviews and extra info
   const [placeDetails, setPlaceDetails] = useState<PlaceDetails | null>(null);
@@ -211,12 +204,16 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
             <button
               onClick={() => {
                 if (onAddToCircle) {
+                  const note = window.prompt('Why are we saving this?') || '';
                   const partnerPlace: GroupPlace = {
                     placeId: place.id,
                     placeName: place.name,
+                    imageUrl: place.imageUrl,
+                    placeType: place.type,
                     addedBy: userId,
                     addedByName: userName,
                     addedAt: new Date().toISOString(),
+                    note: note.trim(),
                   };
                   onAddToCircle('partner', partnerPlace);
                 }
@@ -502,7 +499,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                 </h3>
                 <div className="space-y-3">
                   {venueMemories.map(memory => {
-                    const photos = memory.photoUrls || (memory.photoUrl ? [memory.photoUrl] : []);
+                    const photos = memory.photoThumbUrls || memory.photoUrls || (memory.photoThumbUrl ? [memory.photoThumbUrl] : (memory.photoUrl ? [memory.photoUrl] : []));
                     return (
                       <div key={memory.id} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100">
                         <div className="flex gap-3 p-4">
@@ -614,155 +611,43 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
 
                 {/* Add Memory Section */}
                 <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-xl font-extrabold text-sky-900 flex items-center gap-2">
-                      <span className="opacity-50 text-base">📸</span> Add Memory
-                    </h3>
-                    <button
-                      onClick={() => setShowAddMemory(!showAddMemory)}
-                      className="text-sky-500 font-black text-[10px] uppercase tracking-widest bg-sky-50 px-4 py-2 rounded-xl"
-                    >
-                      {showAddMemory ? 'Cancel' : 'New +'}
-                    </button>
-                  </div>
-                  
-                  {showAddMemory && (
-                    <div className="bg-sky-50 rounded-3xl p-5 space-y-4 border border-sky-100 animate-slide-up">
-                      <input
-                        ref={memoryFileInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file || !storage || !auth?.currentUser) return;
-                          
-                          if (memoryPhotos.length >= 3) {
-                            alert('Maximum 3 photos per memory');
-                            return;
-                          }
-                          
-                          if (file.size > 5 * 1024 * 1024) {
-                            alert('Photo must be under 5MB');
-                            return;
-                          }
-                          
-                          setUploadingMemoryPhoto(true);
-                          try {
-                            const timestamp = Date.now();
-                            const fileName = `memories/${auth.currentUser.uid}/${place.id}/${timestamp}_${file.name}`;
-                            const storageRef = ref(storage, fileName);
-                            await uploadBytes(storageRef, file);
-                            const downloadUrl = await getDownloadURL(storageRef);
-                            setMemoryPhotos(prev => [...prev, downloadUrl]);
-                          } catch (error) {
-                            alert('Failed to upload photo');
-                          }
-                          setUploadingMemoryPhoto(false);
-                          if (memoryFileInputRef.current) memoryFileInputRef.current.value = '';
-                        }}
-                        className="hidden"
-                      />
-                      
-                      <div className="space-y-4">
-                        <div className="flex gap-2 flex-wrap">
-                          {memoryPhotos.map((photo, idx) => (
-                            <div key={idx} className="relative w-20 h-20 rounded-xl overflow-hidden">
-                              <img src={photo} className="w-full h-full object-cover" alt="" />
-                              <button
-                                onClick={() => setMemoryPhotos(prev => prev.filter((_, i) => i !== idx))}
-                                className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          ))}
-                          {memoryPhotos.length < 3 && (
-                            <button
-                              onClick={() => memoryFileInputRef.current?.click()}
-                              disabled={uploadingMemoryPhoto}
-                              className="w-20 h-20 bg-white rounded-xl border-2 border-dashed border-sky-200 flex flex-col items-center justify-center text-sky-300 hover:border-sky-400"
-                            >
-                              {uploadingMemoryPhoto ? (
-                                <span className="text-xs">...</span>
-                              ) : (
-                                <>
-                                  <span className="text-lg">📷</span>
-                                  <span className="text-[9px] font-bold">{memoryPhotos.length}/3</span>
-                                </>
-                              )}
-                            </button>
-                          )}
-                        </div>
-                        
-                        <textarea
-                          value={memoryCaption}
-                          onChange={(e) => setMemoryCaption(e.target.value)}
-                          placeholder="What did you love about this place?"
-                          className="w-full p-4 bg-white rounded-2xl text-sm font-medium text-slate-600 resize-none outline-none focus:ring-2 focus:ring-sky-400"
-                          rows={3}
-                        />
-                      </div>
-                      
-                      <button
-                        onClick={() => {
-                          if (!memoryInfo.allowed) {
-                            alert(`You've reached the limit of ${memoryInfo.limit} memories. Upgrade to Pro for unlimited memories!`);
-                            return;
-                          }
-                          
-                          if (!memoryCaption.trim()) {
-                            alert('Please add a caption');
-                            return;
-                          }
-                          
-                          if (onAddMemory) {
-                            onAddMemory({
-                              placeId: place.id,
-                              placeName: place.name,
-                              photoUrl: memoryPhotos[0] || `https://picsum.photos/seed/${Date.now()}/400/400`,
-                              photoUrls: memoryPhotos.length > 0 ? memoryPhotos : undefined,
-                              caption: memoryCaption,
-                              taggedFriends: [],
-                              date: new Date().toISOString()
-                            });
-                          }
-                          
-                          // Also mark as visited if not already
-                          if (!isVisited) {
-                            onMarkVisited();
-                          }
-                          
-                          setMemoryCaption('');
-                          setMemoryPhotos([]);
-                          setShowAddMemory(false);
-                          alert('Memory added!');
-                        }}
-                        disabled={!memoryInfo.allowed}
-                        className={`w-full py-3 rounded-2xl font-bold text-sm shadow-lg ${
-                          memoryInfo.allowed 
-                            ? 'bg-sky-500 text-white' 
-                            : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                        }`}
-                      >
-                        {memoryInfo.allowed 
-                          ? 'Save Memory' 
-                          : `Limit Reached (${memoryInfo.limit}/${memoryInfo.limit})`}
-                      </button>
-                    </div>
-                  )}
-                  
+                  <MemoryCreate
+                    entitlement={entitlement}
+                    currentCount={memoryCount}
+                    fixedPlace={place}
+                    onCreate={(memory) => {
+                      if (onAddMemory) {
+                        onAddMemory(memory);
+                      }
+                    }}
+                    onUpgradePrompt={() => {
+                      alert('Memory limit reached. Upgrade to Pro for unlimited memories!');
+                    }}
+                    enablePartnerShare={partnerLink?.status === 'accepted'}
+                    circleOptions={circles.map(circle => ({ id: circle.id, name: circle.name }))}
+                    onTagCircle={onTagMemoryToCircle}
+                    title="Add Memory"
+                    toggleLabels={{ closed: 'New +', open: 'Cancel' }}
+                    showToggle={true}
+                  />
                   {/* Show venue memories */}
                   {venueMemories.length > 0 && (
                     <div className="space-y-3">
                       <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Your Memories Here</p>
                       <div className="grid grid-cols-2 gap-3">
                         {venueMemories.map(memory => {
-                          const photos = memory.photoUrls || (memory.photoUrl ? [memory.photoUrl] : []);
-                          const mainPhoto = photos[0] || 'https://picsum.photos/seed/memory/400/400';
+                          const photos = memory.photoThumbUrls || memory.photoUrls || (memory.photoThumbUrl ? [memory.photoThumbUrl] : (memory.photoUrl ? [memory.photoUrl] : []));
+                          const mainPhoto = photos[0] || memory.photoThumbUrl || memory.photoUrl;
                           return (
                             <div key={memory.id} className="bg-white rounded-2xl overflow-hidden shadow-sm">
                               <div className="relative">
-                                <img src={mainPhoto} className="w-full aspect-square object-cover" alt="" />
+                                {mainPhoto ? (
+                                  <img src={mainPhoto} className="w-full aspect-square object-cover" alt="" />
+                                ) : (
+                                  <div className="w-full aspect-square bg-slate-100 flex items-center justify-center text-slate-400 text-[10px] font-bold">
+                                    Text Memory
+                                  </div>
+                                )}
                                 {photos.length > 1 && (
                                   <div className="absolute bottom-1 right-1 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">
                                     +{photos.length - 1}
@@ -786,13 +671,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
         )}
       </div>
       
-      {/* Floating Home Button */}
-      <button
-        onClick={onClose}
-        className="fixed bottom-8 left-1/2 transform -translate-x-1/2 w-16 h-16 bg-sky-500 rounded-full shadow-xl shadow-sky-200 flex items-center justify-center text-white text-2xl z-50 active:scale-95 transition-transform safe-area-inset-bottom"
-      >
-        🏠
-      </button>
+      {/* Floating Home Button removed from here — rendered globally in App.tsx */}
     </div>
   );
 };
@@ -832,3 +711,4 @@ const ContactLink = ({ icon, label, value, link }: any) => (
 );
 
 export default VenueProfile;
+

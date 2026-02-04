@@ -14,8 +14,14 @@ import {
   onSnapshot,
   setDoc,
   collection,
+  collectionGroup,
   query,
   where,
+  addDoc,
+  FieldPath,
+  documentId,
+  deleteDoc,
+  getDocs,
   getDoc
 } from 'firebase/firestore';
 import {
@@ -71,9 +77,15 @@ export {
   onSnapshot,
   setDoc,
   getDoc,
+  getDocs,
   collection,
+  collectionGroup,
   query,
   where,
+  addDoc,
+  FieldPath,
+  documentId,
+  deleteDoc,
   ref,
   uploadBytes,
   getDownloadURL

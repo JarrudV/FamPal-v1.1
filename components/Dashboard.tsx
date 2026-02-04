@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { AppState, Place, Memory, UserReview, ActivityType, FriendCircle, GroupMember, GroupPlace, VisitedPlace, PLAN_LIMITS, UserPreferences, SavedLocation } from '../types';
+import { AppState, Place, Memory, UserReview, ActivityType, GroupPlace, VisitedPlace, PLAN_LIMITS, UserPreferences, SavedLocation } from '../types';
 import Header from './Header';
 import PlaceCard from './PlaceCard';
 import Filters from './Filters';
@@ -9,9 +9,20 @@ import GroupDetail from './GroupDetail';
 import PlanBilling from './PlanBilling';
 import { UpgradePrompt, LimitIndicator } from './UpgradePrompt';
 import { searchNearbyPlaces, textSearchPlaces } from '../placesService';
-import { getLimits, canSavePlace, canAddMemory, isPaidTier } from '../lib/entitlements';
+import { getLimits, canSavePlace, isPaidTier } from '../lib/entitlements';
 import { updateLocation, updateRadius, updateCategory, updateActiveCircle } from '../lib/profileSync';
-import { ShareMemoryModal, QuickShareButton } from './ShareMemory';
+import { ShareMemoryModal } from './ShareMemory';
+import HomeFab from './HomeFab';
+import { db, doc, getDoc, collection, onSnapshot, setDoc } from '../lib/firebase';
+import MemoryCreate from './MemoryCreate';
+import {
+  CircleDoc,
+  createCircle,
+  joinCircleByCode,
+  listenToUserCircles,
+  addCircleMemory,
+  saveCirclePlace,
+} from '../lib/circles';
 
 interface DashboardProps {
   state: AppState;
@@ -21,20 +32,59 @@ interface DashboardProps {
   onUpdateState: (key: keyof AppState, value: any) => void;
 }
 
+interface PartnerNote {
+  id: string;
+  text: string;
+  createdAt: string;
+  createdBy: string;
+  createdByName: string;
+}
+
+type TabButtonProps = { label: string; count?: number; active: boolean; onClick: () => void };
+const TabButton: React.FC<TabButtonProps> = ({ label, count, active, onClick }) => (
+  <button 
+    onClick={onClick}
+    className={`px-3 py-2 rounded-full text-[9px] font-black uppercase tracking-wider whitespace-nowrap transition-all shrink-0 ${
+      active ? 'bg-sky-500 text-white shadow-lg shadow-sky-100' : 'bg-white text-slate-400 border border-slate-100'
+    }`}
+  >
+    {label}{count !== undefined && count > 0 ? ` [${count}]` : ''}
+  </button>
+);
+
+type NavButtonProps = { icon: string; label: string; active: boolean; onClick: () => void };
+const NavButton: React.FC<NavButtonProps> = ({ icon, label, active, onClick }) => (
+  <button 
+    onClick={onClick}
+    className={`flex flex-col items-center gap-1 ${active ? 'text-sky-500' : 'text-slate-300'}`}
+  >
+    <span className="text-xl">{icon}</span>
+    <span className="text-[8px] font-black uppercase tracking-widest">{label}</span>
+  </button>
+);
+
 const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setView, onUpdateState }) => {
   const userPrefs = state.userPreferences || {};
-  const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'groups' | 'partner'>('explore');
+  const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner'>('explore');
   const hasLinkedPartner = state.partnerLink?.status === 'accepted';
+  const partnerName = state.partnerLink?.partnerName?.trim();
+  const partnerEmail = state.partnerLink?.partnerEmail;
+  const partnerPhotoURL = state.partnerLink?.partnerPhotoURL;
+  const partnerUserId = state.partnerLink?.partnerUserId;
+  const partnerIdLabel = partnerUserId
+    ? `Partner linked · ${partnerUserId.slice(0, 6)}…${partnerUserId.slice(-4)}`
+    : 'Partner linked';
+  const partnerLabel = partnerName || partnerIdLabel;
+  const partnerInitial = partnerName ? partnerName[0].toUpperCase() : 'P';
+  const [partnerNotes, setPartnerNotes] = useState<PartnerNote[]>([]);
+  const [noteInput, setNoteInput] = useState('');
+  const [noteError, setNoteError] = useState<string | null>(null);
+  const [noteSending, setNoteSending] = useState(false);
+  const [shareStatus, setShareStatus] = useState<string | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<ActivityType>(userPrefs.lastCategory || 'all');
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
-  const [showAddMemory, setShowAddMemory] = useState(false);
-  const [caption, setCaption] = useState('');
-  const [memoryPhoto, setMemoryPhoto] = useState<string | null>(null);
-  const [memoryVenueId, setMemoryVenueId] = useState<string>('');
-  const [memoryVenueName, setMemoryVenueName] = useState<string>('');
-  
   // Location state - hydrate from saved preferences
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(
     userPrefs.lastLocation ? { lat: userPrefs.lastLocation.lat, lng: userPrefs.lastLocation.lng } : null
@@ -64,9 +114,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     onUpdateState('userPreferences', newPrefs);
   }, [isGuest, userPrefs, onUpdateState]);
   
-  // Groups state
-  const [selectedGroup, setSelectedGroup] = useState<FriendCircle | null>(null);
-  const [addToGroupPlace, setAddToGroupPlace] = useState<Place | null>(null);
+  // Circles state
+  const [circles, setCircles] = useState<CircleDoc[]>([]);
+  const [selectedCircle, setSelectedCircle] = useState<CircleDoc | null>(null);
+  const [addToCirclePlace, setAddToCirclePlace] = useState<Place | null>(null);
   
   // Upgrade prompt state
   const [showUpgradePrompt, setShowUpgradePrompt] = useState<'savedPlaces' | 'memories' | null>(null);
@@ -124,6 +175,143 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
     );
   }, [userPrefs.lastLocation, persistLocation]);
+
+  useEffect(() => {
+    if (!db) return;
+    const link = state.partnerLink;
+    if (!link?.partnerUserId) return;
+    if (link.partnerName && link.partnerPhotoURL && link.partnerEmail) return;
+
+    let cancelled = false;
+    const loadPartnerProfile = async () => {
+      try {
+        const partnerDoc = await getDoc(doc(db, 'users', link.partnerUserId));
+        if (!partnerDoc.exists()) return;
+        const data = partnerDoc.data() || {};
+        const profile = data.profile || {};
+        const nextName = link.partnerName || profile.displayName || profile.email;
+        const nextEmail = link.partnerEmail || profile.email;
+        const nextPhoto = link.partnerPhotoURL || profile.photoURL;
+        if (!nextName && !nextEmail && !nextPhoto) return;
+        if (!cancelled) {
+          onUpdateState('partnerLink', {
+            ...link,
+            partnerName: nextName,
+            partnerEmail: nextEmail,
+            partnerPhotoURL: nextPhoto,
+          });
+        }
+      } catch (err) {
+        console.warn('Partner profile lookup failed.', err);
+      }
+    };
+
+    loadPartnerProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [state.partnerLink, onUpdateState]);
+
+  useEffect(() => {
+    if (isGuest || !state.user?.uid) {
+      setCircles([]);
+      return;
+    }
+    return listenToUserCircles(state.user.uid, (next) => {
+      setCircles(next);
+    });
+  }, [isGuest, state.user?.uid]);
+
+  useEffect(() => {
+    if (!db) return;
+    if (!state.user?.uid) return;
+    const uid = state.user.uid;
+    const link = state.partnerLink;
+    const threadId = link?.partnerUserId
+      ? [uid, link.partnerUserId].sort().join('_')
+      : null;
+    const notesRef = threadId
+      ? collection(db, 'partnerThreads', threadId, 'notes')
+      : collection(db, 'users', uid, 'partnerNotes');
+
+    const unsub = onSnapshot(notesRef, (snap) => {
+      const nextNotes = snap.docs.map((docSnap) => {
+        const data = docSnap.data() as Omit<PartnerNote, 'id'>;
+        return { id: docSnap.id, ...data };
+      });
+      nextNotes.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      setPartnerNotes(nextNotes);
+    }, (err) => {
+      console.warn('Partner notes listener error.', err);
+      setNoteError('Unable to load notes right now.');
+    });
+
+    return () => unsub();
+  }, [state.user?.uid, state.partnerLink]);
+
+  const handleSendPartnerNote = async () => {
+    if (!noteInput.trim()) {
+      setNoteError('Please enter a note before sending.');
+      return;
+    }
+    if (!db || !state.user?.uid) {
+      setNoteError('Please sign in to send notes.');
+      return;
+    }
+
+    setNoteError(null);
+    setNoteSending(true);
+    const uid = state.user.uid;
+    const link = state.partnerLink;
+    const threadId = link?.partnerUserId
+      ? [uid, link.partnerUserId].sort().join('_')
+      : null;
+    const notesRef = threadId
+      ? collection(db, 'partnerThreads', threadId, 'notes')
+      : collection(db, 'users', uid, 'partnerNotes');
+
+    const createdByName = state.user.displayName || state.user.email || 'You';
+    const noteId = `${Date.now()}`;
+    const notePayload = {
+      text: noteInput.trim(),
+      createdAt: new Date().toISOString(),
+      createdBy: uid,
+      createdByName,
+    };
+
+    try {
+      await setDoc(doc(notesRef, noteId), notePayload);
+      setNoteInput('');
+    } catch (err) {
+      console.warn('Failed to send partner note.', err);
+      setNoteError('Failed to send note. Please try again.');
+    } finally {
+      setNoteSending(false);
+    }
+  };
+
+  const handleShareMemoryExternal = async (memory: Memory) => {
+    const shareText = `${memory.caption}${memory.placeName ? `\n@${memory.placeName}` : ''}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: 'FamPals Memory',
+          text: shareText,
+        });
+        setShareStatus('Shared!');
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareText);
+        setShareStatus('Copied to clipboard.');
+      } else {
+        window.prompt('Copy this memory text:', shareText);
+      }
+    } catch (err) {
+      console.warn('Memory share failed.', err);
+      setShareStatus('Unable to share right now.');
+    } finally {
+      setTimeout(() => setShareStatus(null), 2000);
+    }
+  };
 
   // Fetch places when location, filter, radius, or search changes - uses Google Places API (fast, no AI cost)
   useEffect(() => {
@@ -243,60 +431,28 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     }
   };
 
-  const handleMemoryPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && file.size <= 5 * 1024 * 1024) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setMemoryPhoto(event.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const captureMemory = () => {
-    if (!caption || !memoryVenueId) return;
-    
-    const memoryCheck = canAddMemory(state.entitlement, state.memories?.length || 0);
-    if (!memoryCheck.allowed) {
-      setShowUpgradePrompt('memories');
-      return;
-    }
-    
-    const newMemory: Memory = {
-      id: Date.now().toString(),
-      placeId: memoryVenueId,
-      placeName: memoryVenueName || 'Adventure',
-      photoUrl: memoryPhoto || `https://picsum.photos/seed/${Date.now()}/600/600`,
-      caption,
-      taggedFriends: [],
-      date: new Date().toISOString()
-    };
+  const handleAddMemory = useCallback((memory: Omit<Memory, 'id'>) => {
+    const newMemory: Memory = { ...memory, id: Date.now().toString() };
     onUpdateState('memories', [...state.memories, newMemory]);
 
-    // Auto-mark venue as visited
-    const visitedPlaces = state.visitedPlaces || [];
-    const alreadyVisited = visitedPlaces.some(v => v.placeId === memoryVenueId);
-    if (!alreadyVisited) {
-      const selectedVenue = places.find(p => p.id === memoryVenueId);
-      const newVisit: VisitedPlace = {
-        placeId: memoryVenueId,
-        placeName: memoryVenueName,
-        placeType: selectedVenue?.type || 'all',
-        imageUrl: selectedVenue?.imageUrl,
-        visitedAt: new Date().toISOString(),
-        notes: '',
-        isFavorite: state.favorites.includes(memoryVenueId),
-      };
-      onUpdateState('visitedPlaces', [...visitedPlaces, newVisit]);
+    if (memory.placeId) {
+      const visitedPlaces = state.visitedPlaces || [];
+      const alreadyVisited = visitedPlaces.some(v => v.placeId === memory.placeId);
+      if (!alreadyVisited) {
+        const selectedVenue = places.find(p => p.id === memory.placeId);
+        const newVisit: VisitedPlace = {
+          placeId: memory.placeId,
+          placeName: memory.placeName,
+          placeType: selectedVenue?.type || 'all',
+          imageUrl: selectedVenue?.imageUrl,
+          visitedAt: new Date().toISOString(),
+          notes: '',
+          isFavorite: state.favorites.includes(memory.placeId),
+        };
+        onUpdateState('visitedPlaces', [...visitedPlaces, newVisit]);
+      }
     }
-
-    setCaption('');
-    setMemoryPhoto(null);
-    setMemoryVenueId('');
-    setMemoryVenueName('');
-    setShowAddMemory(false);
-  };
+  }, [onUpdateState, places, state.favorites, state.memories, state.visitedPlaces]);
 
   const favoritePlaces = places.filter(p => state.favorites.includes(p.id));
 
@@ -308,162 +464,123 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     });
   };
 
-  const generateInviteCode = () => {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
-  };
-
-  const handleCreateGroup = (name: string) => {
+  const handleCreateCircle = async (name: string) => {
     if (!state.user) return;
-    const newGroup: FriendCircle = {
-      id: Date.now().toString(),
-      name,
-      ownerId: state.user.uid,
-      ownerName: state.user.displayName || state.user.email || 'You',
-      members: [{
-        userId: state.user.uid,
-        email: state.user.email || '',
-        displayName: state.user.displayName || 'You',
-        role: 'owner',
-        joinedAt: new Date().toISOString(),
-      }],
-      sharedPlaces: [],
-      plans: [],
-      inviteCode: generateInviteCode(),
-      createdAt: new Date().toISOString(),
-    };
-    const updatedCircles = [...(state.friendCircles || []), newGroup];
-    onUpdateState('friendCircles', updatedCircles);
+    try {
+      await createCircle(name, state.user);
+    } catch (err) {
+      console.warn('Failed to create circle.', err);
+    }
   };
 
-  const handleAddPlaceToGroup = (groupId: string, placeId: string, placeName: string) => {
+  const handleJoinCircle = async (code: string) => {
     if (!state.user) return;
-    const updatedCircles = (state.friendCircles || []).map(g => {
-      if (g.id === groupId) {
-        const newPlace: GroupPlace = {
-          placeId,
-          placeName,
-          addedBy: state.user!.uid,
-          addedByName: state.user!.displayName || 'You',
-          addedAt: new Date().toISOString(),
-        };
-        return { ...g, sharedPlaces: [...g.sharedPlaces, newPlace] };
-      }
-      return g;
-    });
-    onUpdateState('friendCircles', updatedCircles);
-    const updatedGroup = updatedCircles.find(g => g.id === groupId);
-    if (updatedGroup) setSelectedGroup(updatedGroup);
+    try {
+      await joinCircleByCode(code, state.user);
+    } catch (err) {
+      console.warn('Failed to join circle.', err);
+    }
   };
 
-  const handleRemovePlaceFromGroup = (groupId: string, placeId: string) => {
-    const updatedCircles = (state.friendCircles || []).map(g => {
-      if (g.id === groupId) {
-        return { ...g, sharedPlaces: g.sharedPlaces.filter(sp => sp.placeId !== placeId) };
-      }
-      return g;
-    });
-    onUpdateState('friendCircles', updatedCircles);
-    const updatedGroup = updatedCircles.find(g => g.id === groupId);
-    if (updatedGroup) setSelectedGroup(updatedGroup);
-  };
-
-  const handleDeleteGroup = (groupId: string) => {
-    const updatedCircles = (state.friendCircles || []).filter(g => g.id !== groupId);
-    onUpdateState('friendCircles', updatedCircles);
-    setSelectedGroup(null);
-  };
-
-  const handleLeaveGroup = (groupId: string) => {
+  const handleTagMemoryToCircle = async (circleId: string, memory: Omit<Memory, 'id'>) => {
     if (!state.user) return;
-    const updatedCircles = (state.friendCircles || []).map(g => {
-      if (g.id === groupId) {
-        return { ...g, members: g.members.filter(m => m.userId !== state.user!.uid) };
-      }
-      return g;
-    }).filter(g => g.members.length > 0);
-    onUpdateState('friendCircles', updatedCircles);
-    setSelectedGroup(null);
+    try {
+      await addCircleMemory(circleId, {
+        id: `${Date.now()}`,
+        memoryId: `${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        createdByUid: state.user.uid,
+        createdByName: state.user.displayName || state.user.email || 'Member',
+        memorySnapshot: {
+          caption: memory.caption,
+          placeId: memory.placeId,
+          placeName: memory.placeName,
+          photoUrl: memory.photoUrl,
+          photoUrls: memory.photoUrls,
+          photoThumbUrl: memory.photoThumbUrl,
+          photoThumbUrls: memory.photoThumbUrls,
+          date: memory.date,
+        },
+      });
+    } catch (err) {
+      console.warn('Failed to tag memory to circle.', err);
+    }
   };
 
-  const handleInviteMember = (groupId: string, email: string) => {
-    console.log('Invite sent to:', email, 'for group:', groupId);
-  };
-
-  if (selectedGroup) {
+  if (selectedCircle) {
     return (
-      <GroupDetail
-        group={selectedGroup}
-        userId={state.user?.uid || ''}
-        userFavorites={state.favorites}
-        allPlaces={places}
-        onClose={() => setSelectedGroup(null)}
-        onAddPlace={(placeId, placeName) => handleAddPlaceToGroup(selectedGroup.id, placeId, placeName)}
-        onRemovePlace={(placeId) => handleRemovePlaceFromGroup(selectedGroup.id, placeId)}
-        onInviteMember={(email) => handleInviteMember(selectedGroup.id, email)}
-        onLeaveGroup={() => handleLeaveGroup(selectedGroup.id)}
-        onDeleteGroup={() => handleDeleteGroup(selectedGroup.id)}
-      />
+      <>
+        <GroupDetail
+          circle={selectedCircle}
+          userId={state.user?.uid || ''}
+          userName={state.user?.displayName || state.user?.email || 'Member'}
+          userEmail={state.user?.email}
+          userFavorites={state.favorites}
+          allPlaces={[...places, ...favoritePlaces]}
+          onClose={() => setSelectedCircle(null)}
+          onOpenPlace={(place) => setSelectedPlace(place)}
+        />
+        <HomeFab visible={true} onClick={() => { setSelectedCircle(null); setActiveTab('explore'); }} />
+      </>
     );
   }
 
   if (selectedPlace) {
     return (
-      <VenueProfile 
-        place={selectedPlace} 
-        isFavorite={state.favorites.includes(selectedPlace.id)}
-        isVisited={(state.visitedPlaces || []).some(v => v.placeId === selectedPlace.id)}
-        memories={state.memories}
-        memoryCount={state.memories.length}
-        onToggleFavorite={() => toggleFavorite(selectedPlace.id)}
-        onMarkVisited={() => markVisited(selectedPlace)}
-        onClose={() => setSelectedPlace(null)}
-        onUpdateDetails={(data) => {
-          const newDetails = { ...state.favoriteDetails, [selectedPlace.id]: { ...state.favoriteDetails[selectedPlace.id], ...data, placeId: selectedPlace.id } };
-          onUpdateState('favoriteDetails', newDetails);
-        }}
-        favoriteData={state.favoriteDetails[selectedPlace.id]}
-        childrenAges={state.children?.map(c => c.age) || []}
-        isGuest={isGuest}
-        entitlement={state.entitlement}
-        onIncrementAiRequests={handleIncrementAiRequests}
-        circles={state.friendCircles || []}
-        partnerLink={state.partnerLink}
-        userName={state.user?.displayName || 'You'}
-        userId={state.user?.uid || ''}
-        onAddToCircle={(circleId, groupPlace) => {
-          if (circleId === 'partner') {
-            const currentPartnerPlaces = state.partnerSharedPlaces || [];
-            if (currentPartnerPlaces.some(p => p.placeId === groupPlace.placeId)) {
-              alert('This place is already in Partner Plans!');
-              return;
-            }
-            onUpdateState('partnerSharedPlaces', [...currentPartnerPlaces, groupPlace]);
-            alert(`Added "${groupPlace.placeName}" to Partner Plans!`);
-          } else {
-            const circle = (state.friendCircles || []).find(c => c.id === circleId);
-            if (circle) {
-              // Check if already added
-              if (circle.sharedPlaces.some(p => p.placeId === groupPlace.placeId)) {
-                alert('This place is already in this circle!');
+      <>
+        <VenueProfile 
+          place={selectedPlace} 
+          isFavorite={state.favorites.includes(selectedPlace.id)}
+          isVisited={(state.visitedPlaces || []).some(v => v.placeId === selectedPlace.id)}
+          memories={state.memories}
+          memoryCount={state.memories.length}
+          onToggleFavorite={() => toggleFavorite(selectedPlace.id)}
+          onMarkVisited={() => markVisited(selectedPlace)}
+          onClose={() => setSelectedPlace(null)}
+          onUpdateDetails={(data) => {
+            const newDetails = { ...state.favoriteDetails, [selectedPlace.id]: { ...state.favoriteDetails[selectedPlace.id], ...data, placeId: selectedPlace.id } };
+            onUpdateState('favoriteDetails', newDetails);
+          }}
+          favoriteData={state.favoriteDetails[selectedPlace.id]}
+          childrenAges={state.children?.map(c => c.age) || []}
+          isGuest={isGuest}
+          entitlement={state.entitlement}
+          onIncrementAiRequests={handleIncrementAiRequests}
+          circles={circles}
+          partnerLink={state.partnerLink}
+          userName={state.user?.displayName || 'You'}
+          userId={state.user?.uid || ''}
+          onTagMemoryToCircle={handleTagMemoryToCircle}
+          onAddToCircle={(circleId, groupPlace) => {
+            if (circleId === 'partner') {
+              const currentPartnerPlaces = state.partnerSharedPlaces || [];
+              if (currentPartnerPlaces.some(p => p.placeId === groupPlace.placeId)) {
+                alert('This place is already in Partner Plans!');
                 return;
               }
-              const updatedCircle = {
-                ...circle,
-                sharedPlaces: [...circle.sharedPlaces, groupPlace]
-              };
-              const updatedCircles = (state.friendCircles || []).map(c => 
-                c.id === circleId ? updatedCircle : c
-              );
-              onUpdateState('friendCircles', updatedCircles);
-              alert(`Added "${groupPlace.placeName}" to ${circle.name}!`);
+              onUpdateState('partnerSharedPlaces', [...currentPartnerPlaces, groupPlace]);
+              alert(`Added "${groupPlace.placeName}" to Partner Plans!`);
+            } else {
+              const note = window.prompt('Why are we saving this?') || '';
+              saveCirclePlace(circleId, {
+                placeId: groupPlace.placeId,
+                savedByUid: state.user?.uid || 'guest',
+                savedByName: state.user?.displayName || state.user?.email || 'Member',
+                savedAt: new Date().toISOString(),
+                note: note.trim(),
+                placeSummary: {
+                  placeId: groupPlace.placeId,
+                  name: groupPlace.placeName,
+                  imageUrl: groupPlace.imageUrl,
+                  type: groupPlace.placeType,
+                },
+              }).catch(err => console.warn('Failed to save circle place.', err));
             }
-          }
-        }}
-        onAddMemory={(memory) => {
-          const newMemory = { ...memory, id: Date.now().toString() };
-          onUpdateState('memories', [...state.memories, newMemory]);
-        }}
-      />
+          }}
+          onAddMemory={handleAddMemory}
+        />
+        <HomeFab visible={true} onClick={() => { setSelectedPlace(null); setActiveTab('explore'); }} />
+      </>
     );
   }
 
@@ -486,7 +603,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
           {hasLinkedPartner && (
             <TabButton label="Partner" active={activeTab === 'partner'} onClick={() => setActiveTab('partner')} />
           )}
-          <TabButton label="Groups" count={(state.friendCircles || []).length} active={activeTab === 'groups'} onClick={() => setActiveTab('groups')} />
+          <TabButton label="Circles" count={circles.length} active={activeTab === 'circles'} onClick={() => setActiveTab('circles')} />
         </div>
 
         {activeTab === 'explore' && (
@@ -551,8 +668,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                   isFavorite={true}
                   onToggleFavorite={() => toggleFavorite(place.id)}
                   onClick={() => setSelectedPlace(place)}
-                  showAddToGroup={!isGuest && (state.friendCircles || []).length > 0}
-                  onAddToGroup={() => setAddToGroupPlace(place)}
+                  showAddToGroup={!isGuest && circles.length > 0}
+                  onAddToGroup={() => setAddToCirclePlace(place)}
                 />
               ))
             ) : (
@@ -563,38 +680,45 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
           </div>
         )}
 
-        {addToGroupPlace && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={() => setAddToGroupPlace(null)}>
+        {addToCirclePlace && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={() => setAddToCirclePlace(null)}>
             <div className="bg-white rounded-t-3xl w-full max-w-lg p-6 space-y-4 animate-slide-up" onClick={e => e.stopPropagation()}>
-              <h3 className="font-bold text-lg text-slate-800">Add to Group</h3>
-              <p className="text-sm text-slate-500">Select a group to add "{addToGroupPlace.name}":</p>
+              <h3 className="font-bold text-lg text-slate-800">Add to Circle</h3>
+              <p className="text-sm text-slate-500">Select a circle to add "{addToCirclePlace.name}":</p>
               <div className="space-y-2 max-h-64 overflow-y-auto">
-                {(state.friendCircles || []).map(group => {
-                  const alreadyAdded = group.sharedPlaces.some(sp => sp.placeId === addToGroupPlace.id);
+                {circles.map(circle => {
                   return (
                     <button
-                      key={group.id}
+                      key={circle.id}
                       onClick={() => {
-                        if (!alreadyAdded) {
-                          handleAddPlaceToGroup(group.id, addToGroupPlace.id, addToGroupPlace.name);
-                        }
-                        setAddToGroupPlace(null);
+                        const note = window.prompt('Why are we saving this?') || '';
+                        saveCirclePlace(circle.id, {
+                          placeId: addToCirclePlace.id,
+                          savedByUid: state.user?.uid || 'guest',
+                          savedByName: state.user?.displayName || state.user?.email || 'Member',
+                          savedAt: new Date().toISOString(),
+                          note: note.trim(),
+                          placeSummary: {
+                            placeId: addToCirclePlace.id,
+                            name: addToCirclePlace.name,
+                            imageUrl: addToCirclePlace.imageUrl,
+                            type: addToCirclePlace.type,
+                            mapsUrl: addToCirclePlace.mapsUrl,
+                          },
+                        }).catch(err => console.warn('Failed to save circle place.', err));
+                        setAddToCirclePlace(null);
                       }}
-                      disabled={alreadyAdded}
                       className={`w-full p-4 rounded-xl text-left transition-colors ${
-                        alreadyAdded 
-                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
-                          : 'bg-purple-50 hover:bg-purple-100 text-slate-700'
+                        'bg-purple-50 hover:bg-purple-100 text-slate-700'
                       }`}
                     >
-                      <span className="font-semibold">{group.name}</span>
-                      {alreadyAdded && <span className="text-xs ml-2">(already added)</span>}
+                      <span className="font-semibold">{circle.name}</span>
                     </button>
                   );
                 })}
               </div>
               <button
-                onClick={() => setAddToGroupPlace(null)}
+                onClick={() => setAddToCirclePlace(null)}
                 className="w-full py-3 text-slate-500 text-sm font-medium"
               >
                 Cancel
@@ -688,11 +812,12 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
           </div>
         )}
 
-        {activeTab === 'groups' && (
+        {activeTab === 'circles' && (
           <GroupsList
-            friendCircles={state.friendCircles || []}
-            onCreateGroup={handleCreateGroup}
-            onSelectGroup={setSelectedGroup}
+            circles={circles}
+            onCreateCircle={handleCreateCircle}
+            onJoinCircle={handleJoinCircle}
+            onSelectCircle={setSelectedCircle}
             isGuest={isGuest}
           />
         )}
@@ -712,96 +837,34 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
             </div>
           ) : (
             <div className="space-y-4 mt-4">
-              <button 
-                onClick={() => setShowAddMemory(!showAddMemory)}
-                className="w-full bg-sky-500 text-white h-14 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-sky-100"
-              >
-                {showAddMemory ? 'Cancel' : 'Add Memory'}
-              </button>
-
-              {showAddMemory && (
-                <div className="bg-white p-6 rounded-[40px] shadow-2xl border border-sky-50 space-y-4 animate-slide-up">
-                  <h3 className="font-black text-sky-900">Add a Memory</h3>
-                  
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Tag a Venue</label>
-                    <select
-                      value={memoryVenueId}
-                      onChange={(e) => {
-                        const venue = [...places, ...favoritePlaces].find(p => p.id === e.target.value);
-                        setMemoryVenueId(e.target.value);
-                        setMemoryVenueName(venue?.name || '');
-                      }}
-                      className="w-full h-14 bg-slate-50 border-none rounded-2xl px-5 text-sm font-bold text-slate-600 outline-none appearance-none"
-                    >
-                      <option value="">Select a place...</option>
-                      {state.favorites.length > 0 && (
-                        <optgroup label="Your Saved Places">
-                          {favoritePlaces.map(p => (
-                            <option key={`fav-${p.id}`} value={p.id}>{p.name}</option>
-                          ))}
-                        </optgroup>
-                      )}
-                      <optgroup label="Nearby Places">
-                        {places.filter(p => !state.favorites.includes(p.id)).map(p => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                      </optgroup>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Add a Photo</label>
-                    <div className="flex gap-3">
-                      {memoryPhoto ? (
-                        <div className="relative w-24 h-24 rounded-2xl overflow-hidden">
-                          <img src={memoryPhoto} className="w-full h-full object-cover" alt="" />
-                          <button 
-                            onClick={() => setMemoryPhoto(null)}
-                            className="absolute top-1 right-1 w-6 h-6 bg-black/50 rounded-full text-white text-xs"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ) : (
-                        <label className="w-24 h-24 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 flex items-center justify-center cursor-pointer hover:bg-slate-100">
-                          <input 
-                            type="file" 
-                            accept="image/*" 
-                            className="hidden" 
-                            onChange={handleMemoryPhotoUpload}
-                          />
-                          <span className="text-2xl text-slate-300">📷</span>
-                        </label>
-                      )}
-                      <p className="text-xs text-slate-400 flex-1">Tap to add a photo from your adventure (max 5MB)</p>
-                    </div>
-                  </div>
-
-                  <textarea 
-                    placeholder="What happened today?..."
-                    className="w-full p-5 bg-slate-50 border-none rounded-3xl text-sm font-bold text-slate-600 outline-none"
-                    rows={3}
-                    value={caption}
-                    onChange={e => setCaption(e.target.value)}
-                  />
-                  <button 
-                    onClick={captureMemory}
-                    disabled={!memoryVenueId || !caption}
-                    className="w-full h-14 bg-sky-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-sky-100 disabled:opacity-50"
-                  >
-                    Save Memory
-                  </button>
-                </div>
-              )}
+              <MemoryCreate
+                entitlement={state.entitlement}
+                currentCount={state.memories.length}
+                places={places}
+                favoritePlaces={favoritePlaces}
+                onCreate={handleAddMemory}
+                onUpgradePrompt={() => setShowUpgradePrompt('memories')}
+                enablePartnerShare={hasLinkedPartner}
+                circleOptions={circles.map(circle => ({ id: circle.id, name: circle.name }))}
+                onTagCircle={handleTagMemoryToCircle}
+                title="Add a Memory"
+                toggleLabels={{ closed: 'Add Memory', open: 'Cancel' }}
+                showToggle={true}
+              />
 
               <div className="grid grid-cols-2 gap-4">
                 {state.memories.map(memory => {
-                  const photos = memory.photoUrls || (memory.photoUrl ? [memory.photoUrl] : []);
-                  const mainPhoto = photos[0] || 'https://picsum.photos/seed/memory/400/400';
+                  const photos = memory.photoThumbUrls || memory.photoUrls || (memory.photoThumbUrl ? [memory.photoThumbUrl] : (memory.photoUrl ? [memory.photoUrl] : []));
+                  const mainPhoto = photos[0] || memory.photoThumbUrl || memory.photoUrl;
                   return (
                     <div key={memory.id} className="bg-white rounded-[32px] overflow-hidden shadow-sm relative group aspect-square">
-                      <img src={mainPhoto} className="w-full h-full object-cover" alt="" />
+                      {mainPhoto ? (
+                        <img src={mainPhoto} className="w-full h-full object-cover" alt="" />
+                      ) : (
+                        <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-400 text-sm font-bold">
+                          Text Memory
+                        </div>
+                      )}
                       {photos.length > 1 && (
                         <div className="absolute top-3 left-3 bg-black/60 text-white text-[9px] px-2 py-1 rounded-full font-bold">
                           {photos.length} photos
@@ -818,6 +881,13 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                       >
                         📤
                       </button>
+                      <button
+                        onClick={() => handleShareMemoryExternal(memory)}
+                        className="absolute bottom-3 right-3 px-3 py-1 bg-white/90 backdrop-blur-sm text-slate-700 rounded-full text-[9px] font-bold uppercase tracking-widest shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Share externally"
+                      >
+                        Share
+                      </button>
                     </div>
                   );
                 })}
@@ -830,11 +900,18 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
           <div className="space-y-6">
             <div className="bg-gradient-to-br from-pink-50 to-rose-50 rounded-3xl p-6 border border-rose-100">
               <div className="flex items-center gap-4 mb-4">
-                <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center text-2xl shadow-sm">
-                  💕
+                <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center text-2xl shadow-sm overflow-hidden">
+                  {partnerPhotoURL ? (
+                    <img src={partnerPhotoURL} alt={partnerLabel} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-base font-black text-rose-500">{partnerInitial}</span>
+                  )}
                 </div>
                 <div>
-                  <h3 className="font-black text-lg text-slate-800">{state.partnerLink?.partnerName || 'Your Partner'}</h3>
+                  <h3 className="font-black text-lg text-slate-800">{partnerLabel}</h3>
+                  {partnerEmail && (
+                    <p className="text-xs text-slate-500">{partnerEmail}</p>
+                  )}
                   <p className="text-xs text-slate-500">Linked {state.partnerLink?.linkedAt ? new Date(state.partnerLink.linkedAt).toLocaleDateString() : ''}</p>
                 </div>
               </div>
@@ -843,21 +920,45 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Shared Favorites</h4>
-                {!state.isPro && state.favorites.length > 3 && (
-                  <span className="text-[9px] font-bold text-amber-500">Free: 3 of {state.favorites.length}</span>
+                {!state.isPro && state.partnerSharedPlaces.length > 3 && (
+                  <span className="text-[9px] font-bold text-amber-500">Free: 3 of {state.partnerSharedPlaces.length}</span>
                 )}
               </div>
-              {state.favorites.length > 0 ? (
+              {state.partnerSharedPlaces.length > 0 ? (
                 <div className="space-y-3">
-                  {state.favorites.slice(0, state.isPro ? undefined : 3).map((favId, idx) => (
-                    <div key={favId} className="bg-white rounded-2xl p-4 border border-slate-100 flex items-center gap-4">
-                      <div className="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center text-xl">📍</div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-sm text-slate-800 truncate">Saved Place {idx + 1}</p>
-                        <p className="text-xs text-slate-400">Shared with partner</p>
-                      </div>
-                    </div>
-                  ))}
+                  {state.partnerSharedPlaces.slice(0, state.isPro ? undefined : 3).map((shared) => {
+                    const placeFromList = places.find(p => p.id === shared.placeId) ||
+                      favoritePlaces.find(p => p.id === shared.placeId);
+                    const fallbackImage = shared.imageUrl || 'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=200&h=200&fit=crop';
+                    const resolvedPlace: Place = placeFromList || {
+                      id: shared.placeId,
+                      name: shared.placeName,
+                      description: 'Family-friendly place',
+                      address: '',
+                      rating: undefined,
+                      tags: [],
+                      imageUrl: fallbackImage,
+                      mapsUrl: `https://www.google.com/maps/place/?q=place_id:${shared.placeId}`,
+                      type: shared.placeType || 'all',
+                    };
+                    return (
+                      <button
+                        key={shared.placeId}
+                        onClick={() => setSelectedPlace(resolvedPlace)}
+                        className="w-full text-left bg-white rounded-2xl p-4 border border-slate-100 flex items-center gap-4 hover:bg-slate-50"
+                      >
+                        <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-slate-100">
+                          <img src={resolvedPlace.imageUrl} className="w-full h-full object-cover" alt="" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-sm text-slate-800 truncate">{shared.placeName}</p>
+                          {shared.note && (
+                            <p className="text-xs text-slate-500 line-clamp-2 mt-1">{shared.note}</p>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="bg-slate-50 rounded-2xl p-6 text-center">
@@ -873,14 +974,20 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                   <span className="text-[9px] font-bold text-amber-500">Free: 3 of {state.memories.length}</span>
                 )}
               </div>
-              {state.memories.length > 0 ? (
+              {state.memories.filter(m => m.sharedWithPartner).length > 0 ? (
                 <div className="grid grid-cols-3 gap-2">
-                  {state.memories.slice(0, state.isPro ? undefined : 3).map((memory) => {
-                    const photos = memory.photoUrls || (memory.photoUrl ? [memory.photoUrl] : []);
-                    const mainPhoto = photos[0] || 'https://picsum.photos/seed/memory/400/400';
+                  {state.memories.filter(m => m.sharedWithPartner).slice(0, state.isPro ? undefined : 3).map((memory) => {
+                  const photos = memory.photoThumbUrls || memory.photoUrls || (memory.photoThumbUrl ? [memory.photoThumbUrl] : (memory.photoUrl ? [memory.photoUrl] : []));
+                  const mainPhoto = photos[0] || memory.photoThumbUrl || memory.photoUrl;
                     return (
                       <div key={memory.id} className="aspect-square rounded-xl overflow-hidden">
-                        <img src={mainPhoto} className="w-full h-full object-cover" alt="" />
+                        {mainPhoto ? (
+                          <img src={mainPhoto} className="w-full h-full object-cover" alt="" />
+                        ) : (
+                          <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-400 text-[10px] font-bold">
+                            Text
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -907,13 +1014,36 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
             <div className="space-y-4">
               <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Quick Notes</h4>
               <div className="bg-white rounded-2xl p-4 border border-slate-100">
+                {noteError && (
+                  <p className="text-xs text-rose-500 mb-2">{noteError}</p>
+                )}
+                {partnerNotes.length > 0 ? (
+                  <div className="space-y-2 mb-3">
+                    {partnerNotes.map(note => (
+                      <div key={note.id} className="bg-slate-50 rounded-xl px-3 py-2">
+                        <p className="text-xs text-slate-600">{note.text}</p>
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          {note.createdByName} · {new Date(note.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 mb-3">No notes yet.</p>
+                )}
                 <textarea 
                   placeholder="Leave a note for your partner..."
                   className="w-full h-20 text-sm resize-none outline-none text-slate-700 placeholder-slate-300"
+                  value={noteInput}
+                  onChange={(e) => setNoteInput(e.target.value)}
                 />
                 <div className="flex justify-end">
-                  <button className="px-4 py-2 bg-rose-500 text-white rounded-xl text-xs font-bold">
-                    Send
+                  <button
+                    onClick={handleSendPartnerNote}
+                    disabled={noteSending}
+                    className="px-4 py-2 bg-rose-500 text-white rounded-xl text-xs font-bold disabled:opacity-60"
+                  >
+                    {noteSending ? 'Sending...' : 'Send'}
                   </button>
                 </div>
               </div>
@@ -926,10 +1056,12 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         <div className="flex justify-around">
           <NavButton icon="🏠" label="Home" active={activeTab === 'explore'} onClick={() => setActiveTab('explore')} />
           <NavButton icon="💙" label="Saved" active={activeTab === 'favorites'} onClick={() => setActiveTab('favorites')} />
-          <NavButton icon="👥" label="Groups" active={activeTab === 'groups'} onClick={() => setActiveTab('groups')} />
+          <NavButton icon="👥" label="Circles" active={activeTab === 'circles'} onClick={() => setActiveTab('circles')} />
           <NavButton icon="👤" label="Profile" active={false} onClick={() => setView('profile')} />
         </div>
       </nav>
+      {/* Home FAB for non-explore tabs inside dashboard */}
+      <HomeFab visible={activeTab !== 'explore'} onClick={() => setActiveTab('explore')} />
       
       {showPlanBilling && (
         <PlanBilling 
@@ -963,54 +1095,24 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
       {shareMemory && (
         <ShareMemoryModal
           memory={shareMemory}
-          circles={state.friendCircles || []}
+          circles={circles}
           onShareToCircle={(memory, circleId) => {
-            const circle = (state.friendCircles || []).find(c => c.id === circleId);
-            if (circle) {
-              const sharedPlace: GroupPlace = {
-                placeId: memory.placeId,
-                placeName: memory.placeName,
-                addedBy: state.user?.uid || 'guest',
-                addedByName: state.user?.displayName || 'Guest',
-                addedAt: new Date().toISOString(),
-                note: memory.caption
-              };
-              const updatedCircle = {
-                ...circle,
-                sharedPlaces: [...circle.sharedPlaces, sharedPlace]
-              };
-              const updatedCircles = (state.friendCircles || []).map(c => 
-                c.id === circleId ? updatedCircle : c
-              );
-              onUpdateState('friendCircles', updatedCircles);
-            }
+            const { id, ...payload } = memory;
+            handleTagMemoryToCircle(circleId, payload);
           }}
           onClose={() => setShareMemory(null)}
         />
       )}
+
+      {shareStatus && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50">
+          <div className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-full shadow-lg shadow-slate-900/30">
+            {shareStatus}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
-
-const TabButton = ({ label, count, active, onClick }: { label: string; count?: number; active: boolean; onClick: () => void }) => (
-  <button 
-    onClick={onClick}
-    className={`px-3 py-2 rounded-full text-[9px] font-black uppercase tracking-wider whitespace-nowrap transition-all shrink-0 ${
-      active ? 'bg-sky-500 text-white shadow-lg shadow-sky-100' : 'bg-white text-slate-400 border border-slate-100'
-    }`}
-  >
-    {label}{count !== undefined && count > 0 ? ` [${count}]` : ''}
-  </button>
-);
-
-const NavButton = ({ icon, label, active, onClick }: { icon: string; label: string; active: boolean; onClick: () => void }) => (
-  <button 
-    onClick={onClick}
-    className={`flex flex-col items-center gap-1 ${active ? 'text-sky-500' : 'text-slate-300'}`}
-  >
-    <span className="text-xl">{icon}</span>
-    <span className="text-[8px] font-black uppercase tracking-widest">{label}</span>
-  </button>
-);
 
 export default Dashboard;

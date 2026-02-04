@@ -43,13 +43,18 @@ export interface UserReview {
 
 export interface Memory {
   id: string;
-  placeId: string;
+  placeId?: string;
   placeName: string;
-  photoUrl: string;
+  photoUrl?: string;
   photoUrls?: string[];
+  photoThumbUrl?: string;
+  photoThumbUrls?: string[];
   caption: string;
   taggedFriends: string[];
   date: string;
+  sharedWithPartner?: boolean;
+  circleIds?: string[];
+  geo?: { lat: number; lng: number };
 }
 
 export interface FavoriteData {
@@ -134,6 +139,7 @@ export interface FamilyGroup {
 export interface PartnerLink {
   partnerEmail?: string;
   partnerName?: string;
+  partnerPhotoURL?: string;
   partnerUserId?: string;
   linkedAt: string;
   status: 'pending' | 'accepted';
@@ -151,6 +157,8 @@ export interface GroupMember {
 export interface GroupPlace {
   placeId: string;
   placeName: string;
+  imageUrl?: string;
+  placeType?: ActivityType;
   addedBy: string;
   addedByName: string;
   addedAt: string;

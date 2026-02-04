@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Memory, FriendCircle } from '../types';
+import { Memory } from '../types';
+import { CircleDoc } from '../lib/circles';
 
 interface ShareMemoryProps {
   memory: Memory;
-  circles?: FriendCircle[];
+  circles?: CircleDoc[];
   onShareToCircle?: (memory: Memory, circleId: string) => void;
   onClose: () => void;
 }
