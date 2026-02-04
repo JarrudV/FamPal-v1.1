@@ -134,6 +134,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   // Preference filter mode: all (no filter), family (everyone), partner (adults), solo (just me)
   const [prefFilterMode, setPrefFilterMode] = useState<'all' | 'family' | 'partner' | 'solo'>('all');
   
+  // Hide saved places toggle - show fresh discoveries only
+  const [hideSavedPlaces, setHideSavedPlaces] = useState(false);
+  
   // Preference update callbacks - persist to database with debouncing
   const persistLocation = useCallback((lat: number, lng: number, label: string) => {
     const newPrefs = updateLocation({ lat, lng, label }, isGuest, userPrefs);
@@ -1213,13 +1216,57 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
               </div>
             )}
             
+            {/* Discovery Mode Toggle & Encouragement */}
+            <div className="bg-gradient-to-r from-sky-50 to-purple-50 rounded-2xl p-4 mt-4 border border-sky-100">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🧭</span>
+                  <span className="font-bold text-slate-700 text-sm">Discovery Mode</span>
+                </div>
+                <button
+                  onClick={() => setHideSavedPlaces(!hideSavedPlaces)}
+                  className={`relative w-12 h-6 rounded-full transition-colors ${
+                    hideSavedPlaces ? 'bg-sky-500' : 'bg-slate-200'
+                  }`}
+                >
+                  <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                    hideSavedPlaces ? 'translate-x-7' : 'translate-x-1'
+                  }`} />
+                </button>
+              </div>
+              <p className="text-xs text-slate-500">
+                {hideSavedPlaces 
+                  ? "Showing fresh finds only! Your saved spots are hidden so you can discover something new." 
+                  : "Turn on to hide places you've already saved and find new adventures!"}
+              </p>
+            </div>
+
+            {/* Fun encouragement messages */}
+            {!loading && userLocation && (
+              <div className="mt-4 text-center">
+                <p className="text-sm text-slate-500 italic">
+                  {prefFilterMode === 'family' && "🎉 Finding fun for the whole crew!"}
+                  {prefFilterMode === 'partner' && "💕 Date ideas incoming..."}
+                  {prefFilterMode === 'solo' && "🧘 Me-time discoveries await!"}
+                  {prefFilterMode === 'all' && [
+                    "✨ Every day is an adventure waiting to happen!",
+                    "🌟 The best memories are made exploring together.",
+                    "🎈 Ready for your next family adventure?",
+                    "🗺️ New places, new memories, new stories!",
+                  ][Math.floor(Date.now() / 60000) % 4]}
+                </p>
+              </div>
+            )}
+
             {loading || !userLocation ? (
               <div className="py-24 text-center text-slate-300 font-black text-xs uppercase tracking-widest">
                 {!userLocation ? 'Getting your location...' : 'Finding adventures...'}
               </div>
             ) : (
               <div className="space-y-4 mt-4">
-                {places.map(place => (
+                {places
+                  .filter(place => !hideSavedPlaces || !state.favorites.includes(place.id))
+                  .map(place => (
                   <PlaceCard 
                     key={place.id} 
                     place={place}
@@ -1229,6 +1276,13 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                     onClick={() => setSelectedPlace(place)}
                   />
                 ))}
+                {hideSavedPlaces && places.filter(p => !state.favorites.includes(p.id)).length === 0 && places.length > 0 && (
+                  <div className="py-12 text-center bg-white rounded-2xl border border-slate-100">
+                    <span className="text-4xl mb-3 block">🎊</span>
+                    <p className="text-slate-600 font-semibold">You've saved them all!</p>
+                    <p className="text-slate-400 text-sm mt-1">Try a different category or expand your search radius.</p>
+                  </div>
+                )}
               </div>
             )}
           </>

@@ -210,6 +210,13 @@ For Google Sign-In to work:
   - Circle memories display improved to match main Memories tab (social card style)
   - Partner unlinking fixed (Firestore security - only updates own document)
   - Adding to circles shows success/error feedback alerts
+- **V2.6 Discovery Mode & Encouraging Copy**:
+  - Discovery Mode toggle to hide saved/favorite places from Explore feed
+  - Shows "fresh finds only" when enabled - encourages trying new places
+  - Fun contextual messages based on who's coming filter (Family/Partner/Solo)
+  - Rotating encouragement quotes: "Every day is an adventure!", "Best memories exploring together", etc.
+  - Empty state when all places saved: "You've saved them all!" with suggestion to expand search
+  - Gradient styling on Discovery Mode card for visual appeal
 
 ## Environment Variables (Secrets)
 All secrets are stored securely in Replit Secrets:
