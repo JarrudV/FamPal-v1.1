@@ -43,5 +43,11 @@ service cloud.firestore {
     match /circles/{circleId}/{document=**} {
       allow read, write: if request.auth != null;
     }
+    
+    // CollectionGroup query support for circles/members
+    // This is required for the collectionGroup('members') query to find user's circles
+    match /{path=**}/members/{memberId} {
+      allow read: if request.auth != null;
+    }
   }
 }
