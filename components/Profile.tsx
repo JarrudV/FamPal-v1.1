@@ -264,7 +264,6 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
     try {
       const batch = writeBatch(db);
       batch.update(doc(db, 'users', uid), { partnerLink: deleteField() });
-      batch.update(doc(db, 'users', partnerUserId), { partnerLink: deleteField() });
       batch.set(doc(db, 'partnerThreads', threadId), { status: 'closed', updatedAt: serverTimestamp() }, { merge: true });
       await batch.commit();
       onUpdateState('partnerLink', undefined);

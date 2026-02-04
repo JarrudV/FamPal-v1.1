@@ -977,7 +977,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
               }
               handleAddPartnerPlace(groupPlace);
             } else {
-              const note = window.prompt('Why are we saving this?') || '';
+              const note = window.prompt('Add a note for this place (optional)') || '';
+              const circle = circles.find(c => c.id === circleId);
               saveCirclePlace(circleId, {
                 placeId: groupPlace.placeId,
                 savedByUid: state.user?.uid || 'guest',
@@ -990,7 +991,12 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                   imageUrl: groupPlace.imageUrl,
                   type: groupPlace.placeType,
                 },
-              }).catch(err => console.warn('Failed to save circle place.', err));
+              }).then(() => {
+                alert(`Added to ${circle?.name || 'circle'}!`);
+              }).catch(err => {
+                console.error('Failed to save circle place:', err);
+                alert('Failed to add to circle. Please try again.');
+              });
             }
           }}
           onAddMemory={handleAddMemory}
