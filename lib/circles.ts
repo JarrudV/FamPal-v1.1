@@ -74,6 +74,28 @@ export interface CircleMemoryDoc {
 
 type Unsubscribe = () => void;
 
+function stripUndefined<T>(value: T): T {
+  if (value === undefined) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => stripUndefined(item))
+      .filter((item) => item !== undefined) as T;
+  }
+  if (value && typeof value === 'object') {
+    const cleaned: Record<string, any> = {};
+    Object.entries(value as Record<string, any>).forEach(([key, val]) => {
+      const nextVal = stripUndefined(val);
+      if (nextVal !== undefined) {
+        cleaned[key] = nextVal;
+      }
+    });
+    return cleaned as T;
+  }
+  return value;
+}
+
 function generateJoinCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
@@ -88,21 +110,21 @@ export async function createCircle(name: string, user: { uid: string; displayNam
   const circleRef = doc(collection(db, 'circles'));
   const joinCode = generateJoinCode();
   const createdAt = new Date().toISOString();
-  await setDoc(circleRef, {
+  await setDoc(circleRef, stripUndefined({
     name,
     createdBy: user.uid,
     createdAt,
     joinCode,
-  });
+  }));
 
   const memberRef = doc(db, 'circles', circleRef.id, 'members', user.uid);
-  await setDoc(memberRef, {
+  await setDoc(memberRef, stripUndefined({
     uid: user.uid,
     role: 'owner',
     displayName: user.displayName || undefined,
     email: user.email || undefined,
     joinedAt: createdAt,
-  });
+  }));
 
   return {
     id: circleRef.id,
@@ -124,13 +146,13 @@ export async function joinCircleByCode(code: string, user: { uid: string; displa
   const circleDoc = snap.docs[0];
   const circleData = circleDoc.data();
   const memberRef = doc(db, 'circles', circleDoc.id, 'members', user.uid);
-  await setDoc(memberRef, {
+  await setDoc(memberRef, stripUndefined({
     uid: user.uid,
     role: 'member',
     displayName: user.displayName || undefined,
     email: user.email || undefined,
     joinedAt: new Date().toISOString(),
-  }, { merge: true });
+  }), { merge: true });
 
   return {
     id: circleDoc.id,
@@ -203,7 +225,7 @@ export function listenToCirclePlaces(circleId: string, onData: (places: CirclePl
 export async function saveCirclePlace(circleId: string, place: CirclePlaceDoc) {
   if (!db) throw new Error('Firestore not initialized');
   const placeRef = doc(db, 'circles', circleId, 'places', place.placeId);
-  await setDoc(placeRef, place, { merge: true });
+  await setDoc(placeRef, stripUndefined(place), { merge: true });
 }
 
 export async function removeCirclePlace(circleId: string, placeId: string) {
@@ -233,7 +255,7 @@ export function listenToCircleComments(circleId: string, placeId: string, onData
 export async function addCircleComment(circleId: string, placeId: string, comment: Omit<CircleCommentDoc, 'id' | 'placeId'>) {
   if (!db) throw new Error('Firestore not initialized');
   const ref = collection(db, 'circles', circleId, 'placeComments');
-  await addDoc(ref, { ...comment, placeId });
+  await addDoc(ref, stripUndefined({ ...comment, placeId }));
 }
 
 export function listenToCircleMemories(circleId: string, onData: (memories: CircleMemoryDoc[]) => void): Unsubscribe {
@@ -256,5 +278,5 @@ export function listenToCircleMemories(circleId: string, onData: (memories: Circ
 export async function addCircleMemory(circleId: string, memory: CircleMemoryDoc) {
   if (!db) throw new Error('Firestore not initialized');
   const ref = doc(db, 'circles', circleId, 'memories', memory.memoryId);
-  await setDoc(ref, memory, { merge: true });
+  await setDoc(ref, stripUndefined(memory), { merge: true });
 }
