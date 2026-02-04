@@ -167,7 +167,9 @@ export async function joinCircleByCode(code: string, user: { uid: string; displa
 }
 
 export function listenToUserCircles(uid: string, onData: (circles: CircleDoc[]) => void): Unsubscribe {
+  console.log('[FamPals] listenToUserCircles called for uid:', uid);
   if (!db) {
+    console.error('[FamPals] listenToUserCircles: db is null');
     onData([]);
     return () => {};
   }
@@ -175,15 +177,31 @@ export function listenToUserCircles(uid: string, onData: (circles: CircleDoc[]) 
     collectionGroup(db, 'members'),
     where('uid', '==', uid)
   );
+  console.log('[FamPals] Setting up collectionGroup query on members');
 
   const unsub = onSnapshot(membersQuery, async (snap) => {
+    console.log('[FamPals] Members query result - docs count:', snap.docs.length);
+    if (snap.docs.length === 0) {
+      console.log('[FamPals] No member docs found for this user');
+      onData([]);
+      return;
+    }
     const circleDocs = await Promise.all(
       snap.docs.map(async (memberDoc) => {
+        console.log('[FamPals] Processing member doc:', memberDoc.id, memberDoc.data());
         const circleRef = memberDoc.ref.parent.parent;
-        if (!circleRef) return null;
+        if (!circleRef) {
+          console.log('[FamPals] No parent circle ref found');
+          return null;
+        }
+        console.log('[FamPals] Fetching circle:', circleRef.id);
         const circleSnap = await getDoc(circleRef);
-        if (!circleSnap.exists()) return null;
+        if (!circleSnap.exists()) {
+          console.log('[FamPals] Circle doc does not exist');
+          return null;
+        }
         const data = circleSnap.data();
+        console.log('[FamPals] Found circle:', data.name);
         return {
           id: circleSnap.id,
           name: data.name,
@@ -193,7 +211,12 @@ export function listenToUserCircles(uid: string, onData: (circles: CircleDoc[]) 
         } as CircleDoc;
       })
     );
-    onData(circleDocs.filter(Boolean) as CircleDoc[]);
+    const filtered = circleDocs.filter(Boolean) as CircleDoc[];
+    console.log('[FamPals] Final circles list:', filtered.length, 'circles');
+    onData(filtered);
+  }, (error: any) => {
+    console.error('[FamPals] listenToUserCircles error:', error?.message, error?.code);
+    onData([]);
   });
 
   return () => unsub();
