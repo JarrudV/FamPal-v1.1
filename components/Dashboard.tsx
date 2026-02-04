@@ -72,6 +72,20 @@ const NavButton: React.FC<NavButtonProps> = ({ icon, label, active, onClick }) =
   </button>
 );
 
+function getTimeAgo(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setView, onUpdateState, initialCircleId, onClearInitialCircle }) => {
   const userPrefs = state.userPreferences || {};
   const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner'>('explore');
@@ -1103,52 +1117,86 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
               </div>
             ) : (state.visitedPlaces || []).length > 0 ? (
               <div className="space-y-3">
-                {(state.visitedPlaces || []).map(visit => (
-                  <div key={visit.placeId} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
-                    <div className="flex gap-4">
-                      <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 shrink-0">
-                        {visit.imageUrl && <img src={visit.imageUrl} className="w-full h-full object-cover" alt="" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <h3 className="font-bold text-slate-800 truncate">{visit.placeName}</h3>
-                          {visit.isFavorite && <span className="text-sky-500 shrink-0">💙</span>}
+                {(state.visitedPlaces || []).map(visit => {
+                  const handleOpenVisitedPlace = () => {
+                    const existingPlace = savedPlaces.find(sp => sp.place.id === visit.placeId);
+                    if (existingPlace) {
+                      setSelectedPlace(mapSavedPlaceToPlace(existingPlace));
+                    } else {
+                      const placeFromVisit: Place = {
+                        id: visit.placeId,
+                        name: visit.placeName,
+                        type: visit.placeType || 'all',
+                        tags: [visit.placeType || 'Family'],
+                        rating: 0,
+                        address: '',
+                        description: '',
+                        priceLevel: undefined,
+                        distance: '',
+                        ageAppropriate: '',
+                        imageUrl: visit.imageUrl || '',
+                        mapsUrl: '',
+                      };
+                      setSelectedPlace(placeFromVisit);
+                    }
+                  };
+                  return (
+                    <div key={visit.placeId} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                      <button
+                        onClick={handleOpenVisitedPlace}
+                        className="w-full flex gap-4 p-4 text-left hover:bg-slate-50 transition-colors"
+                      >
+                        <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 shrink-0">
+                          {visit.imageUrl && <img src={visit.imageUrl} className="w-full h-full object-cover" alt="" />}
                         </div>
-                        <p className="text-xs text-slate-400 mt-1">
-                          Visited {new Date(visit.visitedAt).toLocaleDateString()}
-                        </p>
-                        {visit.notes && (
-                          <p className="text-sm text-slate-600 mt-2 line-clamp-2">{visit.notes}</p>
-                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <h3 className="font-bold text-slate-800 truncate">{visit.placeName}</h3>
+                            {visit.isFavorite && <span className="text-sky-500 shrink-0">💙</span>}
+                          </div>
+                          <p className="text-xs text-slate-400 mt-1">
+                            Visited {new Date(visit.visitedAt).toLocaleDateString()}
+                          </p>
+                          {visit.notes && (
+                            <p className="text-sm text-slate-600 mt-2 line-clamp-2">{visit.notes}</p>
+                          )}
+                        </div>
+                        <div className="shrink-0 text-slate-300">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                      </button>
+                      <div className="flex gap-2 px-4 pb-4 pt-0 border-t border-slate-100">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const note = prompt('Add/update notes:', visit.notes);
+                            if (note !== null) {
+                              const updated = (state.visitedPlaces || []).map(v =>
+                                v.placeId === visit.placeId ? { ...v, notes: note } : v
+                              );
+                              onUpdateState('visitedPlaces', updated);
+                            }
+                          }}
+                          className="flex-1 py-2 text-xs font-bold text-slate-500 bg-slate-50 rounded-lg hover:bg-slate-100"
+                        >
+                          Edit Notes
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const updated = (state.visitedPlaces || []).filter(v => v.placeId !== visit.placeId);
+                            onUpdateState('visitedPlaces', updated);
+                          }}
+                          className="px-4 py-2 text-xs font-bold text-rose-500 bg-rose-50 rounded-lg hover:bg-rose-100"
+                        >
+                          Remove
+                        </button>
                       </div>
                     </div>
-                    <div className="flex gap-2 mt-3 pt-3 border-t border-slate-100">
-                      <button
-                        onClick={() => {
-                          const note = prompt('Add/update notes:', visit.notes);
-                          if (note !== null) {
-                            const updated = (state.visitedPlaces || []).map(v =>
-                              v.placeId === visit.placeId ? { ...v, notes: note } : v
-                            );
-                            onUpdateState('visitedPlaces', updated);
-                          }
-                        }}
-                        className="flex-1 py-2 text-xs font-bold text-slate-500 bg-slate-50 rounded-lg hover:bg-slate-100"
-                      >
-                        Edit Notes
-                      </button>
-                      <button
-                        onClick={() => {
-                          const updated = (state.visitedPlaces || []).filter(v => v.placeId !== visit.placeId);
-                          onUpdateState('visitedPlaces', updated);
-                        }}
-                        className="px-4 py-2 text-xs font-bold text-rose-500 bg-rose-50 rounded-lg hover:bg-rose-100"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="py-16 text-center bg-white rounded-[40px] border border-slate-100">
@@ -1204,62 +1252,93 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                 showToggle={true}
               />
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-4">
                 {state.memories.map(memory => {
                   const photos = memory.photoThumbUrls || memory.photoUrls || (memory.photoThumbUrl ? [memory.photoThumbUrl] : (memory.photoUrl ? [memory.photoUrl] : []));
-                  const mainPhoto = photos[0] || memory.photoThumbUrl || memory.photoUrl;
-                  if (!mainPhoto) {
-                    return (
-                      <div key={memory.id} className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 flex flex-col gap-3">
-                        <div>
-                          <p className="text-xs font-black text-slate-800 leading-snug">{memory.caption}</p>
-                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-1">@{memory.placeName}</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setShareMemory(memory)}
-                            className="flex-1 py-2 rounded-xl bg-sky-500 text-white text-[10px] font-bold uppercase tracking-widest"
-                            title="Share memory"
-                          >
-                            Share
-                          </button>
-                          <button
-                            onClick={() => handleShareMemoryExternal(memory)}
-                            className="flex-1 py-2 rounded-xl bg-slate-100 text-slate-700 text-[10px] font-bold uppercase tracking-widest"
-                            title="Share externally"
-                          >
-                            Copy/External
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  }
+                  const memoryDate = memory.date ? new Date(memory.date) : null;
+                  const timeAgo = memoryDate && !isNaN(memoryDate.getTime()) ? getTimeAgo(memoryDate) : 'Recently';
+                  
                   return (
-                    <div key={memory.id} className="bg-white rounded-[32px] overflow-hidden shadow-sm relative group aspect-square">
-                      <img src={mainPhoto} className="w-full h-full object-cover" alt="" />
-                      {photos.length > 1 && (
-                        <div className="absolute top-3 left-3 bg-black/60 text-white text-[9px] px-2 py-1 rounded-full font-bold">
-                          {photos.length} photos
+                    <div key={memory.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                      {/* Post Header */}
+                      <div className="flex items-center gap-3 p-4 pb-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-sky-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                          {state.user?.displayName?.charAt(0)?.toUpperCase() || '👤'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-slate-800 text-sm truncate">
+                            {state.user?.displayName || 'You'}
+                          </p>
+                          <p className="text-xs text-slate-400">{timeAgo}</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (window.confirm('Delete this memory?')) {
+                              const updated = state.memories.filter(m => m.id !== memory.id);
+                              onUpdateState('memories', updated);
+                            }
+                          }}
+                          className="text-slate-300 hover:text-slate-500 p-1"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                      
+                      {/* Caption */}
+                      <div className="px-4 pb-3">
+                        <p className="text-slate-800 text-sm leading-relaxed">{memory.caption}</p>
+                      </div>
+                      
+                      {/* Photos */}
+                      {photos.length > 0 && (
+                        <div className={`${photos.length === 1 ? '' : 'grid grid-cols-2 gap-0.5'}`}>
+                          {photos.slice(0, 4).map((photo, idx) => (
+                            <div key={idx} className={`relative ${photos.length === 1 ? 'aspect-video' : 'aspect-square'} bg-slate-100`}>
+                              <img src={photo} className="w-full h-full object-cover" alt="" />
+                              {idx === 3 && photos.length > 4 && (
+                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                  <span className="text-white font-bold text-lg">+{photos.length - 4}</span>
+                                </div>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-sky-950/80 via-transparent flex flex-col justify-end p-5 text-white">
-                        <p className="text-[10px] font-black leading-tight mb-1">{memory.caption}</p>
-                        <p className="text-[8px] font-bold opacity-60 uppercase tracking-widest">@{memory.placeName}</p>
+                      
+                      {/* Location Tag */}
+                      {memory.placeName && (
+                        <div className="px-4 py-3 flex items-center gap-2 border-t border-slate-100">
+                          <svg className="w-4 h-4 text-rose-500" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                          </svg>
+                          <span className="text-xs font-medium text-slate-600">{memory.placeName}</span>
+                        </div>
+                      )}
+                      
+                      {/* Action Buttons */}
+                      <div className="flex border-t border-slate-100">
+                        <button
+                          onClick={() => setShareMemory(memory)}
+                          className="flex-1 flex items-center justify-center gap-2 py-3 text-slate-500 hover:bg-slate-50 transition-colors"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                          </svg>
+                          <span className="text-sm font-medium">Share to Circle</span>
+                        </button>
+                        <div className="w-px bg-slate-100"></div>
+                        <button
+                          onClick={() => handleShareMemoryExternal(memory)}
+                          className="flex-1 flex items-center justify-center gap-2 py-3 text-slate-500 hover:bg-slate-50 transition-colors"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                          <span className="text-sm font-medium">Share</span>
+                        </button>
                       </div>
-                      <button
-                        onClick={() => setShareMemory(memory)}
-                        className="absolute top-3 right-3 w-9 h-9 bg-white/90 backdrop-blur-sm text-sky-600 rounded-full flex items-center justify-center shadow-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-                        title="Share memory"
-                      >
-                        Share
-                      </button>
-                      <button
-                        onClick={() => handleShareMemoryExternal(memory)}
-                        className="absolute bottom-3 right-3 px-3 py-1 bg-white/90 backdrop-blur-sm text-slate-700 rounded-full text-[9px] font-bold uppercase tracking-widest shadow-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-                        title="Share externally"
-                      >
-                        Share
-                      </button>
                     </div>
                   );
                 })}
