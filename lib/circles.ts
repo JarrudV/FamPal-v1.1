@@ -106,16 +106,19 @@ function generateJoinCode(): string {
 }
 
 export async function createCircle(name: string, user: { uid: string; displayName?: string | null; email?: string | null }) {
+  console.log('[FamPals] Creating circle:', name, 'for user:', user.uid);
   if (!db) throw new Error('Firestore not initialized');
   const circleRef = doc(collection(db, 'circles'));
   const joinCode = generateJoinCode();
   const createdAt = new Date().toISOString();
+  console.log('[FamPals] Circle ref:', circleRef.id, 'joinCode:', joinCode);
   await setDoc(circleRef, stripUndefined({
     name,
     createdBy: user.uid,
     createdAt,
     joinCode,
   }));
+  console.log('[FamPals] Circle document created successfully');
 
   const memberRef = doc(db, 'circles', circleRef.id, 'members', user.uid);
   await setDoc(memberRef, stripUndefined({
