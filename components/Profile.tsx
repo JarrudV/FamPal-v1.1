@@ -127,8 +127,8 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
       const match = snap.docs.find(docSnap => docSnap.id !== auth.currentUser?.uid);
 
       if (!match) {
+        alert('No partner found with this code. Please check and try again.');
         setPartnerCode('');
-        setShowCodeInput(false);
         return;
       }
 
@@ -661,25 +661,23 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
                   
                   {showCodeInput ? (
                     <div className="space-y-3">
-                      <div className="flex gap-2">
-                        <input 
-                          placeholder="Enter 6-digit code" 
-                          className="flex-1 h-14 bg-slate-50 border-none rounded-2xl px-5 text-lg font-black text-center uppercase tracking-[0.2em] outline-none"
-                          maxLength={6}
-                          value={partnerCode}
-                          onChange={e => setPartnerCode(e.target.value.toUpperCase())}
-                        />
-                        <button 
-                          onClick={handleJoinWithCode}
-                          disabled={partnerCode.length !== 6}
-                          className="bg-sky-500 text-white px-6 rounded-2xl text-[11px] font-black uppercase tracking-widest active-press disabled:opacity-50"
-                        >
-                          Join
-                        </button>
-                      </div>
+                      <input 
+                        placeholder="Enter 6-digit code" 
+                        className="w-full h-14 bg-slate-50 border-none rounded-2xl px-5 text-lg font-black text-center uppercase tracking-[0.2em] outline-none"
+                        maxLength={6}
+                        value={partnerCode}
+                        onChange={e => setPartnerCode(e.target.value.toUpperCase())}
+                      />
                       <button 
-                        onClick={() => setShowCodeInput(false)}
-                        className="w-full text-slate-400 text-xs font-bold"
+                        onClick={handleJoinWithCode}
+                        disabled={partnerCode.length !== 6}
+                        className="w-full h-14 bg-sky-500 text-white rounded-2xl text-sm font-black uppercase tracking-widest active-press disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Join with Code
+                      </button>
+                      <button 
+                        onClick={() => { setShowCodeInput(false); setPartnerCode(''); }}
+                        className="w-full text-slate-400 text-sm font-medium py-2"
                       >
                         Cancel
                       </button>
