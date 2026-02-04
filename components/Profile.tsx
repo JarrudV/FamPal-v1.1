@@ -114,24 +114,37 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
   };
 
   const handleJoinWithCode = async () => {
-    if (!partnerCode || partnerCode.length !== 6) return;
+    if (!partnerCode || partnerCode.length !== 6) {
+      alert('Please enter a valid 6-character code.');
+      return;
+    }
     if (!db || !auth?.currentUser) {
+      alert('Please sign in to link with a partner.');
       return;
     }
 
     const normalizedCode = partnerCode.toUpperCase();
+    console.log('[FamPals] Searching for partner with code:', normalizedCode);
+    
     try {
+      // Query for users who have this invite code in their partnerLink
       const usersRef = collection(db, 'users');
       const q = query(usersRef, where('partnerLink.inviteCode', '==', normalizedCode));
+      console.log('[FamPals] Running partner code query...');
       const snap = await getDocs(q);
+      console.log('[FamPals] Query returned', snap.docs.length, 'results');
+      
+      // Find a match that isn't the current user
       const match = snap.docs.find(docSnap => docSnap.id !== auth.currentUser?.uid);
 
       if (!match) {
+        console.log('[FamPals] No partner found with code:', normalizedCode);
         alert('No partner found with this code. Please check and try again.');
         setPartnerCode('');
         return;
       }
 
+      console.log('[FamPals] Found partner:', match.id);
       const partnerData = match.data() || {};
       const partnerProfile = partnerData.profile || {};
       const partnerName = partnerProfile.displayName || partnerProfile.email || 'Partner';
@@ -139,6 +152,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
       const partnerPhotoURL = partnerProfile.photoURL || undefined;
       const partnerUserId = match.id;
 
+      // Update current user's partnerLink to accepted
       const partnerLink: PartnerLink = {
         inviteCode: normalizedCode,
         linkedAt: new Date().toISOString(),
@@ -148,14 +162,16 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
         partnerPhotoURL,
         partnerUserId,
       };
+      
+      console.log('[FamPals] Updating current user partnerLink:', partnerLink);
       onUpdateState('partnerLink', partnerLink);
       setPartnerCode('');
       setShowCodeInput(false);
 
-      // Best-effort update to mark the inviter as linked to this user.
+      // Update the partner's record to mark them as linked
       try {
         const selfProfileName = state.user?.displayName || state.user?.email || 'Partner';
-        await setDoc(doc(db, 'users', partnerUserId), {
+        const partnerUpdate = {
           partnerLink: {
             status: 'accepted',
             linkedAt: new Date().toISOString(),
@@ -165,13 +181,19 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
             partnerPhotoURL: state.user?.photoURL || undefined,
             inviteCode: normalizedCode,
           }
-        }, { merge: true });
+        };
+        console.log('[FamPals] Updating partner record:', partnerUserId, partnerUpdate);
+        await setDoc(doc(db, 'users', partnerUserId), partnerUpdate, { merge: true });
         await ensurePartnerThread(auth.currentUser.uid, partnerUserId);
+        console.log('[FamPals] Partner link complete!');
+        alert('Successfully linked with ' + partnerName + '! The Partner tab is now available.');
       } catch (err) {
-        console.warn('Unable to update partner record.', err);
+        console.warn('[FamPals] Unable to update partner record:', err);
+        alert('Linked locally, but could not update partner. They may need to refresh.');
       }
     } catch (err) {
-      console.warn('Partner lookup failed.', err);
+      console.error('[FamPals] Partner lookup failed:', err);
+      alert('Failed to find partner. Please try again.');
     }
   };
 

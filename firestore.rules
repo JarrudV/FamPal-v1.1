@@ -4,8 +4,14 @@ service cloud.firestore {
     
     // User Data
     // Allow the owner to read/write their root user doc
+    // Allow authenticated users to query for partner invite codes
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && (
+        request.auth.uid == userId ||
+        // Allow reading for partner code lookups (query must filter by partnerLink.inviteCode)
+        resource.data.partnerLink.inviteCode != null
+      );
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
     // Allow the owner to read/write any subcollections under their user doc
     match /users/{userId}/{document=**} {
