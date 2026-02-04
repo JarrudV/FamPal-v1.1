@@ -46,6 +46,16 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
+console.log('[FamPals] Firebase config check:', {
+  hasApiKey: !!firebaseConfig.apiKey,
+  hasAuthDomain: !!firebaseConfig.authDomain,
+  hasProjectId: !!firebaseConfig.projectId,
+  projectId: firebaseConfig.projectId,
+  hasStorageBucket: !!firebaseConfig.storageBucket,
+  hasMessagingSenderId: !!firebaseConfig.messagingSenderId,
+  hasAppId: !!firebaseConfig.appId
+});
+
 const isConfigValid = firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.authDomain;
 
 let app = null;

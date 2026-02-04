@@ -4,21 +4,26 @@ import type { SavedPlace } from '../types';
 type Unsubscribe = () => void;
 
 export function listenToUserDoc(uid: string, onData: (data: any | null) => void): Unsubscribe {
+  console.log('[FamPals] listenToUserDoc called for uid:', uid);
   if (!db) {
-    console.warn('listenToUserDoc: Firestore not initialized');
+    console.error('[FamPals] listenToUserDoc: Firestore db is null/undefined!');
     return () => {};
   }
   const userDocRef = doc(db, 'users', uid);
+  console.log('[FamPals] Setting up onSnapshot listener for user doc');
   console.time(`listen:user:${uid}`);
   const unsub = onSnapshot(userDocRef, (snap) => {
     console.timeEnd(`listen:user:${uid}`);
+    console.log('[FamPals] User doc snapshot received, exists:', snap.exists());
     if (snap.exists()) {
+      console.log('[FamPals] User doc data keys:', Object.keys(snap.data() || {}));
       onData(snap.data());
     } else {
+      console.log('[FamPals] User doc does not exist yet');
       onData(null);
     }
-  }, (err) => {
-    console.error('listenToUserDoc error', err);
+  }, (err: any) => {
+    console.error('[FamPals] listenToUserDoc error:', err?.message || err, err?.code);
     onData(null);
   });
 
@@ -54,21 +59,25 @@ function stripUndefined(value: any): any {
 }
 
 export async function upsertUserProfile(uid: string, profile: Record<string, any>) {
+  console.log('[FamPals] upsertUserProfile called for uid:', uid);
   if (!db) {
-    console.warn('upsertUserProfile: Firestore not initialized');
+    console.error('[FamPals] upsertUserProfile: Firestore db is null/undefined!');
     return;
   }
+  console.log('[FamPals] Firestore db available, creating user doc ref...');
   try {
     const userDocRef = doc(db, 'users', uid);
     const dataToSave = {
       profile: stripUndefined(profile) || {},
       lastLoginAt: new Date().toISOString(),
     };
+    console.log('[FamPals] Attempting setDoc for user:', uid, 'data:', JSON.stringify(dataToSave).substring(0, 200));
     console.time(`upsert:user:${uid}`);
     await setDoc(userDocRef, dataToSave, { merge: true });
     console.timeEnd(`upsert:user:${uid}`);
-  } catch (err) {
-    console.error('upsertUserProfile failed', err);
+    console.log('[FamPals] User profile saved successfully to Firestore!');
+  } catch (err: any) {
+    console.error('[FamPals] upsertUserProfile FAILED:', err?.message || err, err?.code);
     throw err;
   }
 }
