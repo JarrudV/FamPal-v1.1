@@ -15,6 +15,20 @@ import {
   addCircleComment,
 } from '../lib/circles';
 
+function formatTimeAgo(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 interface GroupDetailProps {
   circle: CircleDoc;
   userId: string;
@@ -300,21 +314,57 @@ const GroupDetail: React.FC<GroupDetailProps> = ({
           {memories.length === 0 ? (
             <p className="text-sm text-slate-500">No memories tagged yet.</p>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-4">
               {memories.map((memory) => {
                 const photos = memory.memorySnapshot.photoThumbUrls || memory.memorySnapshot.photoUrls || (memory.memorySnapshot.photoThumbUrl ? [memory.memorySnapshot.photoThumbUrl] : (memory.memorySnapshot.photoUrl ? [memory.memorySnapshot.photoUrl] : []));
-                const mainPhoto = photos[0];
+                const memoryDate = memory.createdAt ? new Date(memory.createdAt) : null;
+                const timeAgo = memoryDate && !isNaN(memoryDate.getTime()) ? formatTimeAgo(memoryDate) : 'Recently';
+                
                 return (
-                  <div key={memory.id} className="bg-slate-50 rounded-xl overflow-hidden">
-                    {mainPhoto ? (
-                      <img src={mainPhoto} className="w-full h-32 object-cover" alt="" />
-                    ) : (
-                      <div className="w-full h-32 bg-slate-100 flex items-center justify-center text-slate-400 text-xs font-bold">Text Memory</div>
-                    )}
-                    <div className="p-3">
-                      <p className="text-xs font-semibold text-slate-700 line-clamp-2">{memory.memorySnapshot.caption}</p>
-                      <p className="text-[10px] text-slate-400 mt-1">{memory.createdByName}</p>
+                  <div key={memory.id} className="bg-slate-50 rounded-xl overflow-hidden border border-slate-100">
+                    {/* Post Header */}
+                    <div className="flex items-center gap-3 p-3">
+                      <div className="w-9 h-9 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                        {memory.createdByName?.charAt(0)?.toUpperCase() || '👤'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-slate-800 text-sm truncate">
+                          {memory.createdByName || 'Member'}
+                        </p>
+                        <p className="text-xs text-slate-400">{timeAgo}</p>
+                      </div>
                     </div>
+                    
+                    {/* Caption */}
+                    <div className="px-3 pb-3">
+                      <p className="text-slate-700 text-sm leading-relaxed">{memory.memorySnapshot.caption}</p>
+                    </div>
+                    
+                    {/* Photos */}
+                    {photos.length > 0 && (
+                      <div className={`${photos.length === 1 ? '' : 'grid grid-cols-2 gap-0.5'}`}>
+                        {photos.slice(0, 4).map((photo, idx) => (
+                          <div key={idx} className={`relative ${photos.length === 1 ? 'aspect-video' : 'aspect-square'} bg-slate-100`}>
+                            <img src={photo} className="w-full h-full object-cover" alt="" />
+                            {idx === 3 && photos.length > 4 && (
+                              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                <span className="text-white font-bold text-lg">+{photos.length - 4}</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Place Tag */}
+                    {memory.memorySnapshot.placeName && (
+                      <div className="px-3 py-2 flex items-center gap-2 border-t border-slate-100">
+                        <svg className="w-4 h-4 text-rose-500" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                        </svg>
+                        <span className="text-xs font-medium text-slate-600">{memory.memorySnapshot.placeName}</span>
+                      </div>
+                    )}
                   </div>
                 );
               })}
