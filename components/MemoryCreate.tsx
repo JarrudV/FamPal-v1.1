@@ -122,7 +122,8 @@ const MemoryCreate: React.FC<MemoryCreateProps> = ({
   const [selectedPlaceName, setSelectedPlaceName] = useState('');
   const [shareWithPartner, setShareWithPartner] = useState(false);
   const [selectedCircleId, setSelectedCircleId] = useState('');
-  const [shareToSocial, setShareToSocial] = useState(false);
+  const [lastCreated, setLastCreated] = useState<Omit<Memory, 'id'> | null>(null);
+  const [shareStatus, setShareStatus] = useState<string | null>(null);
   const [geo, setGeo] = useState<{ lat: number; lng: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -215,8 +216,8 @@ const MemoryCreate: React.FC<MemoryCreateProps> = ({
     if (selectedCircleId && onTagCircle) {
       onTagCircle(selectedCircleId, payload);
     }
-    if (enableSocialShare && shareToSocial) {
-      shareMemory({ id: 'temp', ...payload }).catch(() => undefined);
+    if (enableSocialShare) {
+      setLastCreated(payload);
     }
 
     setCaption('');
@@ -228,9 +229,60 @@ const MemoryCreate: React.FC<MemoryCreateProps> = ({
       setSelectedPlaceName('');
     }
     setSelectedCircleId('');
-    setShareToSocial(false);
     if (showToggle) {
       setIsOpen(false);
+    }
+  };
+
+  const buildMapsUrl = (placeName: string, placeId?: string): string => {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const encodedName = encodeURIComponent(placeName);
+    if (isIOS) {
+      return `https://maps.apple.com/?q=${encodedName}`;
+    }
+    if (placeId) {
+      return `https://www.google.com/maps/search/?api=1&query=${encodedName}&query_place_id=${placeId}`;
+    }
+    return `https://www.google.com/maps/search/?api=1&query=${encodedName}`;
+  };
+
+  const buildShareText = (memory: Omit<Memory, 'id'>): string => {
+    const mapsUrl = buildMapsUrl(memory.placeName, memory.placeId);
+    let text = '';
+    if (memory.caption) {
+      text += `${memory.caption}\n\n`;
+    }
+    text += `📍 ${memory.placeName}\n`;
+    text += mapsUrl;
+    return text;
+  };
+
+  const handleShare = async () => {
+    if (!lastCreated) return;
+    const result = await shareMemory({ id: 'temp', ...lastCreated });
+    if (result.success) {
+      if (result.method === 'clipboard') {
+        setShareStatus('Copied to clipboard!');
+      } else {
+        setShareStatus(null);
+      }
+    } else {
+      setShareStatus('Share failed. Try copy.');
+    }
+    if (result.method !== 'native') {
+      setTimeout(() => setShareStatus(null), 2000);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!lastCreated) return;
+    try {
+      await navigator.clipboard.writeText(buildShareText(lastCreated));
+      setShareStatus('Copied!');
+      setTimeout(() => setShareStatus(null), 2000);
+    } catch {
+      setShareStatus('Copy failed');
+      setTimeout(() => setShareStatus(null), 2000);
     }
   };
 
@@ -371,16 +423,29 @@ const MemoryCreate: React.FC<MemoryCreateProps> = ({
             </label>
           )}
 
-          {enableSocialShare && (
-            <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
-              <input
-                type="checkbox"
-                checked={shareToSocial}
-                onChange={(e) => setShareToSocial(e.target.checked)}
-                className="accent-sky-500"
-              />
-              Share to social after saving
-            </label>
+          {enableSocialShare && lastCreated && (
+            <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm space-y-3">
+              <div className="text-xs font-black uppercase tracking-widest text-slate-400">
+                Share this memory
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleShare}
+                  className="flex-1 py-2.5 rounded-xl bg-sky-500 text-white text-xs font-bold hover:bg-sky-600 transition-colors"
+                >
+                  Share to Social
+                </button>
+                <button
+                  onClick={handleCopy}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-colors"
+                >
+                  Copy Text
+                </button>
+              </div>
+              {shareStatus && (
+                <div className="text-[11px] font-semibold text-emerald-600">{shareStatus}</div>
+              )}
+            </div>
           )}
 
           <button
