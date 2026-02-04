@@ -20,6 +20,7 @@ export interface CircleDoc {
   createdBy: string;
   createdAt: string;
   joinCode: string;
+  isPartnerCircle?: boolean;
 }
 
 export interface CircleMemberDoc {
@@ -135,6 +136,53 @@ export async function createCircle(name: string, user: { uid: string; displayNam
     createdBy: user.uid,
     createdAt,
     joinCode,
+  } as CircleDoc;
+}
+
+export async function createPartnerCircle(
+  name: string, 
+  user: { uid: string; displayName?: string | null; email?: string | null },
+  partner: { uid: string; displayName?: string | null; email?: string | null }
+) {
+  console.log('[FamPals] Creating partner circle:', name, 'for user:', user.uid, 'with partner:', partner.uid);
+  if (!db) throw new Error('Firestore not initialized');
+  const circleRef = doc(collection(db, 'circles'));
+  const joinCode = generateJoinCode();
+  const createdAt = new Date().toISOString();
+  
+  await setDoc(circleRef, stripUndefined({
+    name,
+    createdBy: user.uid,
+    createdAt,
+    joinCode,
+    isPartnerCircle: true,
+  }));
+  
+  const ownerRef = doc(db, 'circles', circleRef.id, 'members', user.uid);
+  await setDoc(ownerRef, stripUndefined({
+    uid: user.uid,
+    role: 'owner',
+    displayName: user.displayName || undefined,
+    email: user.email || undefined,
+    joinedAt: createdAt,
+  }));
+  
+  const partnerRef = doc(db, 'circles', circleRef.id, 'members', partner.uid);
+  await setDoc(partnerRef, stripUndefined({
+    uid: partner.uid,
+    role: 'member',
+    displayName: partner.displayName || undefined,
+    email: partner.email || undefined,
+    joinedAt: createdAt,
+  }));
+
+  return {
+    id: circleRef.id,
+    name,
+    createdBy: user.uid,
+    createdAt,
+    joinCode,
+    isPartnerCircle: true,
   } as CircleDoc;
 }
 
