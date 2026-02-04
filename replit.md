@@ -222,6 +222,9 @@ For Google Sign-In to work:
   - partnerLink, spouseName, linkedEmail now explicitly synced from Firestore listener
   - "Been here?" button on venue profile - clearer visited toggle with text label
   - Shows "Visited" with checkmark when marked as visited
+  - Fixed unlink button for pending codes (works for code generator before partner accepts)
+  - Adventures tab now fully clickable (removed blocking Edit Notes/Remove buttons)
+  - Notes can be edited from VenueProfile page instead
 
 ## Environment Variables (Secrets)
 All secrets are stored securely in Replit Secrets:

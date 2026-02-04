@@ -1432,33 +1432,6 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                           </svg>
                         </div>
                       </button>
-                      <div className="flex gap-2 px-4 pb-4 pt-0 border-t border-slate-100">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const note = prompt('Add/update notes:', visit.notes);
-                            if (note !== null) {
-                              const updated = (state.visitedPlaces || []).map(v =>
-                                v.placeId === visit.placeId ? { ...v, notes: note } : v
-                              );
-                              onUpdateState('visitedPlaces', updated);
-                            }
-                          }}
-                          className="flex-1 py-2 text-xs font-bold text-slate-500 bg-slate-50 rounded-lg hover:bg-slate-100"
-                        >
-                          Edit Notes
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const updated = (state.visitedPlaces || []).filter(v => v.placeId !== visit.placeId);
-                            onUpdateState('visitedPlaces', updated);
-                          }}
-                          className="px-4 py-2 text-xs font-bold text-rose-500 bg-rose-50 rounded-lg hover:bg-rose-100"
-                        >
-                          Remove
-                        </button>
-                      </div>
                     </div>
                   );
                 })}

@@ -254,16 +254,28 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
     }
     const uid = auth.currentUser.uid;
     const partnerUserId = state.partnerLink?.partnerUserId;
+    
+    // If no partner linked yet (pending code), just clear locally and in Firestore
     if (!partnerUserId) {
-      onUpdateState('partnerLink', undefined);
-      onUpdateState('spouseName', undefined);
-      onUpdateState('linkedEmail', undefined);
+      try {
+        await setDoc(doc(db, 'users', uid), { partnerLink: deleteField() }, { merge: true });
+        onUpdateState('partnerLink', undefined);
+        onUpdateState('spouseName', undefined);
+        onUpdateState('linkedEmail', undefined);
+      } catch (err) {
+        console.warn('Failed to clear pending code.', err);
+        // Still clear local state
+        onUpdateState('partnerLink', undefined);
+        onUpdateState('spouseName', undefined);
+        onUpdateState('linkedEmail', undefined);
+      }
       return;
     }
+    
     const threadId = getPartnerThreadId(uid, partnerUserId);
     try {
       const batch = writeBatch(db);
-      batch.update(doc(db, 'users', uid), { partnerLink: deleteField() });
+      batch.set(doc(db, 'users', uid), { partnerLink: deleteField() }, { merge: true });
       batch.set(doc(db, 'partnerThreads', threadId), { status: 'closed', updatedAt: serverTimestamp() }, { merge: true });
       await batch.commit();
       onUpdateState('partnerLink', undefined);
