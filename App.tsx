@@ -182,9 +182,12 @@ const App: React.FC = () => {
         }
         // Immediately show the dashboard shell so UI is responsive
         const serializedUser = serializeUser(userAuth);
+        console.log('[FamPals] User authenticated:', userAuth.email);
         setState(prev => ({ ...prev, isAuthenticated: true, user: serializedUser }));
+        console.log('[FamPals] Setting view to dashboard');
         setView('dashboard');
         setLoading(false);
+        console.log('[FamPals] Loading set to false, view should be dashboard now');
 
         // Upsert profile (non-blocking) and start listening for data
         upsertUserProfile(userAuth.uid, serializedUser).catch(err => console.error(err));
@@ -453,6 +456,7 @@ const App: React.FC = () => {
   }, [isGuest, state.user?.uid, savedPlacesLoaded, state.savedPlaces]);
 
   const renderView = () => {
+    console.log('[FamPals] renderView called - loading:', loading, 'view:', view);
     if (loading) {
       return <div className="flex items-center justify-center h-screen">Loading...</div>;
     }
