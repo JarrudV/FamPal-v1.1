@@ -1,4 +1,4 @@
-import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, deleteField } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { AppState, UserPreferences, SavedLocation, ActivityType, getDefaultEntitlement } from '../types';
 
@@ -116,7 +116,7 @@ async function flushPendingUpdates(): Promise<void> {
     // Use dot-path notation to merge into userPreferences without overwriting other fields
     const dotPathUpdates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(pendingUpdates)) {
-      dotPathUpdates[`userPreferences.${key}`] = value;
+      dotPathUpdates[`userPreferences.${key}`] = value === undefined ? deleteField() : value;
     }
     await updateDoc(userDocRef, dotPathUpdates);
     pendingUpdates = {};

@@ -1,4 +1,4 @@
-import { db, doc, onSnapshot, setDoc } from './firebase';
+import { db, doc, onSnapshot, setDoc, deleteField } from './firebase';
 
 type Unsubscribe = () => void;
 
@@ -26,6 +26,28 @@ export function listenToUserDoc(uid: string, onData: (data: any | null) => void)
   };
 }
 
+function stripUndefined(value: any): any {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (Array.isArray(value)) {
+    const cleaned = value
+      .map((item) => stripUndefined(item))
+      .filter((item) => item !== undefined);
+    return cleaned;
+  }
+  if (typeof value === 'object') {
+    const cleaned: Record<string, any> = {};
+    Object.entries(value).forEach(([key, val]) => {
+      const nextVal = stripUndefined(val);
+      if (nextVal !== undefined) {
+        cleaned[key] = nextVal;
+      }
+    });
+    return cleaned;
+  }
+  return value;
+}
+
 export async function upsertUserProfile(uid: string, profile: Record<string, any>) {
   if (!db) {
     console.warn('upsertUserProfile: Firestore not initialized');
@@ -34,7 +56,7 @@ export async function upsertUserProfile(uid: string, profile: Record<string, any
   try {
     const userDocRef = doc(db, 'users', uid);
     const dataToSave = {
-      profile: profile,
+      profile: stripUndefined(profile) || {},
       lastLoginAt: new Date().toISOString(),
     };
     console.time(`upsert:user:${uid}`);
@@ -54,7 +76,8 @@ export async function saveUserField(uid: string, key: string, value: any) {
   try {
     const userDocRef = doc(db, 'users', uid);
     const payload: Record<string, any> = {};
-    payload[key] = value;
+    const cleanedValue = stripUndefined(value);
+    payload[key] = cleanedValue === undefined ? deleteField() : cleanedValue;
     await setDoc(userDocRef, payload, { merge: true });
   } catch (err) {
     console.error('saveUserField failed', err);

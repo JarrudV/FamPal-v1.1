@@ -21,6 +21,7 @@ import {
   FieldPath,
   documentId,
   deleteDoc,
+  deleteField,
   getDocs,
   getDoc
 } from 'firebase/firestore';
@@ -86,6 +87,7 @@ export {
   FieldPath,
   documentId,
   deleteDoc,
+  deleteField,
   ref,
   uploadBytes,
   getDownloadURL
