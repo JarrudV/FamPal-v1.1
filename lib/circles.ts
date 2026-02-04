@@ -318,3 +318,55 @@ export async function addCircleMemory(circleId: string, memory: CircleMemoryDoc)
   const ref = doc(db, 'circles', circleId, 'memories', memory.memoryId);
   await setDoc(ref, stripUndefined(memory), { merge: true });
 }
+
+export async function deleteCircle(circleId: string, userId: string): Promise<void> {
+  if (!db) throw new Error('Firestore not initialized');
+  
+  // Get the circle to verify ownership
+  const circleRef = doc(db, 'circles', circleId);
+  const circleSnap = await getDoc(circleRef);
+  
+  if (!circleSnap.exists()) {
+    throw new Error('Circle not found');
+  }
+  
+  const circleData = circleSnap.data();
+  if (circleData.createdBy !== userId) {
+    throw new Error('Only the circle owner can delete it');
+  }
+  
+  // Delete all subcollections first (members, places, memories, placeComments)
+  const subcollections = ['members', 'places', 'memories', 'placeComments'];
+  
+  for (const subcol of subcollections) {
+    const subcolRef = collection(db, 'circles', circleId, subcol);
+    const subcolSnap = await getDocs(subcolRef);
+    await Promise.all(subcolSnap.docs.map(docSnap => deleteDoc(docSnap.ref)));
+  }
+  
+  // Delete the circle document
+  await deleteDoc(circleRef);
+  console.log('[FamPals] Circle deleted:', circleId);
+}
+
+export async function leaveCircle(circleId: string, userId: string): Promise<void> {
+  if (!db) throw new Error('Firestore not initialized');
+  
+  // Get the circle to check if user is owner
+  const circleRef = doc(db, 'circles', circleId);
+  const circleSnap = await getDoc(circleRef);
+  
+  if (!circleSnap.exists()) {
+    throw new Error('Circle not found');
+  }
+  
+  const circleData = circleSnap.data();
+  if (circleData.createdBy === userId) {
+    throw new Error('Owner cannot leave the circle. Delete it instead.');
+  }
+  
+  // Remove the member
+  const memberRef = doc(db, 'circles', circleId, 'members', userId);
+  await deleteDoc(memberRef);
+  console.log('[FamPals] User left circle:', circleId);
+}
