@@ -1,4 +1,5 @@
 
+// FamPals v1.1 - Family Activity Discovery App
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import {
