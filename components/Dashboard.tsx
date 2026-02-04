@@ -131,6 +131,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
   
+  // Preference filter mode: all (no filter), family (everyone), partner (adults), solo (just me)
+  const [prefFilterMode, setPrefFilterMode] = useState<'all' | 'family' | 'partner' | 'solo'>('all');
+  
   // Preference update callbacks - persist to database with debouncing
   const persistLocation = useCallback((lat: number, lng: number, label: string) => {
     const newPrefs = updateLocation({ lat, lng, label }, isGuest, userPrefs);
@@ -1050,6 +1053,68 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                 <span className="text-[10px] text-slate-400 font-bold">1 km</span>
                 <span className="text-[10px] text-slate-400 font-bold">200 km</span>
               </div>
+            </div>
+
+            {/* Who's Coming Filter */}
+            <div className="bg-white rounded-3xl p-4 mt-4 border border-slate-100 shadow-sm">
+              <span className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3 block">Who's Coming?</span>
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => setPrefFilterMode('all')}
+                  className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
+                    prefFilterMode === 'all'
+                      ? 'bg-slate-800 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Everyone
+                </button>
+                <button
+                  onClick={() => setPrefFilterMode('family')}
+                  className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
+                    prefFilterMode === 'family'
+                      ? 'bg-sky-500 text-white'
+                      : 'bg-sky-50 text-sky-600 hover:bg-sky-100'
+                  }`}
+                >
+                  👨‍👩‍👧‍👦 Family
+                </button>
+                {hasLinkedPartner && (
+                  <button
+                    onClick={() => setPrefFilterMode('partner')}
+                    className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
+                      prefFilterMode === 'partner'
+                        ? 'bg-rose-500 text-white'
+                        : 'bg-rose-50 text-rose-600 hover:bg-rose-100'
+                    }`}
+                  >
+                    💑 Partner
+                  </button>
+                )}
+                <button
+                  onClick={() => setPrefFilterMode('solo')}
+                  className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
+                    prefFilterMode === 'solo'
+                      ? 'bg-purple-500 text-white'
+                      : 'bg-purple-50 text-purple-600 hover:bg-purple-100'
+                  }`}
+                >
+                  🧑 Just Me
+                </button>
+              </div>
+              {prefFilterMode !== 'all' && (
+                <div className="mt-3 text-xs text-slate-500">
+                  {prefFilterMode === 'family' && (
+                    <span>Considering preferences for you{hasLinkedPartner ? `, ${partnerLabel}` : ''}{state.children.length > 0 ? ` & ${state.children.length} kid${state.children.length > 1 ? 's' : ''}` : ''}</span>
+                  )}
+                  {prefFilterMode === 'partner' && (
+                    <span>Considering preferences for you & {partnerLabel}</span>
+                  )}
+                  {prefFilterMode === 'solo' && (
+                    <span>Just your preferences</span>
+                  )}
+                </div>
+              )}
             </div>
 
             {locationError && (
