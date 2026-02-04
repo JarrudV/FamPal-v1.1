@@ -173,11 +173,20 @@ export function listenToUserCircles(uid: string, onData: (circles: CircleDoc[]) 
     onData([]);
     return () => {};
   }
+  
+  // First try a direct query on circles collection to verify connectivity
+  console.log('[FamPals] Testing Firestore connectivity...');
+  getDocs(collection(db, 'circles')).then(snap => {
+    console.log('[FamPals] Direct circles query returned', snap.docs.length, 'circles');
+  }).catch(err => {
+    console.error('[FamPals] Direct circles query failed:', err);
+  });
+
   const membersQuery = query(
     collectionGroup(db, 'members'),
     where('uid', '==', uid)
   );
-  console.log('[FamPals] Setting up collectionGroup query on members');
+  console.log('[FamPals] Setting up collectionGroup query on members for uid:', uid);
 
   const unsub = onSnapshot(membersQuery, async (snap) => {
     console.log('[FamPals] Members query result - docs count:', snap.docs.length, 'metadata:', snap.metadata);
