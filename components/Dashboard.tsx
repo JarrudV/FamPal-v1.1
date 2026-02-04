@@ -23,6 +23,7 @@ import {
   listenToUserCircles,
   addCircleMemory,
   saveCirclePlace,
+  deleteCircle,
 } from '../lib/circles';
 import { getPartnerThreadId, ensurePartnerThread } from '../lib/partnerThreads';
 import { Timestamp } from 'firebase/firestore';
@@ -849,6 +850,25 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     }
   };
 
+  const handleDeleteCircle = async (circleId: string) => {
+    const currentUser = state.user || (auth?.currentUser ? {
+      uid: auth.currentUser.uid,
+      displayName: auth.currentUser.displayName,
+      email: auth.currentUser.email,
+    } : null);
+    if (!currentUser) {
+      window.alert('Please sign in to delete a circle.');
+      return;
+    }
+    try {
+      await deleteCircle(circleId, currentUser.uid);
+    } catch (err) {
+      console.error('Failed to delete circle.', err);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      window.alert(`Failed to delete circle: ${message}`);
+    }
+  };
+
   const handleTagMemoryToCircle = async (circleId: string, memory: Omit<Memory, 'id'>) => {
     if (!state.user) return;
     try {
@@ -1219,6 +1239,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
             onJoinCircle={handleJoinCircle}
             onSelectCircle={setSelectedCircle}
             isGuest={isGuest}
+            onDeleteCircle={handleDeleteCircle}
+            userId={state.user?.uid}
           />
         )}
 
