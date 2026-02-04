@@ -197,11 +197,13 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
         </button>
         <button 
           onClick={onMarkVisited} 
-          className={`absolute top-10 right-20 w-12 h-12 backdrop-blur-xl rounded-2xl flex items-center justify-center border ${
+          className={`absolute top-10 right-20 flex items-center gap-2 px-4 h-12 backdrop-blur-xl rounded-2xl border ${
             isVisited ? 'bg-green-500/80 border-green-400' : 'bg-white/20 border-white/20'
           }`}
+          title={isVisited ? 'Visited!' : 'Mark as visited'}
         >
-          <span className="text-xl">{isVisited ? '✅' : '🗺️'}</span>
+          <span className="text-xl">{isVisited ? '✅' : '📍'}</span>
+          <span className="text-xs font-bold text-white whitespace-nowrap">{isVisited ? 'Visited' : 'Been here?'}</span>
         </button>
         <div className="absolute bottom-10 left-6 right-6">
            <div className="flex gap-2 mb-3">

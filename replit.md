@@ -217,6 +217,11 @@ For Google Sign-In to work:
   - Rotating encouragement quotes: "Every day is an adventure!", "Best memories exploring together", etc.
   - Empty state when all places saved: "You've saved them all!" with suggestion to expand search
   - Gradient styling on Discovery Mode card for visual appeal
+- **V2.7 Partner Link & UX Fixes**:
+  - Fixed partner link sync - generator side now updates in real-time when partner accepts code
+  - partnerLink, spouseName, linkedEmail now explicitly synced from Firestore listener
+  - "Been here?" button on venue profile - clearer visited toggle with text label
+  - Shows "Visited" with checkmark when marked as visited
 
 ## Environment Variables (Secrets)
 All secrets are stored securely in Replit Secrets:

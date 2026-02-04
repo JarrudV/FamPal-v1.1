@@ -247,6 +247,9 @@ const App: React.FC = () => {
                 friendCircles: dbState.friendCircles || [],
                 entitlement: loadedEntitlement,
                 userPreferences: dbState.userPreferences || guestPrefs || {},
+                partnerLink: dbState.partnerLink || undefined,
+                spouseName: dbState.spouseName || '',
+                linkedEmail: dbState.linkedEmail || '',
               };
             });
           } else {
