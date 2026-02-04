@@ -180,9 +180,9 @@ export function listenToUserCircles(uid: string, onData: (circles: CircleDoc[]) 
   console.log('[FamPals] Setting up collectionGroup query on members');
 
   const unsub = onSnapshot(membersQuery, async (snap) => {
-    console.log('[FamPals] Members query result - docs count:', snap.docs.length);
+    console.log('[FamPals] Members query result - docs count:', snap.docs.length, 'metadata:', snap.metadata);
     if (snap.docs.length === 0) {
-      console.log('[FamPals] No member docs found for this user');
+      console.log('[FamPals] No member docs found for this user - user may need to create or join a circle');
       onData([]);
       return;
     }
@@ -215,7 +215,10 @@ export function listenToUserCircles(uid: string, onData: (circles: CircleDoc[]) 
     console.log('[FamPals] Final circles list:', filtered.length, 'circles');
     onData(filtered);
   }, (error: any) => {
-    console.error('[FamPals] listenToUserCircles error:', error?.message, error?.code);
+    console.error('[FamPals] listenToUserCircles error:', error?.message, error?.code, error);
+    if (error?.code === 'failed-precondition') {
+      console.error('[FamPals] MISSING INDEX: The collectionGroup query requires a Firestore index. Please check Firebase Console > Firestore > Indexes');
+    }
     onData([]);
   });
 

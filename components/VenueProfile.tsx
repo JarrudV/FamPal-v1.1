@@ -167,7 +167,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
     >
       <div className="relative h-96">
         <img src={place.imageUrl} className="w-full h-full object-cover" alt={place.name} />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#F8FAFC] via-transparent to-black/20"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-white via-white/40 to-black/20"></div>
         <button onClick={onClose} className="absolute top-10 left-5 w-12 h-12 bg-white/20 backdrop-blur-xl rounded-2xl text-white flex items-center justify-center border border-white/20">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" /></svg>
         </button>
@@ -184,10 +184,10 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
         </button>
         <div className="absolute bottom-10 left-6 right-6">
            <div className="flex gap-2 mb-3">
-             {place.tags.map(t => <span key={t} className="px-3 py-1 bg-white/40 backdrop-blur rounded-lg text-[9px] font-bold text-sky-900 uppercase tracking-widest">{t}</span>)}
+             {place.tags.map(t => <span key={t} className="px-3 py-1 bg-white/80 backdrop-blur rounded-lg text-[9px] font-bold text-sky-900 uppercase tracking-widest">{t}</span>)}
            </div>
-           <h1 className="text-3xl sm:text-4xl font-black text-[#1E293B] tracking-tight leading-none break-words">{place.name}</h1>
-           <p className="text-sm font-bold text-slate-500 mt-2">{place.address}</p>
+           <h1 className="text-3xl sm:text-4xl font-black text-[#1E293B] tracking-tight leading-none break-words drop-shadow-[0_2px_4px_rgba(255,255,255,0.9)]" style={{ textShadow: '0 1px 3px rgba(255,255,255,0.9), 0 2px 8px rgba(255,255,255,0.7)' }}>{place.name}</h1>
+           <p className="text-sm font-bold text-slate-600 mt-2 drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)]" style={{ textShadow: '0 1px 2px rgba(255,255,255,0.9), 0 1px 4px rgba(255,255,255,0.7)' }}>{place.address}</p>
         </div>
       </div>
 
