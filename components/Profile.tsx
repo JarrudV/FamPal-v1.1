@@ -724,19 +724,22 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
                   </div>
                   
                   {state.partnerLink.status === 'pending' && (
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={handleCopyCode}
-                        className="flex-1 h-12 bg-slate-100 rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-600 active-press"
-                      >
-                        {codeCopied ? '✓ Copied!' : 'Copy Code'}
-                      </button>
-                      <button 
-                        onClick={handleShareCode}
-                        className="flex-1 h-12 bg-green-500 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest active-press"
-                      >
-                        Share via WhatsApp
-                      </button>
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={handleCopyCode}
+                          className="flex-1 h-12 bg-slate-100 rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-600 active-press"
+                        >
+                          {codeCopied ? '✓ Copied!' : 'Copy Code'}
+                        </button>
+                        <button 
+                          onClick={handleShareCode}
+                          className="flex-1 h-12 bg-green-500 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest active-press"
+                        >
+                          Share via WhatsApp
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-400 text-center">Partner connected? The app updates automatically.</p>
                     </div>
                   )}
                 </div>

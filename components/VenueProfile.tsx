@@ -195,16 +195,6 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
         <button onClick={onToggleFavorite} className="absolute top-10 right-5 w-12 h-12 bg-white/20 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/20">
           <span className="text-xl">{isFavorite ? '💙' : '🤍'}</span>
         </button>
-        <button 
-          onClick={onMarkVisited} 
-          className={`absolute top-10 right-20 flex items-center gap-2 px-4 h-12 backdrop-blur-xl rounded-2xl border ${
-            isVisited ? 'bg-green-500/80 border-green-400' : 'bg-white/20 border-white/20'
-          }`}
-          title={isVisited ? 'Visited!' : 'Mark as visited'}
-        >
-          <span className="text-xl">{isVisited ? '✅' : '📍'}</span>
-          <span className="text-xs font-bold text-white whitespace-nowrap">{isVisited ? 'Visited' : 'Been here?'}</span>
-        </button>
         <div className="absolute bottom-10 left-6 right-6">
            <div className="flex gap-2 mb-3">
              {place.tags.map(t => <span key={t} className="px-3 py-1 bg-white/80 backdrop-blur rounded-lg text-[9px] font-bold text-sky-900 uppercase tracking-widest">{t}</span>)}
@@ -219,9 +209,39 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
         <TabBtn active={activeTab === 'parent'} onClick={() => setActiveTab('parent')} label="Notebook" />
       </div>
 
+      {/* Status bar - Save/Visited toggle */}
+      {!isGuest && (
+        <div className="px-5 pt-4">
+          <div className="flex gap-3">
+            <button 
+              onClick={onToggleFavorite}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm shadow-sm transition-all ${
+                isFavorite 
+                  ? 'bg-sky-500 text-white shadow-sky-200' 
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <span>{isFavorite ? '💙' : '🤍'}</span>
+              <span>{isFavorite ? 'Saved' : 'Save Place'}</span>
+            </button>
+            <button 
+              onClick={onMarkVisited}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm shadow-sm transition-all ${
+                isVisited 
+                  ? 'bg-green-500 text-white shadow-green-200' 
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <span>{isVisited ? '✅' : '📍'}</span>
+              <span>{isVisited ? 'Visited' : 'Mark Visited'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Quick action buttons */}
       {!isGuest && (
-        <div className="px-5 pt-4 space-y-2">
+        <div className="px-5 pt-3 space-y-2">
           {partnerLink?.status === 'accepted' && (
             <button
               onClick={() => {
