@@ -193,6 +193,14 @@ For Google Sign-In to work:
   - Floating home button at bottom of VenueProfile (bigger, easier to tap)
   - Swipe right gesture to go back from VenueProfile
   - Fixed add children form to prevent page navigation on submit
+- **V2.4 Partner Circles**:
+  - Create themed circles shared only with your partner (e.g., "Date Night", "Weekend Getaways")
+  - Partner Circles appear in the Partner tab, not in the regular Circles tab
+  - Both partners automatically added as members when creating a partner circle
+  - isPartnerCircle flag on CircleDoc distinguishes partner circles from regular circles
+  - createPartnerCircle() function in lib/circles.ts handles creation with both partners
+  - Regular Circles tab only shows non-partner circles
+  - Admin code system for testing: tap version 5x, enter "FAMPRO2026" to unlock Pro
 
 ## Environment Variables (Secrets)
 All secrets are stored securely in Replit Secrets:
