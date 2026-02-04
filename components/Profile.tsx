@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { AppState, Child, PartnerLink, Preferences, FOOD_PREFERENCES, ALLERGY_OPTIONS, ACCESSIBILITY_OPTIONS, ACTIVITY_PREFERENCES, PLAN_LIMITS } from '../types';
 import PlanBilling from './PlanBilling';
 import { getLimits, getPlanDisplayName, canUseAI, isPaidTier } from '../lib/entitlements';
-import { storage, auth, db, collection, query, where, getDocs, doc, setDoc, ref, uploadBytes, getDownloadURL } from '../lib/firebase';
+import { storage, auth, db, collection, query, where, getDocs, doc, setDoc, ref, uploadBytes, getDownloadURL, writeBatch, deleteField, serverTimestamp } from '../lib/firebase';
+import { ensurePartnerThread, getPartnerThreadId } from '../lib/partnerThreads';
 
 interface ProfileProps {
   state: AppState;
@@ -47,7 +48,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
     const isRemoving = current.includes(value);
     
     // Check if free user is at limit when adding
-    if (!isRemoving && !state.isPro && current.length >= FREE_PREF_LIMIT) {
+    if (!isRemoving && !isPaid && current.length >= FREE_PREF_LIMIT) {
       return; // Don't add more if at limit for free users
     }
     
@@ -65,7 +66,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
       const isRemoving = current.includes(value);
       
       // Check if free user is at limit when adding
-      if (!isRemoving && !state.isPro && current.length >= FREE_PREF_LIMIT) {
+      if (!isRemoving && !isPaid && current.length >= FREE_PREF_LIMIT) {
         return c; // Don't modify if at limit for free users
       }
       
@@ -165,6 +166,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
             inviteCode: normalizedCode,
           }
         }, { merge: true });
+        await ensurePartnerThread(auth.currentUser.uid, partnerUserId);
       } catch (err) {
         console.warn('Unable to update partner record.', err);
       }
@@ -173,10 +175,35 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
     }
   };
 
-  const handleUnlinkPartner = () => {
-    onUpdateState('partnerLink', undefined);
-    onUpdateState('spouseName', undefined);
-    onUpdateState('linkedEmail', undefined);
+  const handleUnlinkPartner = async () => {
+    if (!db || !auth?.currentUser?.uid) {
+      onUpdateState('partnerLink', undefined);
+      onUpdateState('spouseName', undefined);
+      onUpdateState('linkedEmail', undefined);
+      return;
+    }
+    const uid = auth.currentUser.uid;
+    const partnerUserId = state.partnerLink?.partnerUserId;
+    if (!partnerUserId) {
+      onUpdateState('partnerLink', undefined);
+      onUpdateState('spouseName', undefined);
+      onUpdateState('linkedEmail', undefined);
+      return;
+    }
+    const threadId = getPartnerThreadId(uid, partnerUserId);
+    try {
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'users', uid), { partnerLink: deleteField() });
+      batch.update(doc(db, 'users', partnerUserId), { partnerLink: deleteField() });
+      batch.set(doc(db, 'partnerThreads', threadId), { status: 'closed', updatedAt: serverTimestamp() }, { merge: true });
+      await batch.commit();
+      onUpdateState('partnerLink', undefined);
+      onUpdateState('spouseName', undefined);
+      onUpdateState('linkedEmail', undefined);
+    } catch (err) {
+      console.warn('Failed to unlink partner.', err);
+      alert('Unable to unlink right now. Please try again.');
+    }
   };
 
   const shareApp = async () => {
@@ -479,7 +506,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
 
               {showPreferences && (
                 <>
-                  {!state.isPro && (
+                  {!isPaid && (
                     <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-3 border border-amber-100 mb-4 mt-4">
                       <div className="flex items-center gap-2">
                         <span className="text-lg">✨</span>
@@ -494,12 +521,12 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Food Preferences</p>
-                      {!state.isPro && <span className="text-[9px] font-bold text-slate-400">{userPrefs.foodPreferences.length}/{FREE_PREF_LIMIT}</span>}
+                      {!isPaid && <span className="text-[9px] font-bold text-slate-400">{userPrefs.foodPreferences.length}/{FREE_PREF_LIMIT}</span>}
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {FOOD_PREFERENCES.map(pref => {
                         const isSelected = userPrefs.foodPreferences.includes(pref);
-                        const isDisabled = !isSelected && !state.isPro && userPrefs.foodPreferences.length >= FREE_PREF_LIMIT;
+                        const isDisabled = !isSelected && !isPaid && userPrefs.foodPreferences.length >= FREE_PREF_LIMIT;
                         return (
                           <button
                             key={pref}

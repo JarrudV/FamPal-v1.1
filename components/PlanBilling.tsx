@@ -8,7 +8,7 @@ interface PlanBillingProps {
   onUpdateState: <K extends keyof AppState>(key: K, value: AppState[K]) => void;
 }
 
-const API_BASE = '';
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
 export default function PlanBilling({ state, onClose, onUpdateState }: PlanBillingProps) {
   const [loading, setLoading] = useState<'pro' | 'lifetime' | null>(null);
@@ -84,6 +84,7 @@ export default function PlanBilling({ state, onClose, onUpdateState }: PlanBilli
   const isPro = currentTier === 'pro' && entitlement?.plan_status === 'active';
   const isLifetime = currentTier === 'lifetime';
   const isPaid = isPro || isLifetime;
+  const canCancel = !!entitlement?.paystack_subscription_code && !!entitlement?.paystack_email_token;
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
@@ -194,19 +195,27 @@ export default function PlanBilling({ state, onClose, onUpdateState }: PlanBilli
             </>
           )}
 
-          {isPro && entitlement?.paystack_subscription_code && (
+          {isPro && (
             <div className="bg-slate-50 rounded-xl p-4">
               <h4 className="font-semibold text-slate-700 text-sm mb-2">Manage Subscription</h4>
-              <button
-                onClick={handleCancel}
-                disabled={cancelLoading}
-                className="text-sm text-red-600 underline disabled:opacity-50"
-              >
-                {cancelLoading ? 'Cancelling...' : 'Cancel subscription'}
-              </button>
-              <p className="text-xs text-slate-500 mt-1">
-                You'll keep Pro features until the end of your billing period.
-              </p>
+              {canCancel ? (
+                <>
+                  <button
+                    onClick={handleCancel}
+                    disabled={cancelLoading}
+                    className="text-sm text-red-600 underline disabled:opacity-50"
+                  >
+                    {cancelLoading ? 'Cancelling...' : 'Cancel subscription'}
+                  </button>
+                  <p className="text-xs text-slate-500 mt-1">
+                    You'll keep Pro features until the end of your billing period.
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-slate-500">
+                  Subscription cancellation is unavailable. Please contact support.
+                </p>
+              )}
             </div>
           )}
 

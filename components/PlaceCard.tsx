@@ -39,7 +39,7 @@ interface PlaceCardProps {
           </div>
           <h3 className="text-xl font-extrabold leading-tight">{place.name}</h3>
           <div className="flex items-center gap-3 text-[10px] font-bold text-white/70">
-            <span className="flex items-center gap-1 text-sky-300">⭐ {place.rating}</span>
+            <span className="flex items-center gap-1 text-sky-300">⭐ {place.rating ?? '—'}</span>
             <span>•</span>
             <span>{place.distance}</span>
           </div>
@@ -61,8 +61,8 @@ interface PlaceCardProps {
         <p className="text-slate-400 text-xs font-medium line-clamp-1">{place.description}</p>
         <div className="flex items-center justify-between mt-2">
           <div className="flex items-center gap-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-tighter">
-            <span className="text-sky-500">⭐ {place.rating}</span>
-            <span>{place.priceLevel}</span>
+            <span className="text-sky-500">⭐ {place.rating ?? '—'}</span>
+            <span>{place.priceLevel || '—'}</span>
           </div>
           <div className="flex items-center gap-2">
             {showAddToGroup && onAddToGroup && (

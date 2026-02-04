@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { AppState, Place, Memory, UserReview, ActivityType, GroupPlace, VisitedPlace, PLAN_LIMITS, UserPreferences, SavedLocation } from '../types';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { AppState, Place, Memory, UserReview, ActivityType, GroupPlace, VisitedPlace, PLAN_LIMITS, UserPreferences, SavedLocation, SavedPlace } from '../types';
 import Header from './Header';
 import PlaceCard from './PlaceCard';
 import Filters from './Filters';
@@ -8,12 +8,13 @@ import GroupsList from './GroupsList';
 import GroupDetail from './GroupDetail';
 import PlanBilling from './PlanBilling';
 import { UpgradePrompt, LimitIndicator } from './UpgradePrompt';
-import { searchNearbyPlaces, textSearchPlaces } from '../placesService';
+import { searchNearbyPlaces, textSearchPlaces, getPlaceDetails } from '../placesService';
 import { getLimits, canSavePlace, isPaidTier } from '../lib/entitlements';
 import { updateLocation, updateRadius, updateCategory, updateActiveCircle } from '../lib/profileSync';
 import { ShareMemoryModal } from './ShareMemory';
 import HomeFab from './HomeFab';
-import { db, doc, getDoc, collection, onSnapshot, setDoc, auth } from '../lib/firebase';
+import { db, doc, getDoc, collection, onSnapshot, setDoc, auth, serverTimestamp } from '../lib/firebase';
+import { upsertSavedPlace, deleteSavedPlace } from '../lib/userData';
 import MemoryCreate from './MemoryCreate';
 import {
   CircleDoc,
@@ -23,6 +24,8 @@ import {
   addCircleMemory,
   saveCirclePlace,
 } from '../lib/circles';
+import { getPartnerThreadId, ensurePartnerThread } from '../lib/partnerThreads';
+import { Timestamp } from 'firebase/firestore';
 
 interface DashboardProps {
   state: AppState;
@@ -30,6 +33,8 @@ interface DashboardProps {
   onSignOut: () => void;
   setView: (view: string) => void;
   onUpdateState: (key: keyof AppState, value: any) => void;
+  initialCircleId?: string | null;
+  onClearInitialCircle?: () => void;
 }
 
 interface PartnerNote {
@@ -63,7 +68,7 @@ const NavButton: React.FC<NavButtonProps> = ({ icon, label, active, onClick }) =
   </button>
 );
 
-const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setView, onUpdateState }) => {
+const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setView, onUpdateState, initialCircleId, onClearInitialCircle }) => {
   const userPrefs = state.userPreferences || {};
   const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner'>('explore');
   const hasLinkedPartner = state.partnerLink?.status === 'accepted';
@@ -91,6 +96,12 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   );
   const [locationName, setLocationName] = useState(userPrefs.lastLocation?.label || 'Locating...');
   const [locationError, setLocationError] = useState<string | null>(null);
+  const isEditingLocationRef = useRef(false);
+  const isEditingRadiusRef = useRef(false);
+  const isEditingCategoryRef = useRef(false);
+  const locationEditTimeoutRef = useRef<number | null>(null);
+  const radiusEditTimeoutRef = useRef<number | null>(null);
+  const categoryEditTimeoutRef = useRef<number | null>(null);
   
   // Radius slider state (in km) - hydrate from saved preferences
   const [radiusKm, setRadiusKm] = useState(userPrefs.lastRadius || 10);
@@ -124,6 +135,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   
   // Share memory state
   const [shareMemory, setShareMemory] = useState<Memory | null>(null);
+  const [partnerSharedMemories, setPartnerSharedMemories] = useState<Memory[]>([]);
   
   // Plan & Billing modal
   const [showPlanBilling, setShowPlanBilling] = useState(false);
@@ -131,6 +143,16 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   // Entitlement limits
   const limits = getLimits(state.entitlement);
   const isPaid = isPaidTier(state.entitlement);
+  const enrichInFlightRef = useRef<Set<string>>(new Set());
+  const fallbackImage = 'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=400&h=300&fit=crop';
+  
+  useEffect(() => {
+    return () => {
+      if (locationEditTimeoutRef.current) window.clearTimeout(locationEditTimeoutRef.current);
+      if (radiusEditTimeoutRef.current) window.clearTimeout(radiusEditTimeoutRef.current);
+      if (categoryEditTimeoutRef.current) window.clearTimeout(categoryEditTimeoutRef.current);
+    };
+  }, []);
 
   // Get user's location on mount (only if not already saved)
   useEffect(() => {
@@ -213,6 +235,17 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   }, [state.partnerLink, onUpdateState]);
 
   useEffect(() => {
+    if (isGuest) return;
+    const uid = state.user?.uid || auth?.currentUser?.uid;
+    const partnerId = state.partnerLink?.partnerUserId;
+    if (!uid || !partnerId) return;
+    if (state.partnerLink?.status !== 'accepted') return;
+    ensurePartnerThread(uid, partnerId).catch(err => {
+      console.warn('Failed to ensure partner thread', err);
+    });
+  }, [isGuest, state.user?.uid, state.partnerLink?.partnerUserId, state.partnerLink?.status]);
+
+  useEffect(() => {
     if (isGuest || !state.user?.uid) {
       setCircles([]);
       return;
@@ -223,31 +256,111 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   }, [isGuest, state.user?.uid]);
 
   useEffect(() => {
+    if (!initialCircleId) return;
+    if (circles.length === 0) return;
+    const found = circles.find(circle => circle.id === initialCircleId);
+    if (found) {
+      setSelectedCircle(found);
+      if (onClearInitialCircle) {
+        onClearInitialCircle();
+      }
+    }
+  }, [initialCircleId, circles, onClearInitialCircle]);
+
+  useEffect(() => {
     if (!db) return;
     if (!state.user?.uid) return;
-    const uid = state.user.uid;
+    if (isGuest) return;
     const link = state.partnerLink;
-    const threadId = link?.partnerUserId
-      ? [uid, link.partnerUserId].sort().join('_')
-      : null;
-    const notesRef = threadId
-      ? collection(db, 'partnerThreads', threadId, 'notes')
-      : collection(db, 'users', uid, 'partnerNotes');
+    if (!link?.partnerUserId || link.status !== 'accepted') {
+      setPartnerNotes([]);
+      setNoteError(null);
+      return;
+    }
+    let unsub: (() => void) | null = null;
+    let cancelled = false;
+    const threadId = getPartnerThreadId(state.user.uid, link.partnerUserId);
+    (async () => {
+      try {
+        await ensurePartnerThread(state.user!.uid, link.partnerUserId);
+        if (cancelled) return;
+        const notesRef = collection(db, 'partnerThreads', threadId, 'notes');
+        unsub = onSnapshot(notesRef, (snap) => {
+          const nextNotes = snap.docs.map((docSnap) => {
+            const data = docSnap.data() as Omit<PartnerNote, 'id'>;
+            return { id: docSnap.id, ...data };
+          });
+          nextNotes.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+          setPartnerNotes(nextNotes);
+        }, (err: any) => {
+          console.warn('Partner notes listener error.', err);
+          if (err?.code === 'permission-denied') {
+            setNoteError('Partner notes are unavailable (permission denied).');
+          } else {
+            setNoteError('Unable to load notes right now.');
+          }
+        });
+      } catch (err) {
+        console.warn('Failed to initialize partner notes thread.', err);
+      }
+    })();
 
-    const unsub = onSnapshot(notesRef, (snap) => {
-      const nextNotes = snap.docs.map((docSnap) => {
-        const data = docSnap.data() as Omit<PartnerNote, 'id'>;
-        return { id: docSnap.id, ...data };
-      });
-      nextNotes.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-      setPartnerNotes(nextNotes);
-    }, (err) => {
-      console.warn('Partner notes listener error.', err);
-      setNoteError('Unable to load notes right now.');
-    });
+    return () => {
+      cancelled = true;
+      if (unsub) unsub();
+    };
+  }, [state.user?.uid, state.partnerLink, isGuest]);
 
-    return () => unsub();
-  }, [state.user?.uid, state.partnerLink]);
+  useEffect(() => {
+    if (!db) return;
+    if (isGuest) return;
+    const uid = state.user?.uid;
+    const link = state.partnerLink;
+    if (!uid || !link?.partnerUserId || link.status !== 'accepted') {
+      onUpdateState('partnerSharedPlaces', []);
+      setPartnerSharedMemories([]);
+      return;
+    }
+    let unsubPlaces: (() => void) | null = null;
+    let unsubMemories: (() => void) | null = null;
+    let cancelled = false;
+    const threadId = getPartnerThreadId(uid, link.partnerUserId);
+    (async () => {
+      try {
+        await ensurePartnerThread(uid, link.partnerUserId);
+        if (cancelled) return;
+        const placesRef = collection(db, 'partnerThreads', threadId, 'sharedPlaces');
+        const memoriesRef = collection(db, 'partnerThreads', threadId, 'sharedMemories');
+
+        unsubPlaces = onSnapshot(placesRef, (snap) => {
+          const nextPlaces = snap.docs.map(docSnap => docSnap.data() as GroupPlace);
+          nextPlaces.sort((a, b) => (b.addedAt || '').localeCompare(a.addedAt || ''));
+          onUpdateState('partnerSharedPlaces', nextPlaces);
+        }, (err: any) => {
+          console.warn('Partner shared places listener error.', err);
+        });
+
+        unsubMemories = onSnapshot(memoriesRef, (snap) => {
+          const nextMemories = snap.docs.map(docSnap => {
+            const data = docSnap.data() as Omit<Memory, 'id'>;
+            return { id: docSnap.id, ...data };
+          });
+          nextMemories.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+          setPartnerSharedMemories(nextMemories);
+        }, (err: any) => {
+          console.warn('Partner shared memories listener error.', err);
+        });
+      } catch (err) {
+        console.warn('Failed to initialize partner thread listeners.', err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (unsubPlaces) unsubPlaces();
+      if (unsubMemories) unsubMemories();
+    };
+  }, [state.user?.uid, state.partnerLink, isGuest, onUpdateState]);
 
   const handleSendPartnerNote = async () => {
     if (!noteInput.trim()) {
@@ -258,17 +371,17 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
       setNoteError('Please sign in to send notes.');
       return;
     }
+    if (!state.partnerLink?.partnerUserId || state.partnerLink.status !== 'accepted') {
+      setNoteError('Link a partner to send notes.');
+      return;
+    }
 
     setNoteError(null);
     setNoteSending(true);
     const uid = state.user.uid;
     const link = state.partnerLink;
-    const threadId = link?.partnerUserId
-      ? [uid, link.partnerUserId].sort().join('_')
-      : null;
-    const notesRef = threadId
-      ? collection(db, 'partnerThreads', threadId, 'notes')
-      : collection(db, 'users', uid, 'partnerNotes');
+    const threadId = getPartnerThreadId(uid, link.partnerUserId);
+    const notesRef = collection(db, 'partnerThreads', threadId, 'notes');
 
     const createdByName = state.user.displayName || state.user.email || 'You';
     const noteId = `${Date.now()}`;
@@ -280,11 +393,17 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     };
 
     try {
+      await ensurePartnerThread(uid, link.partnerUserId);
       await setDoc(doc(notesRef, noteId), notePayload);
+      await setDoc(doc(db, 'partnerThreads', threadId), { updatedAt: serverTimestamp() }, { merge: true });
       setNoteInput('');
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Failed to send partner note.', err);
-      setNoteError('Failed to send note. Please try again.');
+      if (err?.code === 'permission-denied') {
+        setNoteError('Permission denied. Please re-link your partner.');
+      } else {
+        setNoteError('Failed to send note. Please try again.');
+      }
     } finally {
       setNoteSending(false);
     }
@@ -340,6 +459,37 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
       fetchPlaces();
     }
   }, [selectedFilter, activeTab, userLocation, radiusKm, searchQuery]);
+
+  useEffect(() => {
+    if (isGuest) return;
+    const prefs = state.userPreferences;
+    if (!prefs) return;
+
+    if (!isEditingRadiusRef.current && typeof prefs.lastRadius === 'number' && prefs.lastRadius !== radiusKm) {
+      setRadiusKm(prefs.lastRadius);
+    }
+
+    if (!isEditingCategoryRef.current && prefs.lastCategory && prefs.lastCategory !== selectedFilter) {
+      setSelectedFilter(prefs.lastCategory);
+    }
+
+    if (!isEditingLocationRef.current && prefs.lastLocation) {
+      const next = prefs.lastLocation;
+      const current = userLocation;
+      const sameLatLng = current &&
+        Math.abs(current.lat - next.lat) < 0.00001 &&
+        Math.abs(current.lng - next.lng) < 0.00001;
+      if (!sameLatLng) {
+        setUserLocation({ lat: next.lat, lng: next.lng });
+      }
+      if (next.label && next.label !== locationName) {
+        setLocationName(next.label);
+      }
+      if (locationError) {
+        setLocationError(null);
+      }
+    }
+  }, [state.userPreferences, radiusKm, selectedFilter, userLocation, locationName, locationError, isGuest]);
   
   // Handle search from header
   const handleSearch = (query: string) => {
@@ -349,6 +499,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   
   // Handle location change from postcode input
   const handleLocationChange = async (postcode: string): Promise<void> => {
+    isEditingLocationRef.current = true;
+    if (locationEditTimeoutRef.current) {
+      window.clearTimeout(locationEditTimeoutRef.current);
+    }
     setLocationName('Searching...');
     setLocationError(null);
     try {
@@ -378,23 +532,81 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
       console.error('Geocoding error:', err);
       setLocationError('Failed to find location. Please try again.');
       setLocationName('Your Area');
+    } finally {
+      locationEditTimeoutRef.current = window.setTimeout(() => {
+        isEditingLocationRef.current = false;
+      }, 800);
     }
   };
   
   // Handler for radius slider that also persists
   const handleRadiusSliderChange = (newRadius: number) => {
+    isEditingRadiusRef.current = true;
+    if (radiusEditTimeoutRef.current) {
+      window.clearTimeout(radiusEditTimeoutRef.current);
+    }
+    radiusEditTimeoutRef.current = window.setTimeout(() => {
+      isEditingRadiusRef.current = false;
+    }, 800);
     setRadiusKm(newRadius);
     persistRadius(newRadius);
   };
   
   // Handler for category filter that also persists
   const handleFilterChange = (category: ActivityType) => {
+    isEditingCategoryRef.current = true;
+    if (categoryEditTimeoutRef.current) {
+      window.clearTimeout(categoryEditTimeoutRef.current);
+    }
+    categoryEditTimeoutRef.current = window.setTimeout(() => {
+      isEditingCategoryRef.current = false;
+    }, 800);
     setSelectedFilter(category);
     persistCategory(category);
   };
 
-  const toggleFavorite = (placeId: string) => {
-    const isRemoving = state.favorites.includes(placeId);
+  const mapSavedPlaceToPlace = (saved: SavedPlace): Place => {
+    const place: Place = {
+      id: saved.placeId,
+      name: saved.name || 'Saved place',
+      description: saved.address || saved.description || 'Address unavailable',
+      address: saved.address || '',
+      rating: saved.rating,
+      tags: saved.tags || [],
+      mapsUrl: saved.mapsUrl || `https://www.google.com/maps/place/?q=place_id:${saved.placeId}`,
+      type: saved.type || 'all',
+      priceLevel: saved.priceLevel,
+      imageUrl: saved.imageUrl || fallbackImage,
+    };
+    return place;
+  };
+
+  const savedPlaces = state.savedPlaces || [];
+
+  const buildSavedPlaceSnapshot = (place: Place): SavedPlace => ({
+    placeId: place.id,
+    name: place.name,
+    address: place.address || '',
+    imageUrl: place.imageUrl,
+    mapsUrl: place.mapsUrl || `https://www.google.com/maps/place/?q=place_id:${place.id}`,
+    rating: place.rating,
+    priceLevel: place.priceLevel,
+    savedAt: Timestamp.now(),
+  });
+
+  const priceLevelToString = (level?: number): '$' | '$$' | '$$$' | '$$$$' | undefined => {
+    switch (level) {
+      case 0: return '$';
+      case 1: return '$';
+      case 2: return '$$';
+      case 3: return '$$$';
+      case 4: return '$$$$';
+      default: return undefined;
+    }
+  };
+
+  const toggleFavorite = (place: Place) => {
+    const isRemoving = state.favorites.includes(place.id);
     
     if (!isRemoving) {
       const saveCheck = canSavePlace(state.entitlement, state.favorites.length);
@@ -405,10 +617,105 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     }
     
     const newFavorites = isRemoving
-      ? state.favorites.filter(id => id !== placeId)
-      : [...state.favorites, placeId];
+      ? state.favorites.filter(id => id !== place.id)
+      : [...state.favorites, place.id];
     onUpdateState('favorites', newFavorites);
+    const nextSavedPlaces = isRemoving
+      ? savedPlaces.filter(saved => saved.placeId !== place.id)
+      : [...savedPlaces.filter(saved => saved.placeId !== place.id), buildSavedPlaceSnapshot(place)];
+    onUpdateState('savedPlaces', nextSavedPlaces);
+
+    if (isGuest) return;
+    const uid = state.user?.uid || auth?.currentUser?.uid;
+    if (!uid) {
+      console.warn('toggleFavorite: missing user uid');
+      return;
+    }
+    if (isRemoving) {
+      deleteSavedPlace(uid, place.id).catch(err => {
+        console.warn('Failed to delete saved place', err);
+      });
+    } else {
+      const snapshot = buildSavedPlaceSnapshot(place);
+      upsertSavedPlace(uid, snapshot).catch(err => {
+        console.warn('Failed to save place snapshot', err);
+      });
+    }
   };
+
+  const handleAddPartnerPlace = async (groupPlace: GroupPlace) => {
+    if (!db || !state.user?.uid || !state.partnerLink?.partnerUserId) {
+      alert('Please sign in and link a partner first.');
+      return;
+    }
+    try {
+      const threadId = await ensurePartnerThread(state.user.uid, state.partnerLink.partnerUserId);
+      const placeRef = doc(db, 'partnerThreads', threadId, 'sharedPlaces', groupPlace.placeId);
+      await setDoc(placeRef, groupPlace, { merge: true });
+      await setDoc(doc(db, 'partnerThreads', threadId), { updatedAt: serverTimestamp() }, { merge: true });
+      alert(`Added "${groupPlace.placeName}" to Partner Plans!`);
+    } catch (err: any) {
+      console.warn('Failed to save partner shared place.', err);
+      if (err?.code === 'permission-denied') {
+        alert('Permission denied. Please re-link your partner.');
+      } else {
+        alert('Failed to add to Partner Plans. Please try again.');
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (isGuest) return;
+    if (activeTab !== 'favorites') return;
+    const uid = state.user?.uid || auth?.currentUser?.uid;
+    if (!uid) return;
+    const missing = savedPlaces.filter((place) => {
+      const isPlaceholderName = !place.name || place.name === 'Saved place';
+      return isPlaceholderName || !place.address || !place.imageUrl || !place.mapsUrl || place.rating === undefined;
+    }).filter(place => !enrichInFlightRef.current.has(place.placeId));
+
+    if (missing.length === 0) return;
+
+    const queue = missing.slice(0, 6);
+    let active = 0;
+    const maxConcurrent = 2;
+
+    const runNext = async () => {
+      if (queue.length === 0) return;
+      if (active >= maxConcurrent) return;
+      const nextPlace = queue.shift();
+      if (!nextPlace) return;
+      active += 1;
+      enrichInFlightRef.current.add(nextPlace.placeId);
+      try {
+        const details = await getPlaceDetails(nextPlace.placeId);
+        if (!details) return;
+        const updated: SavedPlace = {
+          placeId: nextPlace.placeId,
+          name: details.name || nextPlace.name || 'Saved place',
+          address: details.address || nextPlace.address || '',
+          imageUrl: details.photos?.[0] || nextPlace.imageUrl,
+          mapsUrl: details.mapsUrl || nextPlace.mapsUrl || `https://www.google.com/maps/place/?q=place_id:${nextPlace.placeId}`,
+          rating: details.rating ?? nextPlace.rating,
+          priceLevel: priceLevelToString(details.priceLevel) || nextPlace.priceLevel,
+          savedAt: nextPlace.savedAt || Timestamp.now(),
+        };
+        await upsertSavedPlace(uid, updated);
+      } catch (err) {
+        console.warn('Saved place enrichment failed', { placeId: nextPlace.placeId, err });
+      } finally {
+        enrichInFlightRef.current.delete(nextPlace.placeId);
+        active -= 1;
+        if (queue.length > 0) {
+          runNext();
+        }
+      }
+    };
+
+    for (let i = 0; i < maxConcurrent; i += 1) {
+      runNext();
+    }
+  }, [activeTab, isGuest, savedPlaces, state.user?.uid]);
 
   const markVisited = (place: Place) => {
     const visitedPlaces = state.visitedPlaces || [];
@@ -434,6 +741,28 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   const handleAddMemory = useCallback((memory: Omit<Memory, 'id'>) => {
     const newMemory: Memory = { ...memory, id: Date.now().toString() };
     onUpdateState('memories', [...state.memories, newMemory]);
+    if (!isGuest && db && state.partnerLink?.status === 'accepted' && state.partnerLink.partnerUserId && memory.sharedWithPartner && state.user?.uid) {
+      const threadId = getPartnerThreadId(state.user.uid, state.partnerLink.partnerUserId);
+      const sharedRef = doc(db, 'partnerThreads', threadId, 'sharedMemories', newMemory.id);
+      const payload: Omit<Memory, 'id'> = {
+        placeId: newMemory.placeId,
+        placeName: newMemory.placeName,
+        photoUrl: newMemory.photoUrl,
+        photoUrls: newMemory.photoUrls,
+        photoThumbUrl: newMemory.photoThumbUrl,
+        photoThumbUrls: newMemory.photoThumbUrls,
+        caption: newMemory.caption,
+        taggedFriends: newMemory.taggedFriends,
+        date: newMemory.date,
+        sharedWithPartner: true,
+        circleIds: newMemory.circleIds,
+        geo: newMemory.geo,
+      };
+      ensurePartnerThread(state.user.uid, state.partnerLink.partnerUserId)
+        .then(() => setDoc(sharedRef, payload, { merge: true }))
+        .then(() => setDoc(doc(db, 'partnerThreads', threadId), { updatedAt: serverTimestamp() }, { merge: true }))
+        .catch((err) => console.warn('Failed to share memory with partner.', err));
+    }
 
     if (memory.placeId) {
       const visitedPlaces = state.visitedPlaces || [];
@@ -452,9 +781,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         onUpdateState('visitedPlaces', [...visitedPlaces, newVisit]);
       }
     }
-  }, [onUpdateState, places, state.favorites, state.memories, state.visitedPlaces]);
+  }, [onUpdateState, places, state.favorites, state.memories, state.visitedPlaces, isGuest, state.partnerLink, state.user?.uid]);
 
-  const favoritePlaces = places.filter(p => state.favorites.includes(p.id));
+  const favoritePlaces = savedPlaces.map(mapSavedPlaceToPlace);
 
   const handleIncrementAiRequests = () => {
     const current = state.entitlement?.ai_requests_this_month || 0;
@@ -554,7 +883,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
           isVisited={(state.visitedPlaces || []).some(v => v.placeId === selectedPlace.id)}
           memories={state.memories}
           memoryCount={state.memories.length}
-          onToggleFavorite={() => toggleFavorite(selectedPlace.id)}
+          onToggleFavorite={() => toggleFavorite(selectedPlace)}
           onMarkVisited={() => markVisited(selectedPlace)}
           onClose={() => setSelectedPlace(null)}
           onUpdateDetails={(data) => {
@@ -578,8 +907,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                 alert('This place is already in Partner Plans!');
                 return;
               }
-              onUpdateState('partnerSharedPlaces', [...currentPartnerPlaces, groupPlace]);
-              alert(`Added "${groupPlace.placeName}" to Partner Plans!`);
+              handleAddPartnerPlace(groupPlace);
             } else {
               const note = window.prompt('Why are we saving this?') || '';
               saveCirclePlace(circleId, {
@@ -668,7 +996,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                     place={place}
                     variant="list"
                     isFavorite={state.favorites.includes(place.id)}
-                    onToggleFavorite={() => toggleFavorite(place.id)}
+                    onToggleFavorite={() => toggleFavorite(place)}
                     onClick={() => setSelectedPlace(place)}
                   />
                 ))}
@@ -686,7 +1014,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                   place={place}
                   variant="list"
                   isFavorite={true}
-                  onToggleFavorite={() => toggleFavorite(place.id)}
+                  onToggleFavorite={() => toggleFavorite(place)}
                   onClick={() => setSelectedPlace(place)}
                   showAddToGroup={!isGuest && circles.length > 0}
                   onAddToGroup={() => setAddToCirclePlace(place)}
@@ -960,13 +1288,13 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Shared Favorites</h4>
-                {!state.isPro && state.partnerSharedPlaces.length > 3 && (
+                {!isPaid && state.partnerSharedPlaces.length > 3 && (
                   <span className="text-[9px] font-bold text-amber-500">Free: 3 of {state.partnerSharedPlaces.length}</span>
                 )}
               </div>
               {state.partnerSharedPlaces.length > 0 ? (
                 <div className="space-y-3">
-                  {state.partnerSharedPlaces.slice(0, state.isPro ? undefined : 3).map((shared) => {
+                  {state.partnerSharedPlaces.slice(0, isPaid ? undefined : 3).map((shared) => {
                     const placeFromList = places.find(p => p.id === shared.placeId) ||
                       favoritePlaces.find(p => p.id === shared.placeId);
                     const fallbackImage = shared.imageUrl || 'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=200&h=200&fit=crop';
@@ -1010,13 +1338,13 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Shared Memories</h4>
-                {!state.isPro && state.memories.length > 3 && (
-                  <span className="text-[9px] font-bold text-amber-500">Free: 3 of {state.memories.length}</span>
+                {!isPaid && partnerSharedMemories.length > 3 && (
+                  <span className="text-[9px] font-bold text-amber-500">Free: 3 of {partnerSharedMemories.length}</span>
                 )}
               </div>
-              {state.memories.filter(m => m.sharedWithPartner).length > 0 ? (
+              {partnerSharedMemories.length > 0 ? (
                 <div className="grid grid-cols-3 gap-2">
-                  {state.memories.filter(m => m.sharedWithPartner).slice(0, state.isPro ? undefined : 3).map((memory) => {
+                  {partnerSharedMemories.slice(0, isPaid ? undefined : 3).map((memory) => {
                   const photos = memory.photoThumbUrls || memory.photoUrls || (memory.photoThumbUrl ? [memory.photoThumbUrl] : (memory.photoUrl ? [memory.photoUrl] : []));
                   const mainPhoto = photos[0] || memory.photoThumbUrl || memory.photoUrl;
                     return (
@@ -1039,7 +1367,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
               )}
             </div>
             
-            {!state.isPro && (state.favorites.length > 3 || state.memories.length > 3) && (
+            {!isPaid && (state.favorites.length > 3 || state.memories.length > 3) && (
               <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl p-4 border border-amber-100">
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">✨</span>

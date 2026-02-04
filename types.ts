@@ -1,4 +1,6 @@
 
+import type { Timestamp } from 'firebase/firestore';
+
 export interface Place {
   id: string;
   name: string;
@@ -65,6 +67,20 @@ export interface FavoriteData {
   lastVisited?: string;
   activities?: string[];
   customTags?: string[];
+}
+
+export interface SavedPlace {
+  placeId: string;
+  name: string;
+  address?: string;
+  imageUrl?: string;
+  mapsUrl?: string;
+  rating?: number;
+  priceLevel?: '$' | '$$' | '$$$' | '$$$$';
+  tags?: string[];
+  type?: ActivityType;
+  description?: string;
+  savedAt?: Timestamp;
 }
 
 export const ACTIVITY_OPTIONS = {
@@ -208,6 +224,7 @@ export interface Entitlement {
   entitlement_end_date: string | null;
   paystack_customer_code?: string;
   paystack_subscription_code?: string;
+  paystack_email_token?: string | null;
   last_payment_reference?: string;
   ai_requests_this_month: number;
   ai_requests_reset_date: string;
@@ -283,6 +300,8 @@ export interface AppState {
   user: User | null;
   favorites: string[]; 
   favoriteDetails: Record<string, FavoriteData>;
+  savedPlaces: SavedPlace[];
+  savedPlacesMigratedAt?: Timestamp;
   visited: string[];
   visitedPlaces: VisitedPlace[];
   reviews: UserReview[];
@@ -298,5 +317,4 @@ export interface AppState {
   friendCircles: FriendCircle[];
   entitlement: Entitlement;
   aiRequestsUsed: number;
-  isPro?: boolean;
 }

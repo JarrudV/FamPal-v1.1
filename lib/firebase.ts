@@ -4,6 +4,8 @@ import {
   onAuthStateChanged,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   setPersistence,
   browserLocalPersistence
@@ -23,7 +25,10 @@ import {
   deleteDoc,
   deleteField,
   getDocs,
-  getDoc
+  getDoc,
+  writeBatch,
+  serverTimestamp,
+  Timestamp
 } from 'firebase/firestore';
 import {
   getStorage,
@@ -73,6 +78,8 @@ export {
   googleProvider,
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   doc,
   onSnapshot,
@@ -88,6 +95,9 @@ export {
   documentId,
   deleteDoc,
   deleteField,
+  writeBatch,
+  serverTimestamp,
+  Timestamp,
   ref,
   uploadBytes,
   getDownloadURL

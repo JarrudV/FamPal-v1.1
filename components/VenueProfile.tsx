@@ -109,10 +109,9 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   const [loadingDetails, setLoadingDetails] = useState(false);
   
   useEffect(() => {
-    const googlePlaceId = (place as any).googlePlaceId;
-    if (googlePlaceId) {
+    if (place.id) {
       setLoadingDetails(true);
-      getPlaceDetails(googlePlaceId)
+      getPlaceDetails(place.id)
         .then(details => setPlaceDetails(details))
         .finally(() => setLoadingDetails(false));
     }
@@ -265,10 +264,10 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
             </section>
 
             <section className="grid grid-cols-2 gap-4">
-              <InfoTile label="Pricing" value={place.priceLevel || '$$'} icon="💰" />
+              <InfoTile label="Pricing" value={place.priceLevel || '—'} icon="💰" />
               <InfoTile label="Age Group" value={place.ageAppropriate || 'All ages'} icon="👶" />
-              <InfoTile label="Distance" value={place.distance || '0.8 km'} icon="📍" />
-              <InfoTile label="Rating" value={`⭐ ${place.rating}`} icon="📈" />
+              <InfoTile label="Distance" value={place.distance || '—'} icon="📍" />
+              <InfoTile label="Rating" value={`⭐ ${place.rating ?? '—'}`} icon="📈" />
             </section>
 
             <section className="space-y-4">

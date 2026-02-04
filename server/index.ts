@@ -11,7 +11,8 @@ app.use(express.json({ verify: (req: any, _res, buf) => { req.rawBody = buf; } }
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || '';
 const PAYSTACK_PUBLIC_KEY = process.env.PAYSTACK_PUBLIC_KEY || '';
-const APP_URL = process.env.REPLIT_DOMAINS?.split(',')[0] ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000';
+const APP_URL = process.env.APP_URL
+  || (process.env.REPLIT_DOMAINS?.split(',')[0] ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000');
 
 if (!getApps().length) {
   const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT 
@@ -321,6 +322,7 @@ async function updateUserEntitlement(
     entitlement_end_date: endDate,
     paystack_customer_code: paymentData.customer?.customer_code || null,
     paystack_subscription_code: paymentData.subscription_code || null,
+    paystack_email_token: paymentData.email_token || paymentData.subscription?.email_token || null,
     last_payment_reference: reference,
     ai_requests_this_month: 0,
     ai_requests_reset_date: nextMonth.toISOString(),
