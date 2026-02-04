@@ -26,6 +26,15 @@ function getNavigationUrl(place: Place, placeDetails?: PlaceDetails | null): str
   return `https://www.google.com/maps/dir/?api=1&destination=${address}`;
 }
 
+interface CombinedPreferences {
+  allergies: string[];
+  accessibility: string[];
+  foodPreferences: string[];
+  activityPreferences: string[];
+  includesPartner: boolean;
+  includesChildren: boolean;
+}
+
 interface VenueProfileProps {
   place: Place;
   isFavorite: boolean;
@@ -40,6 +49,7 @@ interface VenueProfileProps {
   partnerLink?: PartnerLink;
   userName?: string;
   userId?: string;
+  tripContext?: CombinedPreferences;
   onClose: () => void;
   onToggleFavorite: () => void;
   onMarkVisited: () => void;
@@ -64,6 +74,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   partnerLink,
   userName = 'You',
   userId = '',
+  tripContext,
   onClose, 
   onToggleFavorite,
   onMarkVisited,
@@ -134,7 +145,17 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
     setAiLoading(true);
     setAiAnswer('');
     try {
-      const answer = await askAboutPlace(place, question, { childrenAges });
+      const answer = await askAboutPlace(place, question, { 
+        childrenAges,
+        tripContext: tripContext ? {
+          allergies: tripContext.allergies,
+          accessibility: tripContext.accessibility,
+          foodPreferences: tripContext.foodPreferences,
+          activityPreferences: tripContext.activityPreferences,
+          includesPartner: tripContext.includesPartner,
+          includesChildren: tripContext.includesChildren,
+        } : undefined
+      });
       setAiAnswer(answer);
       if (onIncrementAiRequests) {
         onIncrementAiRequests();

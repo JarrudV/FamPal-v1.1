@@ -243,10 +243,19 @@ function getCachedPlaces(key: string): Place[] | null {
   return null;
 }
 
+export interface TripContext {
+  allergies?: string[];
+  accessibility?: string[];
+  foodPreferences?: string[];
+  activityPreferences?: string[];
+  includesPartner?: boolean;
+  includesChildren?: boolean;
+}
+
 export async function askAboutPlace(
   place: Place,
   question: string,
-  userContext?: { childrenAges?: number[] }
+  userContext?: { childrenAges?: number[]; tripContext?: TripContext }
 ): Promise<string> {
   if (!import.meta.env.VITE_GEMINI_API_KEY) {
     throw new Error("Gemini API key missing – AI disabled");
@@ -254,7 +263,9 @@ export async function askAboutPlace(
   
   // Create a cache key from place ID, question, and family context
   const agesKey = userContext?.childrenAges?.sort().join(',') || 'none';
-  const cacheKey = `${place.id}:${question.toLowerCase().trim()}:ages:${agesKey}`;
+  const tripKey = userContext?.tripContext ? 
+    `${userContext.tripContext.allergies?.join(',')}|${userContext.tripContext.foodPreferences?.join(',')}` : 'none';
+  const cacheKey = `${place.id}:${question.toLowerCase().trim()}:ages:${agesKey}:trip:${tripKey}`;
   
   // Check memory cache first
   if (aiResponseCache.has(cacheKey)) {
@@ -268,6 +279,19 @@ export async function askAboutPlace(
       ? `The family has children aged ${userContext.childrenAges.join(', ')}.`
       : '';
     
+    // Build trip context section
+    const tripContext = userContext?.tripContext;
+    let tripContextSection = '';
+    if (tripContext) {
+      const parts: string[] = [];
+      if (tripContext.includesPartner) parts.push('This trip includes the parents/partner.');
+      if (tripContext.includesChildren) parts.push('Children are coming on this trip.');
+      if (tripContext.allergies?.length) parts.push(`IMPORTANT - Group has allergies to: ${tripContext.allergies.join(', ')}. Please check if this venue can accommodate these allergies.`);
+      if (tripContext.accessibility?.length) parts.push(`Accessibility needs: ${tripContext.accessibility.join(', ')}.`);
+      if (tripContext.foodPreferences?.length) parts.push(`Food preferences: ${tripContext.foodPreferences.join(', ')}.`);
+      if (parts.length) tripContextSection = '\n\nTrip context:\n' + parts.join('\n');
+    }
+    
     const prompt = `You are a helpful family travel assistant. A parent is asking about "${place.name}" located at ${place.address}.
 
 Place details:
@@ -277,11 +301,11 @@ Place details:
 - Tags: ${place.tags.join(', ')}
 - Description: ${place.description}
 
-${childContext}
+${childContext}${tripContextSection}
 
 Question: ${question}
 
-Provide a helpful, concise answer focused on family-friendliness, kid safety, and practical tips. Keep response under 150 words.`;
+Provide a helpful, concise answer focused on family-friendliness, kid safety, and practical tips. If there are allergy concerns, address them specifically. Keep response under 150 words.`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",

@@ -201,6 +201,15 @@ For Google Sign-In to work:
   - createPartnerCircle() function in lib/circles.ts handles creation with both partners
   - Regular Circles tab only shows non-partner circles
   - Admin code system for testing: tap version 5x, enter "FAMPRO2026" to unlock Pro
+- **V2.5 Who's Coming Filter & Preference Context**:
+  - "Who's Coming?" filter on Explore tab: Everyone, Family, Partner, Solo
+  - Filter sets context for trip planning based on who's attending
+  - Combined preferences chips show allergies (⚠️), accessibility (♿), and food preferences (🥗)
+  - Preferences aggregated from user + children when "Family" selected
+  - AI queries now include trip context (allergies, accessibility, food preferences)
+  - Circle memories display improved to match main Memories tab (social card style)
+  - Partner unlinking fixed (Firestore security - only updates own document)
+  - Adding to circles shows success/error feedback alerts
 
 ## Environment Variables (Secrets)
 All secrets are stored securely in Replit Secrets:

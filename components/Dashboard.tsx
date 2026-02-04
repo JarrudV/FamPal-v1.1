@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { AppState, Place, Memory, UserReview, ActivityType, GroupPlace, VisitedPlace, PLAN_LIMITS, UserPreferences, SavedLocation, SavedPlace } from '../types';
 import Header from './Header';
 import PlaceCard from './PlaceCard';
@@ -158,6 +158,68 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   // Computed: separate partner circles from regular circles
   const partnerCircles = circles.filter(c => c.isPartnerCircle);
   const regularCircles = circles.filter(c => !c.isPartnerCircle);
+  
+  // Computed: Combined preferences based on filter mode
+  const combinedPreferences = useMemo(() => {
+    const myPrefs = state.preferences || { foodPreferences: [], allergies: [], accessibility: [], activityPreferences: [] };
+    const childrenPrefs = state.children.map(c => c.preferences || { foodPreferences: [], allergies: [], accessibility: [], activityPreferences: [] });
+    // Partner preferences would come from partner's profile - for now we just note partner is included
+    
+    if (prefFilterMode === 'solo') {
+      return {
+        allergies: [...new Set(myPrefs.allergies)],
+        accessibility: [...new Set(myPrefs.accessibility)],
+        foodPreferences: [...new Set(myPrefs.foodPreferences)],
+        activityPreferences: [...new Set(myPrefs.activityPreferences)],
+        includesPartner: false,
+        includesChildren: false,
+      };
+    }
+    
+    if (prefFilterMode === 'partner') {
+      return {
+        allergies: [...new Set(myPrefs.allergies)],
+        accessibility: [...new Set(myPrefs.accessibility)],
+        foodPreferences: [...new Set(myPrefs.foodPreferences)],
+        activityPreferences: [...new Set(myPrefs.activityPreferences)],
+        includesPartner: true,
+        includesChildren: false,
+      };
+    }
+    
+    if (prefFilterMode === 'family') {
+      const allAllergies = [...myPrefs.allergies];
+      const allAccessibility = [...myPrefs.accessibility];
+      const allFood = [...myPrefs.foodPreferences];
+      const allActivity = [...myPrefs.activityPreferences];
+      
+      childrenPrefs.forEach(cp => {
+        allAllergies.push(...cp.allergies);
+        allAccessibility.push(...cp.accessibility);
+        allFood.push(...cp.foodPreferences);
+        allActivity.push(...cp.activityPreferences);
+      });
+      
+      return {
+        allergies: [...new Set(allAllergies)],
+        accessibility: [...new Set(allAccessibility)],
+        foodPreferences: [...new Set(allFood)],
+        activityPreferences: [...new Set(allActivity)],
+        includesPartner: hasLinkedPartner,
+        includesChildren: state.children.length > 0,
+      };
+    }
+    
+    // 'all' mode - no filtering
+    return {
+      allergies: [],
+      accessibility: [],
+      foodPreferences: [],
+      activityPreferences: [],
+      includesPartner: false,
+      includesChildren: false,
+    };
+  }, [prefFilterMode, state.preferences, state.children, hasLinkedPartner]);
   
   // Upgrade prompt state
   const [showUpgradePrompt, setShowUpgradePrompt] = useState<'savedPlaces' | 'memories' | null>(null);
@@ -970,6 +1032,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
           partnerLink={state.partnerLink}
           userName={state.user?.displayName || 'You'}
           userId={state.user?.uid || ''}
+          tripContext={prefFilterMode !== 'all' ? combinedPreferences : undefined}
           onTagMemoryToCircle={handleTagMemoryToCircle}
           onAddToCircle={(circleId, groupPlace) => {
             if (circleId === 'partner') {
@@ -1113,6 +1176,33 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                   {prefFilterMode === 'solo' && (
                     <span>Just your preferences</span>
                   )}
+                </div>
+              )}
+              
+              {/* Preference chips - show combined allergies/accessibility */}
+              {prefFilterMode !== 'all' && (combinedPreferences.allergies.length > 0 || combinedPreferences.accessibility.length > 0) && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {combinedPreferences.allergies.map(allergy => (
+                    <span key={allergy} className="inline-flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-medium">
+                      <span>⚠️</span> {allergy}
+                    </span>
+                  ))}
+                  {combinedPreferences.accessibility.map(access => (
+                    <span key={access} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
+                      <span>♿</span> {access}
+                    </span>
+                  ))}
+                </div>
+              )}
+              
+              {/* Food preferences chips */}
+              {prefFilterMode !== 'all' && combinedPreferences.foodPreferences.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {combinedPreferences.foodPreferences.map(pref => (
+                    <span key={pref} className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 rounded-full text-xs font-medium">
+                      🥗 {pref}
+                    </span>
+                  ))}
                 </div>
               )}
             </div>
