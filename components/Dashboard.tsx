@@ -13,7 +13,7 @@ import { getLimits, canSavePlace, isPaidTier } from '../lib/entitlements';
 import { updateLocation, updateRadius, updateCategory, updateActiveCircle } from '../lib/profileSync';
 import { ShareMemoryModal } from './ShareMemory';
 import HomeFab from './HomeFab';
-import { db, doc, getDoc, collection, onSnapshot, setDoc } from '../lib/firebase';
+import { db, doc, getDoc, collection, onSnapshot, setDoc, auth } from '../lib/firebase';
 import MemoryCreate from './MemoryCreate';
 import {
   CircleDoc,
@@ -465,20 +465,40 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   };
 
   const handleCreateCircle = async (name: string) => {
-    if (!state.user) return;
+    const currentUser = state.user || (auth?.currentUser ? {
+      uid: auth.currentUser.uid,
+      displayName: auth.currentUser.displayName,
+      email: auth.currentUser.email,
+    } : null);
+    if (!currentUser) {
+      window.alert('Please sign in to create a circle.');
+      return;
+    }
     try {
-      await createCircle(name, state.user);
+      await createCircle(name, currentUser);
     } catch (err) {
-      console.warn('Failed to create circle.', err);
+      console.error('Failed to create circle.', err);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      window.alert(`Failed to create circle: ${message}`);
     }
   };
 
   const handleJoinCircle = async (code: string) => {
-    if (!state.user) return;
+    const currentUser = state.user || (auth?.currentUser ? {
+      uid: auth.currentUser.uid,
+      displayName: auth.currentUser.displayName,
+      email: auth.currentUser.email,
+    } : null);
+    if (!currentUser) {
+      window.alert('Please sign in to join a circle.');
+      return;
+    }
     try {
-      await joinCircleByCode(code, state.user);
+      await joinCircleByCode(code, currentUser);
     } catch (err) {
-      console.warn('Failed to join circle.', err);
+      console.error('Failed to join circle.', err);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      window.alert(`Failed to join circle: ${message}`);
     }
   };
 
