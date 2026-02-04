@@ -84,21 +84,26 @@ const App: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
-      await signInWithRedirect(auth, googleProvider);
-    } catch (e: any) {
-      console.warn("Login redirect error:", e);
-      try {
-        await signInWithPopup(auth, googleProvider);
-      } catch (popupErr: any) {
-        if (popupErr.code === 'auth/unauthorized-domain') {
-          setError("This domain is not authorized for Google Sign-In. Please add it to Firebase Console -> Authentication -> Settings -> Authorized domains.");
-        } else if (popupErr.code === 'auth/popup-blocked') {
-          setError("Popup was blocked. Please allow popups for this site.");
-        } else if (popupErr.code === 'auth/popup-closed-by-user') {
-          setError(null);
-        } else {
-          setError(`Login failed: ${popupErr.message}`);
+      // Use popup as primary method - redirect has session storage issues in modern browsers
+      await signInWithPopup(auth, googleProvider);
+    } catch (popupErr: any) {
+      console.warn("Login popup error:", popupErr);
+      if (popupErr.code === 'auth/popup-blocked') {
+        // Fallback to redirect only if popup is blocked
+        try {
+          await signInWithRedirect(auth, googleProvider);
+        } catch (redirectErr: any) {
+          setError(`Login failed: ${redirectErr.message}`);
+          setLoading(false);
         }
+      } else if (popupErr.code === 'auth/unauthorized-domain') {
+        setError("This domain is not authorized for Google Sign-In. Please add it to Firebase Console -> Authentication -> Settings -> Authorized domains.");
+        setLoading(false);
+      } else if (popupErr.code === 'auth/popup-closed-by-user') {
+        setError(null);
+        setLoading(false);
+      } else {
+        setError(`Login failed: ${popupErr.message}`);
         console.error("Login popup error:", popupErr);
         setLoading(false);
       }
