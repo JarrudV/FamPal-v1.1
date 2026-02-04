@@ -19,6 +19,7 @@ import MemoryCreate from './MemoryCreate';
 import {
   CircleDoc,
   createCircle,
+  createPartnerCircle,
   joinCircleByCode,
   listenToUserCircles,
   addCircleMemory,
@@ -91,10 +92,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   const userPrefs = state.userPreferences || {};
   const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner'>('explore');
   const hasLinkedPartner = state.partnerLink?.status === 'accepted';
+  const partnerUserId = state.partnerLink?.partnerUserId;
   const partnerName = state.partnerLink?.partnerName?.trim();
   const partnerEmail = state.partnerLink?.partnerEmail;
   const partnerPhotoURL = state.partnerLink?.partnerPhotoURL;
-  const partnerUserId = state.partnerLink?.partnerUserId;
   const partnerIdLabel = partnerUserId
     ? `Partner linked · ${partnerUserId.slice(0, 6)}…${partnerUserId.slice(-4)}`
     : 'Partner linked';
@@ -104,6 +105,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   const [noteInput, setNoteInput] = useState('');
   const [noteError, setNoteError] = useState<string | null>(null);
   const [noteSending, setNoteSending] = useState(false);
+  const [newPartnerCircleName, setNewPartnerCircleName] = useState('');
+  const [creatingPartnerCircle, setCreatingPartnerCircle] = useState(false);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<ActivityType>(userPrefs.lastCategory || 'all');
   const [places, setPlaces] = useState<Place[]>([]);
@@ -148,6 +151,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   const [circles, setCircles] = useState<CircleDoc[]>([]);
   const [selectedCircle, setSelectedCircle] = useState<CircleDoc | null>(null);
   const [addToCirclePlace, setAddToCirclePlace] = useState<Place | null>(null);
+  
+  // Computed: separate partner circles from regular circles
+  const partnerCircles = circles.filter(c => c.isPartnerCircle);
+  const regularCircles = circles.filter(c => !c.isPartnerCircle);
   
   // Upgrade prompt state
   const [showUpgradePrompt, setShowUpgradePrompt] = useState<'savedPlaces' | 'memories' | null>(null);
@@ -869,6 +876,29 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     }
   };
 
+  const handleCreatePartnerCircle = async () => {
+    if (!newPartnerCircleName.trim()) return;
+    if (!state.user || !partnerUserId) {
+      window.alert('Please link with a partner first.');
+      return;
+    }
+    setCreatingPartnerCircle(true);
+    try {
+      await createPartnerCircle(
+        newPartnerCircleName.trim(),
+        { uid: state.user.uid, displayName: state.user.displayName, email: state.user.email },
+        { uid: partnerUserId, displayName: partnerName || null, email: partnerEmail || null }
+      );
+      setNewPartnerCircleName('');
+    } catch (err) {
+      console.error('Failed to create partner circle.', err);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      window.alert(`Failed to create partner circle: ${message}`);
+    } finally {
+      setCreatingPartnerCircle(false);
+    }
+  };
+
   const handleTagMemoryToCircle = async (circleId: string, memory: Omit<Memory, 'id'>) => {
     if (!state.user) return;
     try {
@@ -1234,7 +1264,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
 
         {activeTab === 'circles' && (
           <GroupsList
-            circles={circles}
+            circles={regularCircles}
             onCreateCircle={handleCreateCircle}
             onJoinCircle={handleJoinCircle}
             onSelectCircle={setSelectedCircle}
@@ -1483,6 +1513,57 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                 </div>
               </div>
             )}
+
+            <div className="space-y-4">
+              <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Partner Circles</h4>
+              <p className="text-xs text-slate-500 -mt-2">Create themed collections to share with your partner</p>
+              
+              {partnerCircles.length > 0 ? (
+                <div className="space-y-3">
+                  {partnerCircles.map((circle) => (
+                    <button
+                      key={circle.id}
+                      onClick={() => setSelectedCircle(circle)}
+                      className="w-full text-left bg-white rounded-2xl p-4 border border-slate-100 flex items-center justify-between hover:bg-slate-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-rose-100 rounded-xl flex items-center justify-center text-lg">💑</div>
+                        <div>
+                          <p className="font-bold text-sm text-slate-800">{circle.name}</p>
+                          <p className="text-xs text-slate-500">Shared with {partnerLabel}</p>
+                        </div>
+                      </div>
+                      <span className="text-slate-300">›</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-slate-50 rounded-2xl p-6 text-center">
+                  <p className="text-sm text-slate-500">No partner circles yet</p>
+                  <p className="text-xs text-slate-400 mt-1">Create one below to start collecting places together</p>
+                </div>
+              )}
+              
+              <div className="bg-white rounded-2xl p-4 border border-slate-100">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="e.g., Date Night, Weekend Getaways..."
+                    value={newPartnerCircleName}
+                    onChange={(e) => setNewPartnerCircleName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreatePartnerCircle()}
+                    className="flex-1 text-sm outline-none text-slate-700 placeholder-slate-300"
+                  />
+                  <button
+                    onClick={handleCreatePartnerCircle}
+                    disabled={creatingPartnerCircle || !newPartnerCircleName.trim()}
+                    className="px-4 py-2 bg-rose-500 text-white rounded-xl text-xs font-bold disabled:opacity-60"
+                  >
+                    {creatingPartnerCircle ? '...' : 'Create'}
+                  </button>
+                </div>
+              </div>
+            </div>
 
             <div className="space-y-4">
               <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Quick Notes</h4>

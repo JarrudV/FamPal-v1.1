@@ -258,13 +258,14 @@ export function listenToUserCircles(uid: string, onData: (circles: CircleDoc[]) 
           return null;
         }
         const data = circleSnap.data();
-        console.log('[FamPals] Found circle:', data.name);
+        console.log('[FamPals] Found circle:', data.name, 'isPartnerCircle:', data.isPartnerCircle);
         return {
           id: circleSnap.id,
           name: data.name,
           createdBy: data.createdBy,
           createdAt: data.createdAt,
           joinCode: data.joinCode,
+          isPartnerCircle: data.isPartnerCircle || false,
         } as CircleDoc;
       })
     );
