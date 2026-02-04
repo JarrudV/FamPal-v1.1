@@ -856,15 +856,35 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                 {state.memories.map(memory => {
                   const photos = memory.photoThumbUrls || memory.photoUrls || (memory.photoThumbUrl ? [memory.photoThumbUrl] : (memory.photoUrl ? [memory.photoUrl] : []));
                   const mainPhoto = photos[0] || memory.photoThumbUrl || memory.photoUrl;
+                  if (!mainPhoto) {
+                    return (
+                      <div key={memory.id} className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 flex flex-col gap-3">
+                        <div>
+                          <p className="text-xs font-black text-slate-800 leading-snug">{memory.caption}</p>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-1">@{memory.placeName}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setShareMemory(memory)}
+                            className="flex-1 py-2 rounded-xl bg-sky-500 text-white text-[10px] font-bold uppercase tracking-widest"
+                            title="Share memory"
+                          >
+                            Share
+                          </button>
+                          <button
+                            onClick={() => handleShareMemoryExternal(memory)}
+                            className="flex-1 py-2 rounded-xl bg-slate-100 text-slate-700 text-[10px] font-bold uppercase tracking-widest"
+                            title="Share externally"
+                          >
+                            Copy/External
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
                   return (
                     <div key={memory.id} className="bg-white rounded-[32px] overflow-hidden shadow-sm relative group aspect-square">
-                      {mainPhoto ? (
-                        <img src={mainPhoto} className="w-full h-full object-cover" alt="" />
-                      ) : (
-                        <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-400 text-sm font-bold">
-                          Text Memory
-                        </div>
-                      )}
+                      <img src={mainPhoto} className="w-full h-full object-cover" alt="" />
                       {photos.length > 1 && (
                         <div className="absolute top-3 left-3 bg-black/60 text-white text-[9px] px-2 py-1 rounded-full font-bold">
                           {photos.length} photos
@@ -876,14 +896,14 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                       </div>
                       <button
                         onClick={() => setShareMemory(memory)}
-                        className="absolute top-3 right-3 w-9 h-9 bg-white/90 backdrop-blur-sm text-sky-600 rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-3 right-3 w-9 h-9 bg-white/90 backdrop-blur-sm text-sky-600 rounded-full flex items-center justify-center shadow-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                         title="Share memory"
                       >
-                        📤
+                        Share
                       </button>
                       <button
                         onClick={() => handleShareMemoryExternal(memory)}
-                        className="absolute bottom-3 right-3 px-3 py-1 bg-white/90 backdrop-blur-sm text-slate-700 rounded-full text-[9px] font-bold uppercase tracking-widest shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute bottom-3 right-3 px-3 py-1 bg-white/90 backdrop-blur-sm text-slate-700 rounded-full text-[9px] font-bold uppercase tracking-widest shadow-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                         title="Share externally"
                       >
                         Share
