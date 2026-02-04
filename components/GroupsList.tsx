@@ -40,7 +40,7 @@ const GroupsList: React.FC<GroupsListProps> = ({ circles, onCreateCircle, onJoin
 
   if (isGuest) {
     return (
-      <div className="p-4 space-y-4">
+      <div className="p-4 pb-10 space-y-4">
         <div className="text-center py-6">
           <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mb-4 mx-auto">
             <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -90,7 +90,7 @@ const GroupsList: React.FC<GroupsListProps> = ({ circles, onCreateCircle, onJoin
   }
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 pb-10 space-y-4">
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-lg font-bold text-slate-800">Your Circles</h2>
         {canCreateMore ? (

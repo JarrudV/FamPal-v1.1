@@ -49,11 +49,12 @@ type TabButtonProps = { label: string; count?: number; active: boolean; onClick:
 const TabButton: React.FC<TabButtonProps> = ({ label, count, active, onClick }) => (
   <button 
     onClick={onClick}
-    className={`px-3 py-2 rounded-full text-[9px] font-black uppercase tracking-wider whitespace-nowrap transition-all shrink-0 ${
-      active ? 'bg-sky-500 text-white shadow-lg shadow-sky-100' : 'bg-white text-slate-400 border border-slate-100'
+    aria-label={`${label}${count !== undefined && count > 0 ? `, ${count} items` : ''}`}
+    className={`px-4 py-2.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0 min-h-[44px] ${
+      active ? 'bg-sky-500 text-white shadow-lg shadow-sky-200' : 'bg-white text-slate-600 border border-slate-200'
     }`}
   >
-    {label}{count !== undefined && count > 0 ? ` [${count}]` : ''}
+    {label}{count !== undefined && count > 0 ? ` (${count})` : ''}
   </button>
 );
 
@@ -61,10 +62,13 @@ type NavButtonProps = { icon: string; label: string; active: boolean; onClick: (
 const NavButton: React.FC<NavButtonProps> = ({ icon, label, active, onClick }) => (
   <button 
     onClick={onClick}
-    className={`flex flex-col items-center gap-1 ${active ? 'text-sky-500' : 'text-slate-300'}`}
+    aria-label={label}
+    className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl transition-all min-w-[60px] min-h-[52px] ${
+      active ? 'text-sky-500 bg-sky-50' : 'text-slate-400 hover:text-slate-600'
+    }`}
   >
     <span className="text-xl">{icon}</span>
-    <span className="text-[8px] font-black uppercase tracking-widest">{label}</span>
+    <span className="text-[11px] font-semibold capitalize">{label}</span>
   </button>
 );
 
@@ -933,7 +937,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-24 container-safe">
+    <div className="min-h-screen bg-[#F8FAFC] pb-32 container-safe">
       <Header 
         setView={setView} 
         user={state.user} 
@@ -942,8 +946,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         onLocationChange={handleLocationChange}
       />
       
-      <div className="px-5 py-4">
-        <div className="flex gap-1.5 mb-4 overflow-x-auto no-scrollbar pb-1">
+      <div className="px-4 py-4">
+        <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar pb-1 scroll-pl-4" style={{ scrollPaddingLeft: '1rem', scrollPaddingRight: '1rem' }}>
           <TabButton label="Explore" active={activeTab === 'explore'} onClick={() => setActiveTab('explore')} />
           <TabButton label="Saved" count={state.favorites.length} active={activeTab === 'favorites'} onClick={() => setActiveTab('favorites')} />
           <TabButton label="Adventures" count={(state.visitedPlaces || []).length} active={activeTab === 'adventures'} onClick={() => setActiveTab('adventures')} />
@@ -1420,8 +1424,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         )}
       </div>
 
-      <nav className="fixed bottom-0 left-0 right-0 bottom-nav-blur border-t border-slate-100 px-6 py-4 safe-area-inset-bottom">
-        <div className="flex justify-around">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-lg border-t border-slate-200/60 px-4 py-3 safe-area-inset-bottom z-40">
+        <div className="flex justify-around max-w-md mx-auto">
           <NavButton icon="🏠" label="Home" active={activeTab === 'explore'} onClick={() => setActiveTab('explore')} />
           <NavButton icon="💙" label="Saved" active={activeTab === 'favorites'} onClick={() => setActiveTab('favorites')} />
           <NavButton icon="👥" label="Circles" active={activeTab === 'circles'} onClick={() => setActiveTab('circles')} />
