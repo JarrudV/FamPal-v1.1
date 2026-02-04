@@ -32,6 +32,9 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
   const [showPreferences, setShowPreferences] = useState(false);
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
   const [showPlanBilling, setShowPlanBilling] = useState(false);
+  const [showAdminCode, setShowAdminCode] = useState(false);
+  const [adminCode, setAdminCode] = useState('');
+  const [adminTapCount, setAdminTapCount] = useState(0);
   const [uploadingProfilePic, setUploadingProfilePic] = useState(false);
   const profilePicInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -111,6 +114,51 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
       const message = `Join me on FamPals! Use my partner code: ${state.partnerLink.inviteCode}\n\nDownload the app: ${window.location.origin}`;
       window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
     }
+  };
+
+  const handleAdminCode = async () => {
+    const ADMIN_CODE = 'FAMPRO2026';
+    if (adminCode.toUpperCase() === ADMIN_CODE) {
+      if (!db || !auth?.currentUser) {
+        alert('Please sign in first.');
+        return;
+      }
+      try {
+        const userRef = doc(db, 'users', auth.currentUser.uid);
+        const now = new Date();
+        const resetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const proEntitlement = {
+          plan_tier: 'pro',
+          plan_status: 'active',
+          entitlement_source: 'admin',
+          entitlement_start_date: now.toISOString(),
+          entitlement_end_date: null,
+          ai_requests_this_month: 0,
+          ai_requests_reset_date: resetDate.toISOString(),
+        };
+        await setDoc(userRef, { entitlement: proEntitlement }, { merge: true });
+        onUpdateState('entitlement', proEntitlement);
+        setAdminCode('');
+        setShowAdminCode(false);
+        alert('Pro features activated! You now have full access to test all features.');
+      } catch (err) {
+        console.error('Failed to apply admin code', err);
+        alert('Failed to apply code. Please try again.');
+      }
+    } else {
+      alert('Invalid code. Please try again.');
+    }
+  };
+
+  const handleVersionTap = () => {
+    setAdminTapCount(prev => {
+      const newCount = prev + 1;
+      if (newCount >= 5) {
+        setShowAdminCode(true);
+        return 0;
+      }
+      return newCount;
+    });
   };
 
   const handleJoinWithCode = async () => {
@@ -757,6 +805,35 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
           </div>
         )}
 
+        {showAdminCode && (
+          <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-[32px] border border-purple-200 shadow-sm p-6 space-y-4">
+            <h3 className="text-xs font-black text-purple-600 uppercase tracking-widest">Admin Access</h3>
+            <input
+              type="text"
+              value={adminCode}
+              onChange={(e) => setAdminCode(e.target.value.toUpperCase())}
+              placeholder="Enter admin code"
+              className="w-full h-14 bg-white border border-purple-200 rounded-2xl px-5 text-lg font-black text-center uppercase tracking-[0.15em] outline-none focus:ring-2 focus:ring-purple-400"
+              maxLength={10}
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={handleAdminCode}
+                disabled={!adminCode.trim()}
+                className="flex-1 h-12 bg-purple-500 text-white rounded-xl text-xs font-black uppercase tracking-widest disabled:opacity-50"
+              >
+                Activate
+              </button>
+              <button
+                onClick={() => { setShowAdminCode(false); setAdminCode(''); }}
+                className="px-4 h-12 bg-slate-100 rounded-xl text-xs font-black uppercase tracking-widest text-slate-500"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
           <button 
             onClick={onSignOut}
@@ -766,6 +843,16 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
             <span>→</span>
           </button>
         </div>
+        {!isGuest && (
+          <div className="text-center py-4">
+            <button
+              onClick={handleVersionTap}
+              className="text-xs text-slate-300 hover:text-slate-400 transition-colors"
+            >
+              FamPals v2.3
+            </button>
+          </div>
+        )}
       </div>
 
       {showPlanBilling && (
