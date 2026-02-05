@@ -49,11 +49,3 @@ env:
     availability:
       - BUILD
       - RUNTIME
-  - variable: PAYSTACK_SECRET_KEY
-    secret: PAYSTACK_SECRET_KEY
-    availability:
-      - RUNTIME
-  - variable: PAYSTACK_PUBLIC_KEY
-    secret: PAYSTACK_PUBLIC_KEY
-    availability:
-      - RUNTIME
