@@ -710,8 +710,9 @@ if (isProduction) {
 }
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`[FamPals API] Server running on port ${PORT}`);
+const HOST = '0.0.0.0';
+app.listen(Number(PORT), HOST, () => {
+  console.log(`[FamPals API] Server running on ${HOST}:${PORT}`);
   console.log(`[FamPals API] Environment: ${isProduction ? 'production' : 'development'}`);
   console.log(`[FamPals API] Paystack configured: ${!!PAYSTACK_SECRET_KEY}`);
 });
