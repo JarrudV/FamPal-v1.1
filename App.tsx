@@ -17,7 +17,6 @@ import { listenToUserDoc, upsertUserProfile, saveUserField, listenToSavedPlaces,
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Profile from './components/Profile';
-import HomeFab from './components/HomeFab';
 import Onboarding from './components/Onboarding';
 import { AppState, User, getDefaultEntitlement, UserPreferences, SavedPlace, Preferences, Child, PartnerLink, ProfileInfo } from './types';
 import { getGuestPreferences, syncGuestPreferencesToUser } from './lib/profileSync';
@@ -329,6 +328,7 @@ const App: React.FC = () => {
     const completedAt = Timestamp.now();
     try {
       await saveUserField(uid, 'onboardingCompletedAt', completedAt);
+      await saveUserField(uid, 'onboardingCompleted', true);
       await saveUserField(uid, 'profileCompletionRequired', result.skipped);
       if (result.userPreferences) {
         handleUpdateState('userPreferences', result.userPreferences);
@@ -346,6 +346,11 @@ const App: React.FC = () => {
       if (result.partnerLink && !state.partnerLink) {
         handleUpdateState('partnerLink', result.partnerLink);
       }
+      setState(prev => ({
+        ...prev,
+        onboardingCompletedAt: completedAt,
+        profileCompletionRequired: result.skipped,
+      }));
     } catch (err) {
       console.warn('Failed to persist onboarding state.', err);
     } finally {
@@ -582,7 +587,6 @@ const App: React.FC = () => {
       <Route path="/" element={
         <div>
           {renderView()}
-          <HomeFab visible={view !== 'dashboard' && view !== 'login'} onClick={() => setView('dashboard')} />
         </div>
       } />
       <Route path="/join/:code" element={<JoinRoute />} />

@@ -29,6 +29,8 @@ function formatTimeAgo(date: Date): string {
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+const FALLBACK_PLACE_IMAGE = 'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=200&h=200&fit=crop';
+
 interface GroupDetailProps {
   circle: CircleDoc;
   userId: string;
@@ -137,14 +139,14 @@ const GroupDetail: React.FC<GroupDetailProps> = ({
       address: '',
       rating: undefined,
       tags: [],
-      imageUrl: placeDoc.placeSummary.imageUrl,
+      imageUrl: placeDoc.placeSummary.imageUrl || FALLBACK_PLACE_IMAGE,
       mapsUrl: placeDoc.placeSummary.mapsUrl || `https://www.google.com/maps/place/?q=place_id:${placeDoc.placeId}`,
       type: (placeDoc.placeSummary.type as any) || 'all',
     };
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
+    <div className="min-h-screen bg-[#F8FAFC] pb-28">
       <div className="sticky top-0 z-10 bg-white border-b border-slate-100 px-4 py-3">
         <div className="flex items-center justify-between">
           <button onClick={onClose} className="p-2 -ml-2 hover:bg-slate-100 rounded-full">
@@ -245,10 +247,21 @@ const GroupDetail: React.FC<GroupDetailProps> = ({
                     <div className="flex items-center justify-between">
                       <button
                         onClick={() => onOpenPlace(place)}
-                        className="text-left"
+                        className="flex items-center gap-3 text-left"
                       >
-                        <p className="text-sm font-medium text-slate-700">{sp.placeSummary.name}</p>
-                        <p className="text-xs text-slate-400">Added by {sp.savedByName}</p>
+                        <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-100 shrink-0">
+                          {place.imageUrl ? (
+                            <img src={place.imageUrl} className="w-full h-full object-cover" alt="" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400 font-semibold">
+                              No image
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-slate-700 truncate">{place.name}</p>
+                          <p className="text-xs text-slate-400">Added by {sp.savedByName}</p>
+                        </div>
                       </button>
                       {(sp.savedByUid === userId || isOwner) && (
                         <button

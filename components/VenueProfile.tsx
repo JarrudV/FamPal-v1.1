@@ -194,7 +194,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-[100] bg-[#F8FAFC] overflow-y-auto overflow-x-hidden animate-slide-up container-safe"
+      className="fixed inset-0 z-30 bg-[#F8FAFC] overflow-y-auto overflow-x-hidden animate-slide-up container-safe"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
@@ -308,7 +308,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
         </div>
       )}
 
-      <div className="p-6 space-y-8 pb-32">
+      <div className="p-6 space-y-8 pb-40">
         {activeTab === 'info' ? (
           <>
             <section className="space-y-4">

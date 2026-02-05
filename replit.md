@@ -42,3 +42,4 @@ Key features include:
 - **Onboarding profile capture**: Collects name, age, preferences, dependants, and optional partner invite during first run.
 - **AI guardrails**: Added Gemini logging, caching with refresh, output token caps, and request timeouts.
 - **Family plan scaffolding**: Added a Family tier with pooled AI allowance for linked partners and entitlement-based gating for partner linking.
+- **UI stability fixes**: Added Places API fallbacks, fixed onboarding completion persistence, restored circle/adventure place clicks with images, and removed the floating Home button while keeping bottom nav visible.

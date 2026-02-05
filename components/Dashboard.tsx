@@ -12,7 +12,6 @@ import { searchNearbyPlacesPaged, textSearchPlacesPaged, getPlaceDetails } from 
 import { getLimits, canSavePlace, isPaidTier, getNextResetDate } from '../lib/entitlements';
 import { updateLocation, updateRadius, updateCategory, updateActiveCircle } from '../lib/profileSync';
 import { ShareMemoryModal } from './ShareMemory';
-import HomeFab from './HomeFab';
 import { db, doc, getDoc, collection, onSnapshot, setDoc, auth, serverTimestamp, increment } from '../lib/firebase';
 import { upsertSavedPlace, deleteSavedPlace } from '../lib/userData';
 import MemoryCreate from './MemoryCreate';
@@ -1114,9 +1113,21 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     }
   };
 
-  if (selectedCircle) {
-    return (
-      <>
+  const showCircleDetail = !!selectedCircle;
+
+  return (
+    <div className="min-h-screen bg-[#F8FAFC] pb-32 container-safe">
+      {!showCircleDetail && (
+        <Header 
+          setView={setView} 
+          user={state.user} 
+          locationName={locationName} 
+          onSearch={handleSearch}
+          onLocationChange={handleLocationChange}
+        />
+      )}
+      
+      {selectedCircle ? (
         <GroupDetail
           circle={selectedCircle}
           userId={state.user?.uid || ''}
@@ -1127,88 +1138,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
           onClose={() => setSelectedCircle(null)}
           onOpenPlace={(place) => setSelectedPlace(place)}
         />
-        <HomeFab visible={true} onClick={() => { setSelectedCircle(null); setActiveTab('explore'); }} />
-      </>
-    );
-  }
-
-  if (selectedPlace) {
-    return (
-      <>
-        <VenueProfile 
-          place={selectedPlace} 
-          isFavorite={state.favorites.includes(selectedPlace.id)}
-          isVisited={(state.visitedPlaces || []).some(v => v.placeId === selectedPlace.id)}
-          memories={state.memories}
-          memoryCount={state.memories.length}
-          onToggleFavorite={() => toggleFavorite(selectedPlace)}
-          onMarkVisited={() => markVisited(selectedPlace)}
-          onClose={() => setSelectedPlace(null)}
-          onUpdateDetails={(data) => {
-            const newDetails = { ...state.favoriteDetails, [selectedPlace.id]: { ...state.favoriteDetails[selectedPlace.id], ...data, placeId: selectedPlace.id } };
-            onUpdateState('favoriteDetails', newDetails);
-          }}
-          favoriteData={state.favoriteDetails[selectedPlace.id]}
-          childrenAges={state.children?.map(c => c.age) || []}
-          isGuest={isGuest}
-          entitlement={state.entitlement}
-          familyPool={state.familyPool}
-          onIncrementAiRequests={handleIncrementAiRequests}
-          circles={circles}
-          partnerLink={state.partnerLink}
-          userName={state.user?.displayName || 'You'}
-          userId={state.user?.uid || ''}
-          tripContext={prefFilterMode !== 'all' ? combinedPreferences : undefined}
-          onTagMemoryToCircle={handleTagMemoryToCircle}
-          onAddToCircle={(circleId, groupPlace) => {
-            if (circleId === 'partner') {
-              const currentPartnerPlaces = state.partnerSharedPlaces || [];
-              if (currentPartnerPlaces.some(p => p.placeId === groupPlace.placeId)) {
-                alert('This place is already in Partner Plans!');
-                return;
-              }
-              handleAddPartnerPlace(groupPlace);
-            } else {
-              const note = window.prompt('Add a note for this place (optional)') || '';
-              const circle = circles.find(c => c.id === circleId);
-              saveCirclePlace(circleId, {
-                placeId: groupPlace.placeId,
-                savedByUid: state.user?.uid || 'guest',
-                savedByName: state.user?.displayName || state.user?.email || 'Member',
-                savedAt: new Date().toISOString(),
-                note: note.trim(),
-                placeSummary: {
-                  placeId: groupPlace.placeId,
-                  name: groupPlace.placeName,
-                  imageUrl: groupPlace.imageUrl,
-                  type: groupPlace.placeType,
-                },
-              }).then(() => {
-                alert(`Added to ${circle?.name || 'circle'}!`);
-              }).catch(err => {
-                console.error('Failed to save circle place:', err);
-                alert('Failed to add to circle. Please try again.');
-              });
-            }
-          }}
-          onAddMemory={handleAddMemory}
-        />
-        <HomeFab visible={true} onClick={() => { setSelectedPlace(null); setActiveTab('explore'); }} />
-      </>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-32 container-safe">
-      <Header 
-        setView={setView} 
-        user={state.user} 
-        locationName={locationName} 
-        onSearch={handleSearch}
-        onLocationChange={handleLocationChange}
-      />
-      
-      <div className="px-4 py-4">
+      ) : (
+        <div className="px-4 py-4">
         <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar pb-1 scroll-pl-4" style={{ scrollPaddingLeft: '1rem', scrollPaddingRight: '1rem' }}>
           <TabButton label="Explore" active={activeTab === 'explore'} onClick={() => setActiveTab('explore')} />
           <TabButton label="Saved" count={state.favorites.length} active={activeTab === 'favorites'} onClick={() => setActiveTab('favorites')} />
@@ -1516,10 +1447,11 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
               <div className="space-y-3">
                 {(state.visitedPlaces || []).map(visit => {
                   const handleOpenVisitedPlace = () => {
-                    const existingPlace = savedPlaces.find(sp => sp.place.id === visit.placeId);
+                    const existingPlace = savedPlaces.find(sp => sp.placeId === visit.placeId);
                     if (existingPlace) {
                       setSelectedPlace(mapSavedPlaceToPlace(existingPlace));
                     } else {
+                      const fallbackImage = visit.imageUrl || 'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=200&h=200&fit=crop';
                       const placeFromVisit: Place = {
                         id: visit.placeId,
                         name: visit.placeName,
@@ -1531,8 +1463,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                         priceLevel: undefined,
                         distance: '',
                         ageAppropriate: '',
-                        imageUrl: visit.imageUrl || '',
-                        mapsUrl: '',
+                        imageUrl: fallbackImage,
+                        mapsUrl: `https://www.google.com/maps/place/?q=place_id:${visit.placeId}`,
                       };
                       setSelectedPlace(placeFromVisit);
                     }
@@ -1984,7 +1916,68 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         )}
       </div>
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-lg border-t border-slate-200/60 px-4 py-3 safe-area-inset-bottom z-40">
+      {selectedPlace && (
+        <VenueProfile 
+          place={selectedPlace} 
+          isFavorite={state.favorites.includes(selectedPlace.id)}
+          isVisited={(state.visitedPlaces || []).some(v => v.placeId === selectedPlace.id)}
+          memories={state.memories}
+          memoryCount={state.memories.length}
+          onToggleFavorite={() => toggleFavorite(selectedPlace)}
+          onMarkVisited={() => markVisited(selectedPlace)}
+          onClose={() => setSelectedPlace(null)}
+          onUpdateDetails={(data) => {
+            const newDetails = { ...state.favoriteDetails, [selectedPlace.id]: { ...state.favoriteDetails[selectedPlace.id], ...data, placeId: selectedPlace.id } };
+            onUpdateState('favoriteDetails', newDetails);
+          }}
+          favoriteData={state.favoriteDetails[selectedPlace.id]}
+          childrenAges={state.children?.map(c => c.age) || []}
+          isGuest={isGuest}
+          entitlement={state.entitlement}
+          familyPool={state.familyPool}
+          onIncrementAiRequests={handleIncrementAiRequests}
+          circles={circles}
+          partnerLink={state.partnerLink}
+          userName={state.user?.displayName || 'You'}
+          userId={state.user?.uid || ''}
+          tripContext={prefFilterMode !== 'all' ? combinedPreferences : undefined}
+          onTagMemoryToCircle={handleTagMemoryToCircle}
+          onAddToCircle={(circleId, groupPlace) => {
+            if (circleId === 'partner') {
+              const currentPartnerPlaces = state.partnerSharedPlaces || [];
+              if (currentPartnerPlaces.some(p => p.placeId === groupPlace.placeId)) {
+                alert('This place is already in Partner Plans!');
+                return;
+              }
+              handleAddPartnerPlace(groupPlace);
+            } else {
+              const note = window.prompt('Add a note for this place (optional)') || '';
+              const circle = circles.find(c => c.id === circleId);
+              saveCirclePlace(circleId, {
+                placeId: groupPlace.placeId,
+                savedByUid: state.user?.uid || 'guest',
+                savedByName: state.user?.displayName || state.user?.email || 'Member',
+                savedAt: new Date().toISOString(),
+                note: note.trim(),
+                placeSummary: {
+                  placeId: groupPlace.placeId,
+                  name: groupPlace.placeName,
+                  imageUrl: groupPlace.imageUrl,
+                  type: groupPlace.placeType,
+                },
+              }).then(() => {
+                alert(`Added to ${circle?.name || 'circle'}!`);
+              }).catch(err => {
+                console.error('Failed to save circle place:', err);
+                alert('Failed to add to circle. Please try again.');
+              });
+            }
+          }}
+          onAddMemory={handleAddMemory}
+        />
+      )}
+
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-lg border-t border-slate-200/60 px-4 py-3 safe-area-inset-bottom z-50">
         <div className="flex justify-around max-w-md mx-auto">
           <NavButton icon="🏠" label="Home" active={activeTab === 'explore'} onClick={() => setActiveTab('explore')} />
           <NavButton icon="💙" label="Saved" active={activeTab === 'favorites'} onClick={() => setActiveTab('favorites')} />
@@ -1992,9 +1985,6 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
           <NavButton icon="👤" label="Profile" active={false} onClick={() => setView('profile')} />
         </div>
       </nav>
-      {/* Home FAB for non-explore tabs inside dashboard */}
-      <HomeFab visible={activeTab !== 'explore'} onClick={() => setActiveTab('explore')} />
-      
       {showPlanBilling && (
         <PlanBilling 
           state={state} 

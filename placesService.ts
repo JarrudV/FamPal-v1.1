@@ -3,7 +3,7 @@ import { Place, ActivityType } from "./types";
 const PLACES_API_KEY = import.meta.env.VITE_GOOGLE_PLACES_API_KEY || "";
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const resolveApiUrl = (path: string) => (API_BASE ? `${API_BASE}${path}` : path);
-const CLIENT_PLACES_KEY = !API_BASE && PLACES_API_KEY ? PLACES_API_KEY : '';
+const CLIENT_PLACES_KEY = PLACES_API_KEY || '';
 const DENY_TYPES_ENV = import.meta.env.VITE_PLACES_DENY_TYPES || '';
 const DENY_BRANDS_ENV = import.meta.env.VITE_PLACES_DENY_BRANDS || '';
 const DENY_TYPES_STORAGE_KEY = 'fampals_places_deny_types';
@@ -44,6 +44,7 @@ interface DetailsCacheData {
 export interface PlacesSearchResponse {
   places: Place[];
   nextPageToken: string | null;
+  error?: string;
 }
 
 export interface PlaceDetails {
@@ -319,7 +320,7 @@ async function fetchLegacyPlaces(
     if (!response.ok) {
       const errText = await response.text();
       console.warn('[FamPals] Places backend error:', errText);
-      return { places: [], nextPageToken: null };
+      return { places: [], nextPageToken: null, error: errText || `HTTP ${response.status}` };
     }
     const data = await response.json();
     const results = Array.isArray(data.results) ? data.results : [];
@@ -334,7 +335,7 @@ async function fetchLegacyPlaces(
     return { places, nextPageToken: data.nextPageToken || null };
   } catch (error) {
     console.warn('[FamPals] Places backend fetch failed:', error);
-    return { places: [], nextPageToken: null };
+    return { places: [], nextPageToken: null, error: 'fetch_failed' };
   }
 }
 
@@ -346,7 +347,11 @@ export async function searchNearbyPlacesPaged(
   pageToken?: string
 ): Promise<PlacesSearchResponse> {
   if (!lat || !lng) return { places: [], nextPageToken: null };
-  return fetchLegacyPlaces(
+  if (!API_BASE && PLACES_API_KEY) {
+    const places = await searchNearbyPlaces(lat, lng, type, radiusKm);
+    return { places, nextPageToken: null };
+  }
+  const response = await fetchLegacyPlaces(
     '/api/places/nearby',
     {
       apiKey: CLIENT_PLACES_KEY || undefined,
@@ -361,6 +366,11 @@ export async function searchNearbyPlacesPaged(
     lng,
     true
   );
+  if (response.error && !pageToken && PLACES_API_KEY) {
+    const places = await searchNearbyPlaces(lat, lng, type, radiusKm);
+    return { places, nextPageToken: null };
+  }
+  return response;
 }
 
 export async function textSearchPlacesPaged(
@@ -371,7 +381,11 @@ export async function textSearchPlacesPaged(
   pageToken?: string
 ): Promise<PlacesSearchResponse> {
   if (!query.trim()) return { places: [], nextPageToken: null };
-  return fetchLegacyPlaces(
+  if (!API_BASE && PLACES_API_KEY) {
+    const places = await textSearchPlaces(query, lat, lng, radiusKm);
+    return { places, nextPageToken: null };
+  }
+  const response = await fetchLegacyPlaces(
     '/api/places/text',
     {
       apiKey: CLIENT_PLACES_KEY || undefined,
@@ -386,6 +400,11 @@ export async function textSearchPlacesPaged(
     lng,
     true
   );
+  if (response.error && !pageToken && PLACES_API_KEY) {
+    const places = await textSearchPlaces(query, lat, lng, radiusKm);
+    return { places, nextPageToken: null };
+  }
+  return response;
 }
 
 export async function searchNearbyPlaces(
