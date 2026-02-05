@@ -89,3 +89,10 @@ Key features include:
   - Added `requireAuth` middleware that verifies Firebase ID tokens
   - Added "Refresh Partner Status" button to Profile page for manual sync
   - Frontend passes Firebase Auth tokens in Authorization headers for all partner API calls
+- **V2.17 Full-Stack Deployment & Onboarding Fix**:
+  - Configured apphosting.yaml for Cloud Run deployment (replaces static-only deployment)
+  - Server now serves built frontend in production from `dist/` folder
+  - Fixed onboarding flash by waiting for Firestore check before rendering
+  - Authenticated users now go directly to dashboard (not login) after refresh
+  - Firebase Admin SDK now uses Application Default Credentials (ADC) on Cloud Run
+  - All environment variables configured with proper BUILD/RUNTIME availability

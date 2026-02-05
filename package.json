@@ -9,7 +9,7 @@
     "dev:server": "npx tsx server/index.ts",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "vite preview --port $PORT"
+    "start": "NODE_ENV=production npx tsx server/index.ts"
   },
   "dependencies": {
     "@google/genai": "^1.38.0",

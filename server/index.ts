@@ -1,9 +1,14 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Extend Express Request type to include verified user
 interface AuthenticatedRequest extends Request {
@@ -20,14 +25,22 @@ const PAYSTACK_PUBLIC_KEY = process.env.PAYSTACK_PUBLIC_KEY || '';
 const APP_URL = process.env.APP_URL
   || (process.env.REPLIT_DOMAINS?.split(',')[0] ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000');
 
+// Initialize Firebase Admin SDK
+// In production on Cloud Run/App Hosting, uses Application Default Credentials (ADC)
+// Can also use FIREBASE_SERVICE_ACCOUNT if explicitly provided
 if (!getApps().length) {
-  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT 
-    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
-    : null;
-  
-  if (serviceAccount) {
-    initializeApp({ credential: cert(serviceAccount) });
-  } else {
+  try {
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      initializeApp({ credential: cert(serviceAccount) });
+      console.log('[FamPals API] Initialized with explicit service account');
+    } else {
+      // Use ADC (works on Cloud Run, App Engine, Cloud Functions)
+      initializeApp();
+      console.log('[FamPals API] Initialized with Application Default Credentials');
+    }
+  } catch (err) {
+    console.error('[FamPals API] Firebase Admin init error:', err);
     initializeApp();
   }
 }
@@ -129,7 +142,8 @@ app.get('/api/places/nearby', async (req, res) => {
     const radiusKm = Number(req.query.radiusKm || 10);
     const radiusMeters = Math.min(Math.max(radiusKm, 0.1) * 1000, 50000);
     const pageToken = typeof req.query.pageToken === 'string' ? req.query.pageToken : undefined;
-    const legacyType = resolveLegacyType(req.query.type);
+    const typeParam = typeof req.query.type === 'string' ? req.query.type : undefined;
+    const legacyType = resolveLegacyType(typeParam);
 
     const params = new URLSearchParams({
       key: apiKey,
@@ -675,8 +689,29 @@ app.post('/api/partner/link', requireAuth, async (req: AuthenticatedRequest, res
   }
 });
 
+// In production, serve the built frontend
+const isProduction = process.env.NODE_ENV === 'production';
+if (isProduction) {
+  // When running from repo root with `npx tsx server/index.ts`, dist is at ./dist
+  // When running from server dir, dist is at ../dist
+  const distPath = path.resolve(process.cwd(), 'dist');
+  console.log(`[FamPals API] Serving static files from: ${distPath}`);
+  console.log(`[FamPals API] Current working directory: ${process.cwd()}`);
+  
+  // Serve static files
+  app.use(express.static(distPath));
+  
+  // Handle client-side routing - serve index.html for all non-API routes
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api/')) {
+      res.sendFile(path.join(distPath, 'index.html'));
+    }
+  });
+}
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`[FamPals API] Server running on port ${PORT}`);
+  console.log(`[FamPals API] Environment: ${isProduction ? 'production' : 'development'}`);
   console.log(`[FamPals API] Paystack configured: ${!!PAYSTACK_SECRET_KEY}`);
 });
