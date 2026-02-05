@@ -8,6 +8,11 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 
+// Log startup immediately
+console.log('[FamPals API] Starting server...');
+console.log('[FamPals API] PORT env:', process.env.PORT);
+console.log('[FamPals API] NODE_ENV:', process.env.NODE_ENV);
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -17,6 +22,11 @@ interface AuthenticatedRequest extends Request {
 }
 
 const app = express();
+
+// Health check endpoint - respond BEFORE any initialization
+app.get('/health', (_req, res) => {
+  res.status(200).send('OK');
+});
 
 app.use(cors({ origin: true }));
 app.use(express.json({ verify: (req: any, _res, buf) => { req.rawBody = buf; } }));
@@ -29,8 +39,11 @@ const APP_URL = process.env.APP_URL
 // Initialize Firebase Admin SDK
 // In production on Cloud Run/App Hosting, uses Application Default Credentials (ADC)
 // Can also use FIREBASE_SERVICE_ACCOUNT if explicitly provided
-if (!getApps().length) {
-  try {
+let db: ReturnType<typeof getFirestore>;
+let adminAuth: ReturnType<typeof getAuth>;
+
+try {
+  if (!getApps().length) {
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
       const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
       initializeApp({ credential: cert(serviceAccount) });
@@ -40,14 +53,14 @@ if (!getApps().length) {
       initializeApp();
       console.log('[FamPals API] Initialized with Application Default Credentials');
     }
-  } catch (err) {
-    console.error('[FamPals API] Firebase Admin init error:', err);
-    initializeApp();
   }
+  db = getFirestore();
+  adminAuth = getAuth();
+  console.log('[FamPals API] Firebase Admin SDK initialized successfully');
+} catch (err) {
+  console.error('[FamPals API] Firebase Admin init error:', err);
+  throw err; // Re-throw to fail fast and show in logs
 }
-
-const db = getFirestore();
-const adminAuth = getAuth();
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY || process.env.VITE_GOOGLE_PLACES_API_KEY || '';
 
 // Middleware to verify Firebase Auth token
