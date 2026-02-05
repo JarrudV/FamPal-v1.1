@@ -18,3 +18,4 @@ lerna-debug.log*
 # Misc
 .DS_Store
 attached_assets/
+dist-server/
