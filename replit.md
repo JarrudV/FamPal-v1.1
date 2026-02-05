@@ -48,3 +48,9 @@ Key features include:
   - Added "Show Onboarding Again" button to Profile page
   - Users can now manually trigger onboarding from settings
   - Onboarding toggle only visible for logged-in users
+- **V2.10 Onboarding Flash Fix & Location Refresh**:
+  - Fixed onboarding screen flashing briefly before dashboard loads
+  - Added onboardingChecked state to prevent premature rendering
+  - Added "Use Current Location" button in Explore tab radius section
+  - Users can now refresh their GPS location on demand
+  - Better location error handling with user feedback

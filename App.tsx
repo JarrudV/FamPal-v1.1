@@ -68,6 +68,7 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState('login');
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [pendingJoinCircleId, setPendingJoinCircleId] = useState<string | null>(null);
   const [savedPlacesLoaded, setSavedPlacesLoaded] = useState(false);
   const legacyFavoritesRef = useRef<string[]>([]);
@@ -224,6 +225,7 @@ const App: React.FC = () => {
           if (dbState) {
             const onboardingCompleted = !!dbState.onboardingCompletedAt || dbState.onboardingCompleted === true;
             setNeedsOnboarding(!onboardingCompleted);
+            setOnboardingChecked(true);
             legacyFavoritesRef.current = Array.isArray(dbState.favorites) ? dbState.favorites : [];
             savedPlacesMigratedAtRef.current = dbState.savedPlacesMigratedAt || null;
             const loadedEntitlement = dbState.entitlement || getDefaultEntitlement();
@@ -283,6 +285,7 @@ const App: React.FC = () => {
             legacyFavoritesRef.current = [];
             savedPlacesMigratedAtRef.current = null;
             setNeedsOnboarding(true);
+            setOnboardingChecked(true);
             setState(prev => ({
               ...initialState,
               savedPlaces: prev.savedPlaces || [],
@@ -301,6 +304,7 @@ const App: React.FC = () => {
         aiResetAttemptedRef.current = null;
         lastAuthUidRef.current = null;
         setNeedsOnboarding(false);
+        setOnboardingChecked(true);
         setPendingJoinCircleId(null);
         setState(getInitialState(null));
         setView('login');
@@ -533,8 +537,13 @@ const App: React.FC = () => {
   }, [isGuest, state.user?.uid, savedPlacesLoaded, state.savedPlaces]);
 
   const renderView = () => {
-    console.log('[FamPals] renderView called - loading:', loading, 'view:', view);
+    console.log('[FamPals] renderView called - loading:', loading, 'view:', view, 'onboardingChecked:', onboardingChecked);
     if (loading) {
+      return <div className="flex items-center justify-center h-screen">Loading...</div>;
+    }
+
+    // Wait for onboarding check before showing dashboard (prevents flash)
+    if (!isGuest && state.user && !onboardingChecked && view !== 'login') {
       return <div className="flex items-center justify-center h-screen">Loading...</div>;
     }
 

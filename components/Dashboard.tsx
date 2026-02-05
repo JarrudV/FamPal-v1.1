@@ -684,6 +684,40 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     setActiveTab('explore');
   };
   
+  // Refresh GPS location from device
+  const refreshGpsLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation not supported');
+      return;
+    }
+    setLocationName('Getting location...');
+    setLocationError(null);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        setUserLocation({ lat: latitude, lng: longitude });
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+          );
+          const data = await response.json();
+          const city = data.address?.city || data.address?.town || data.address?.village || data.address?.suburb || 'Your Area';
+          setLocationName(city);
+          persistLocation(latitude, longitude, city);
+        } catch (err) {
+          setLocationName('Your Area');
+          persistLocation(latitude, longitude, 'Your Area');
+        }
+      },
+      (error) => {
+        console.error('Location error:', error);
+        setLocationError('Unable to get location. Check permissions.');
+        setLocationName('Unknown Location');
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  };
+
   // Handle location change from postcode input
   const handleLocationChange = async (postcode: string): Promise<void> => {
     isEditingLocationRef.current = true;
@@ -1171,6 +1205,16 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                 <span className="text-[10px] text-slate-400 font-bold">1 km</span>
                 <span className="text-[10px] text-slate-400 font-bold">200 km</span>
               </div>
+              <button
+                onClick={refreshGpsLocation}
+                className="w-full mt-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold text-slate-600 transition-colors flex items-center justify-center gap-2"
+              >
+                <span>📍</span>
+                <span>Use Current Location</span>
+              </button>
+              {locationError && (
+                <p className="text-xs text-rose-500 mt-2 text-center">{locationError}</p>
+              )}
             </div>
 
             {/* Who's Coming Filter */}
