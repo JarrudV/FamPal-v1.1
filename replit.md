@@ -33,3 +33,12 @@ Key features include:
 - **Unsplash**: Provides category-specific placeholder images for venues.
 - **WhatsApp**: Integrated for sharing place details directly from the app.
 - **Google Calendar**: Allows users to quickly add planned activities to their calendar.
+
+## Recent Updates
+- **Places pagination**: Added a "Load more" flow for Explore results that appends pages without resetting filters or location.
+- **Places filtering**: Added a configurable denylist to remove petrol stations/convenience venues from Places results, with optional brand exclusions.
+- **Partner tab CTA**: Partner tab is visible for all users with an unlinked empty state and optional Pro gate via `VITE_PARTNER_LINK_REQUIRES_PRO`.
+- **Onboarding flow**: First login now routes to onboarding with core feature screens and preference setup, tracked in Firestore.
+- **Onboarding profile capture**: Collects name, age, preferences, dependants, and optional partner invite during first run.
+- **AI guardrails**: Added Gemini logging, caching with refresh, output token caps, and request timeouts.
+- **Family plan scaffolding**: Added a Family tier with pooled AI allowance for linked partners and entitlement-based gating for partner linking.

@@ -45,6 +45,7 @@ interface VenueProfileProps {
   childrenAges?: number[];
   isGuest?: boolean;
   entitlement?: Entitlement;
+  familyPool?: { ai_requests_this_month?: number; ai_requests_reset_date?: string };
   circles?: CircleDoc[];
   partnerLink?: PartnerLink;
   userName?: string;
@@ -70,6 +71,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   childrenAges = [],
   isGuest = false,
   entitlement,
+  familyPool,
   circles = [],
   partnerLink,
   userName = 'You',
@@ -84,13 +86,15 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   onAddMemory,
   onTagMemoryToCircle
 }) => {
-  const aiInfo = canUseAI(entitlement);
+  const aiInfo = canUseAI(entitlement, familyPool);
   const venueMemories = memories.filter(m => m.placeId === place.id);
   const [activeTab, setActiveTab] = useState<'info' | 'parent'>('info');
   const [aiQuestion, setAiQuestion] = useState('');
   const [aiAnswer, setAiAnswer] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [showAiPanel, setShowAiPanel] = useState(false);
+  const [lastAiQuestion, setLastAiQuestion] = useState('');
+  const [aiCached, setAiCached] = useState(false);
   
   // Swipe gesture handling
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -137,13 +141,15 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
 
   const aiLimitReached = !aiInfo.allowed;
   
-  const handleAskAI = async (question: string) => {
+  const handleAskAI = async (question: string, forceRefresh: boolean = false) => {
     if (!question.trim()) return;
     if (isGuest) return;
     if (aiLimitReached) return;
     
     setAiLoading(true);
     setAiAnswer('');
+    setAiCached(false);
+    setLastAiQuestion(question);
     try {
       const answer = await askAboutPlace(place, question, { 
         childrenAges,
@@ -155,11 +161,18 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
           includesPartner: tripContext.includesPartner,
           includesChildren: tripContext.includesChildren,
         } : undefined
+      }, {
+        userId,
+        featureName: 'place_ai_qna',
+        forceRefresh,
+        onUsage: ({ cached }) => {
+          setAiCached(cached);
+          if (!cached && onIncrementAiRequests) {
+            onIncrementAiRequests();
+          }
+        },
       });
       setAiAnswer(answer);
-      if (onIncrementAiRequests) {
-        onIncrementAiRequests();
-      }
     } catch (error: any) {
       setAiAnswer(error.message || 'Failed to get response. Please try again.');
     }
@@ -390,6 +403,9 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                       {aiAnswer && (
                         <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
                           <p className="text-sm text-slate-600 leading-relaxed">{aiAnswer}</p>
+                          {aiCached && (
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Cached response</p>
+                          )}
                           <button 
                             onClick={handleSaveSummary}
                             disabled={summarySaved}
@@ -400,6 +416,13 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                             }`}
                           >
                             {summarySaved ? 'Saved!' : 'Save Summary to Notes'}
+                          </button>
+                          <button
+                            onClick={() => handleAskAI(lastAiQuestion || aiQuestion, true)}
+                            disabled={aiLoading || !(lastAiQuestion || aiQuestion)}
+                            className="w-full py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-60"
+                          >
+                            Refresh AI Response
                           </button>
                         </div>
                       )}

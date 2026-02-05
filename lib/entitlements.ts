@@ -14,7 +14,7 @@ export function getLimits(entitlement: Entitlement | undefined) {
 export function isPaidTier(entitlement: Entitlement | undefined): boolean {
   if (!entitlement) return false;
   const { plan_tier, plan_status } = entitlement;
-  return (plan_tier === 'pro' || plan_tier === 'lifetime') && plan_status === 'active';
+  return (plan_tier === 'pro' || plan_tier === 'family' || plan_tier === 'lifetime') && plan_status === 'active';
 }
 
 interface FeatureCheck {
@@ -51,16 +51,21 @@ export function canCreateCircle(entitlement: Entitlement | undefined, currentCou
   return { allowed: currentCount < limit, remaining, limit };
 }
 
-export function canUseAI(entitlement: Entitlement | undefined): { allowed: boolean; remaining: number; limit: number } {
+export function canUseAI(
+  entitlement: Entitlement | undefined,
+  poolUsage?: { ai_requests_this_month?: number; ai_requests_reset_date?: string } | null
+): { allowed: boolean; remaining: number; limit: number } {
   const limits = getLimits(entitlement);
-  const used = entitlement?.ai_requests_this_month || 0;
   const limit = limits.aiRequestsPerMonth;
+  const used = entitlement?.plan_tier === 'family' && poolUsage
+    ? (poolUsage.ai_requests_this_month || 0)
+    : (entitlement?.ai_requests_this_month || 0);
   const remaining = Math.max(0, limit - used);
-  
+  const unlimited = limit === Infinity;
   return {
-    allowed: remaining > 0,
+    allowed: unlimited ? true : remaining > 0,
     remaining,
-    limit: limit === Infinity ? -1 : limit
+    limit: unlimited ? -1 : limit
   };
 }
 
@@ -92,6 +97,7 @@ export function getRemainingCount(current: number, limit: number): string {
 export function getPlanDisplayName(tier: PlanTier): string {
   switch (tier) {
     case 'pro': return 'Pro';
+    case 'family': return 'Family';
     case 'lifetime': return 'Lifetime';
     default: return 'Free';
   }

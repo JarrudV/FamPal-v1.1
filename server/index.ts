@@ -27,6 +27,28 @@ if (!getApps().length) {
 }
 
 const db = getFirestore();
+const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY || process.env.VITE_GOOGLE_PLACES_API_KEY || '';
+
+if (!GOOGLE_PLACES_API_KEY) {
+  console.warn('[FamPals API] Google Places API key is not configured. Places search will fail.');
+}
+
+const LEGACY_PLACE_TYPE_MAP: Record<string, string | undefined> = {
+  restaurant: 'restaurant',
+  outdoor: 'park',
+  indoor: 'museum',
+  active: 'playground',
+  hike: 'park',
+  wine: 'bar',
+  golf: 'golf_course',
+  all: undefined,
+};
+
+function resolveLegacyType(type?: string | string[]) {
+  if (!type) return undefined;
+  const key = Array.isArray(type) ? type[0] : type;
+  return LEGACY_PLACE_TYPE_MAP[key] || undefined;
+}
 
 interface PlanConfig {
   name: string;
@@ -63,6 +85,109 @@ function verifyPaystackSignature(rawBody: Buffer, signature: string): boolean {
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.get('/api/places/nearby', async (req, res) => {
+  try {
+    const apiKey = GOOGLE_PLACES_API_KEY || (typeof req.query.apiKey === 'string' ? req.query.apiKey : '');
+    if (!apiKey) {
+      return res.status(500).json({ error: 'Places API not configured' });
+    }
+    if (!GOOGLE_PLACES_API_KEY && apiKey) {
+      console.warn('[FamPals API] Using client-provided Places API key for nearby search.');
+    }
+    const lat = Number(req.query.lat);
+    const lng = Number(req.query.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({ error: 'Missing or invalid lat/lng' });
+    }
+    const radiusKm = Number(req.query.radiusKm || 10);
+    const radiusMeters = Math.min(Math.max(radiusKm, 0.1) * 1000, 50000);
+    const pageToken = typeof req.query.pageToken === 'string' ? req.query.pageToken : undefined;
+    const legacyType = resolveLegacyType(req.query.type);
+
+    const params = new URLSearchParams({
+      key: apiKey,
+      location: `${lat},${lng}`,
+      radius: `${radiusMeters}`,
+    });
+    if (legacyType) {
+      params.set('type', legacyType);
+    }
+    if (pageToken) {
+      params.set('pagetoken', pageToken);
+    }
+
+    const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${params.toString()}`;
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.status === 'INVALID_REQUEST' && pageToken) {
+      return res.status(409).json({ error: 'page_token_not_ready' });
+    }
+    if (data.status && data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+      return res.status(400).json({ error: data.error_message || data.status, status: data.status });
+    }
+    return res.json({
+      results: data.results || [],
+      nextPageToken: data.next_page_token || null,
+    });
+  } catch (error) {
+    console.error('Places nearby error:', error);
+    return res.status(500).json({ error: 'Places search failed' });
+  }
+});
+
+app.get('/api/places/text', async (req, res) => {
+  try {
+    const apiKey = GOOGLE_PLACES_API_KEY || (typeof req.query.apiKey === 'string' ? req.query.apiKey : '');
+    if (!apiKey) {
+      return res.status(500).json({ error: 'Places API not configured' });
+    }
+    if (!GOOGLE_PLACES_API_KEY && apiKey) {
+      console.warn('[FamPals API] Using client-provided Places API key for text search.');
+    }
+    const query = typeof req.query.query === 'string' ? req.query.query.trim() : '';
+    if (!query) {
+      return res.status(400).json({ error: 'Missing query' });
+    }
+    const lat = Number(req.query.lat);
+    const lng = Number(req.query.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({ error: 'Missing or invalid lat/lng' });
+    }
+    const radiusKm = Number(req.query.radiusKm || 10);
+    const radiusMeters = Math.min(Math.max(radiusKm, 0.1) * 1000, 50000);
+    const pageToken = typeof req.query.pageToken === 'string' ? req.query.pageToken : undefined;
+
+    const params = new URLSearchParams({
+      key: apiKey,
+      query: `${query} family friendly`,
+      location: `${lat},${lng}`,
+      radius: `${radiusMeters}`,
+    });
+    if (pageToken) {
+      params.set('pagetoken', pageToken);
+    }
+
+    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?${params.toString()}`;
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.status === 'INVALID_REQUEST' && pageToken) {
+      return res.status(409).json({ error: 'page_token_not_ready' });
+    }
+    if (data.status && data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+      return res.status(400).json({ error: data.error_message || data.status, status: data.status });
+    }
+    return res.json({
+      results: data.results || [],
+      nextPageToken: data.next_page_token || null,
+    });
+  } catch (error) {
+    console.error('Places text search error:', error);
+    return res.status(500).json({ error: 'Places search failed' });
+  }
 });
 
 app.get('/api/subscription/status/:userId', async (req, res) => {

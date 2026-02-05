@@ -1,6 +1,7 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import { Place, ActivityType, Child, Preferences } from "./types";
+import { db, collection, addDoc, serverTimestamp } from "./lib/firebase";
 
 export interface SearchContext {
   userPreferences?: Preferences;
@@ -12,6 +13,12 @@ export interface SearchContext {
 
 // Always create a fresh instance to ensure correct API key usage
 const getAI = () => new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || "" });
+
+const AI_MAX_OUTPUT_TOKENS = Number(import.meta.env.VITE_AI_MAX_OUTPUT_TOKENS || 512);
+const AI_SUMMARY_MAX_OUTPUT_TOKENS = Number(import.meta.env.VITE_AI_SUMMARY_MAX_OUTPUT_TOKENS || 256);
+const AI_TIMEOUT_MS = Number(import.meta.env.VITE_AI_TIMEOUT_MS || 15000);
+const AI_CACHE_TTL_MS = Number(import.meta.env.VITE_AI_CACHE_TTL_MS || 7 * 24 * 60 * 60 * 1000);
+const AI_CACHE_STORAGE_KEY = 'fampals_ai_cache';
 
 // Reliable placeholder images by place type using Unsplash
 const placeholderImages: Record<string, string[]> = {
@@ -67,6 +74,92 @@ function getPlaceholderImage(type: string, name: string, index: number): string 
   return typeImages[(hash + index) % typeImages.length];
 }
 
+type AiUsageMeta = {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  model: string;
+  latencyMs: number;
+};
+
+type AiUsageCallback = (info: { cached: boolean; usage?: AiUsageMeta }) => void;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('AI request timed out.'));
+    }, ms);
+    promise
+      .then((result) => {
+        clearTimeout(timer);
+        resolve(result);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
+
+function getAiCache(): Record<string, { value: string; timestamp: number }> {
+  try {
+    const cached = localStorage.getItem(AI_CACHE_STORAGE_KEY);
+    return cached ? JSON.parse(cached) : {};
+  } catch {
+    return {};
+  }
+}
+
+function getCachedAiResponse(key: string): string | null {
+  const cache = getAiCache();
+  const entry = cache[key];
+  if (entry && Date.now() - entry.timestamp < AI_CACHE_TTL_MS) {
+    return entry.value;
+  }
+  return null;
+}
+
+function setCachedAiResponse(key: string, value: string) {
+  try {
+    const cache = getAiCache();
+    cache[key] = { value, timestamp: Date.now() };
+    const keys = Object.keys(cache);
+    if (keys.length > 50) {
+      const oldest = keys.sort((a, b) => cache[a].timestamp - cache[b].timestamp)[0];
+      delete cache[oldest];
+    }
+    localStorage.setItem(AI_CACHE_STORAGE_KEY, JSON.stringify(cache));
+  } catch {
+    // ignore cache failures
+  }
+}
+
+function extractUsage(response: any): { inputTokens: number; outputTokens: number; totalTokens: number } {
+  const usage = response?.usageMetadata || response?.response?.usageMetadata || {};
+  const inputTokens = usage?.promptTokenCount ?? usage?.promptTokens ?? 0;
+  const outputTokens = usage?.candidatesTokenCount ?? usage?.completionTokens ?? 0;
+  const totalTokens = usage?.totalTokenCount ?? usage?.totalTokens ?? inputTokens + outputTokens;
+  return { inputTokens, outputTokens, totalTokens };
+}
+
+async function logAiUsage(userId: string | undefined, featureName: string, usage: AiUsageMeta) {
+  if (!userId || !db) return;
+  try {
+    await addDoc(collection(db, 'users', userId, 'aiUsageLogs'), {
+      timestamp: serverTimestamp(),
+      user_id: userId,
+      feature_name: featureName,
+      input_tokens: usage.inputTokens,
+      output_tokens: usage.outputTokens,
+      total_tokens: usage.totalTokens,
+      model_name: usage.model,
+      latency_ms: usage.latencyMs,
+    });
+  } catch (err) {
+    console.warn('[FamPals] Failed to log AI usage.', err);
+  }
+}
+
 export async function fetchNearbyPlaces(
   lat: number,
   lng: number,
@@ -74,7 +167,8 @@ export async function fetchNearbyPlaces(
   children: Child[] = [],
   radiusKm: number = 10,
   searchQuery?: string,
-  searchContext?: SearchContext
+  searchContext?: SearchContext,
+  options?: { userId?: string; featureName?: string }
 ): Promise<Place[]> {
   if (!import.meta.env.VITE_GEMINI_API_KEY) {
     throw new Error("Gemini API key missing – AI disabled");
@@ -135,36 +229,41 @@ export async function fetchNearbyPlaces(
     const prompt = `Find 5-10 kid and pet-friendly ${type === 'all' ? 'places' : type} within ${radiusKm}km of ${lat}, ${lng}.${ageContext}${searchQueryContext}${prefsContext}
     Return a strict JSON array of REAL places with actual contact info. Each place must have an id, name, description, address, rating (1-5), tags (array of strings), mapsUrl (Google Maps link), type, priceLevel ($, $$, $$$), imageUrl, distance (string), ageAppropriate string, phone (real phone number if known), and website (real website URL if known).`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              name: { type: Type.STRING },
-              description: { type: Type.STRING },
-              address: { type: Type.STRING },
-              rating: { type: Type.NUMBER },
-              tags: { type: Type.ARRAY, items: { type: Type.STRING } },
-              mapsUrl: { type: Type.STRING },
-              type: { type: Type.STRING, enum: ["restaurant", "outdoor", "indoor", "active", "hike", "wine", "golf", "all"] },
-              priceLevel: { type: Type.STRING, enum: ["$", "$$", "$$$", "$$$$"] },
-              imageUrl: { type: Type.STRING },
-              distance: { type: Type.STRING },
-              ageAppropriate: { type: Type.STRING },
-              phone: { type: Type.STRING },
-              website: { type: Type.STRING },
+    const startedAt = performance.now();
+    const response = await withTimeout(
+      ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          maxOutputTokens: AI_MAX_OUTPUT_TOKENS,
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING },
+                name: { type: Type.STRING },
+                description: { type: Type.STRING },
+                address: { type: Type.STRING },
+                rating: { type: Type.NUMBER },
+                tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+                mapsUrl: { type: Type.STRING },
+                type: { type: Type.STRING, enum: ["restaurant", "outdoor", "indoor", "active", "hike", "wine", "golf", "all"] },
+                priceLevel: { type: Type.STRING, enum: ["$", "$$", "$$$", "$$$$"] },
+                imageUrl: { type: Type.STRING },
+                distance: { type: Type.STRING },
+                ageAppropriate: { type: Type.STRING },
+                phone: { type: Type.STRING },
+                website: { type: Type.STRING },
+              },
+              required: ["id", "name", "description", "address", "rating", "tags", "mapsUrl", "type", "priceLevel", "imageUrl", "distance", "ageAppropriate"],
             },
-            required: ["id", "name", "description", "address", "rating", "tags", "mapsUrl", "type", "priceLevel", "imageUrl", "distance", "ageAppropriate"],
           },
         },
-      },
-    });
+      }),
+      AI_TIMEOUT_MS
+    );
 
     const responseText = response.text;
     const data = responseText ? JSON.parse(responseText) : null;
@@ -180,6 +279,14 @@ export async function fetchNearbyPlaces(
       id: place.id || `gen-${Date.now()}-${index}`,
       imageUrl: getPlaceholderImage(place.type, place.name, index)
     }));
+    const latencyMs = Math.round(performance.now() - startedAt);
+    const usage = extractUsage(response);
+    const featureName = options?.featureName || 'ai_places_search';
+    logAiUsage(options?.userId, featureName, {
+      ...usage,
+      model: "gemini-2.5-flash",
+      latencyMs,
+    });
     
     // Cache the results to localStorage (persists across page refreshes)
     setPlacesCache(cacheKey, { places, timestamp: Date.now() });
@@ -255,7 +362,8 @@ export interface TripContext {
 export async function askAboutPlace(
   place: Place,
   question: string,
-  userContext?: { childrenAges?: number[]; tripContext?: TripContext }
+  userContext?: { childrenAges?: number[]; tripContext?: TripContext },
+  options?: { userId?: string; featureName?: string; forceRefresh?: boolean; onUsage?: AiUsageCallback }
 ): Promise<string> {
   if (!import.meta.env.VITE_GEMINI_API_KEY) {
     throw new Error("Gemini API key missing – AI disabled");
@@ -268,13 +376,23 @@ export async function askAboutPlace(
   const cacheKey = `${place.id}:${question.toLowerCase().trim()}:ages:${agesKey}:trip:${tripKey}`;
   
   // Check memory cache first
-  if (aiResponseCache.has(cacheKey)) {
-    return aiResponseCache.get(cacheKey)!;
+  if (!options?.forceRefresh) {
+    if (aiResponseCache.has(cacheKey)) {
+      options?.onUsage?.({ cached: true });
+      return aiResponseCache.get(cacheKey)!;
+    }
+    const cached = getCachedAiResponse(cacheKey);
+    if (cached) {
+      aiResponseCache.set(cacheKey, cached);
+      options?.onUsage?.({ cached: true });
+      return cached;
+    }
   }
   
   const ai = getAI();
   
   try {
+    const startedAt = performance.now();
     const childContext = userContext?.childrenAges?.length 
       ? `The family has children aged ${userContext.childrenAges.join(', ')}.`
       : '';
@@ -307,15 +425,32 @@ Question: ${question}
 
 Provide a helpful, concise answer focused on family-friendliness, kid safety, and practical tips. If there are allergy concerns, address them specifically. Keep response under 150 words.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-    });
+    const response = await withTimeout(
+      ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+          maxOutputTokens: AI_MAX_OUTPUT_TOKENS,
+        },
+      }),
+      AI_TIMEOUT_MS
+    );
 
     const answer = response.text || "Sorry, I couldn't generate an answer. Please try again.";
     
     // Cache the response
     aiResponseCache.set(cacheKey, answer);
+    setCachedAiResponse(cacheKey, answer);
+    const latencyMs = Math.round(performance.now() - startedAt);
+    const usage = extractUsage(response);
+    const featureName = options?.featureName || 'ask_about_place';
+    const usageMeta: AiUsageMeta = {
+      ...usage,
+      model: "gemini-2.5-flash",
+      latencyMs,
+    };
+    logAiUsage(options?.userId, featureName, usageMeta);
+    options?.onUsage?.({ cached: false, usage: usageMeta });
     
     return answer;
   } catch (error: any) {
@@ -324,20 +459,34 @@ Provide a helpful, concise answer focused on family-friendliness, kid safety, an
   }
 }
 
-export async function generateFamilySummary(place: Place, childrenAges?: number[]): Promise<string> {
+export async function generateFamilySummary(
+  place: Place,
+  childrenAges?: number[],
+  options?: { userId?: string; featureName?: string; forceRefresh?: boolean; onUsage?: AiUsageCallback }
+): Promise<string> {
   if (!import.meta.env.VITE_GEMINI_API_KEY) {
     throw new Error("Gemini API key missing – AI disabled");
   }
   
   const cacheKey = `summary:${place.id}:${childrenAges?.join(',') || 'general'}`;
   
-  if (aiResponseCache.has(cacheKey)) {
-    return aiResponseCache.get(cacheKey)!;
+  if (!options?.forceRefresh) {
+    if (aiResponseCache.has(cacheKey)) {
+      options?.onUsage?.({ cached: true });
+      return aiResponseCache.get(cacheKey)!;
+    }
+    const cached = getCachedAiResponse(cacheKey);
+    if (cached) {
+      aiResponseCache.set(cacheKey, cached);
+      options?.onUsage?.({ cached: true });
+      return cached;
+    }
   }
   
   const ai = getAI();
   
   try {
+    const startedAt = performance.now();
     const ageContext = childrenAges?.length 
       ? `for a family with children aged ${childrenAges.join(', ')}`
       : 'for families with young children';
@@ -355,13 +504,30 @@ Include:
 
 Keep it under 80 words, warm and helpful tone.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-    });
+    const response = await withTimeout(
+      ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+          maxOutputTokens: AI_SUMMARY_MAX_OUTPUT_TOKENS,
+        },
+      }),
+      AI_TIMEOUT_MS
+    );
 
     const summary = response.text || place.description;
     aiResponseCache.set(cacheKey, summary);
+    setCachedAiResponse(cacheKey, summary);
+    const latencyMs = Math.round(performance.now() - startedAt);
+    const usage = extractUsage(response);
+    const featureName = options?.featureName || 'family_summary';
+    const usageMeta: AiUsageMeta = {
+      ...usage,
+      model: "gemini-2.5-flash",
+      latencyMs,
+    };
+    logAiUsage(options?.userId, featureName, usageMeta);
+    options?.onUsage?.({ cached: false, usage: usageMeta });
     
     return summary;
   } catch (error: any) {

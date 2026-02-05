@@ -1,6 +1,22 @@
 import { Place, ActivityType } from "./types";
 
 const PLACES_API_KEY = import.meta.env.VITE_GOOGLE_PLACES_API_KEY || "";
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const resolveApiUrl = (path: string) => (API_BASE ? `${API_BASE}${path}` : path);
+const CLIENT_PLACES_KEY = !API_BASE && PLACES_API_KEY ? PLACES_API_KEY : '';
+const DENY_TYPES_ENV = import.meta.env.VITE_PLACES_DENY_TYPES || '';
+const DENY_BRANDS_ENV = import.meta.env.VITE_PLACES_DENY_BRANDS || '';
+const DENY_TYPES_STORAGE_KEY = 'fampals_places_deny_types';
+const DENY_BRANDS_STORAGE_KEY = 'fampals_places_deny_brands';
+const DEFAULT_DENY_TYPES = [
+  'gas_station',
+  'convenience_store',
+  'car_wash',
+  'car_dealer',
+  'car_rental',
+  'car_repair',
+  'truck_stop'
+];
 
 if (!PLACES_API_KEY) {
   console.error('[FamPals] CRITICAL: Google Places API key is missing! Places will not load.');
@@ -23,6 +39,11 @@ interface PlacesCacheData {
 
 interface DetailsCacheData {
   [key: string]: CacheEntry<PlaceDetails>;
+}
+
+export interface PlacesSearchResponse {
+  places: Place[];
+  nextPageToken: string | null;
 }
 
 export interface PlaceDetails {
@@ -53,11 +74,24 @@ export interface PlaceReview {
 }
 
 const categoryToPlaceTypes: Record<ActivityType, string[]> = {
-  all: ['tourist_attraction', 'park', 'restaurant', 'cafe', 'amusement_park', 'zoo', 'aquarium', 'museum'],
-  restaurant: ['restaurant', 'cafe', 'bakery', 'ice_cream_shop'],
+  all: [
+    'tourist_attraction',
+    'park',
+    'playground',
+    'restaurant',
+    'cafe',
+    'amusement_park',
+    'zoo',
+    'aquarium',
+    'museum',
+    'bowling_alley',
+    'movie_theater',
+    'library'
+  ],
+  restaurant: ['restaurant', 'cafe', 'bakery', 'ice_cream_shop', 'meal_takeaway', 'meal_delivery'],
   outdoor: ['park', 'national_park', 'campground', 'state_park'],
   indoor: ['museum', 'aquarium', 'bowling_alley', 'movie_theater', 'library'],
-  active: ['gym', 'sports_complex', 'swimming_pool', 'playground'],
+  active: ['gym', 'sports_complex', 'swimming_pool', 'playground', 'amusement_park'],
   hike: ['national_park', 'state_park', 'park'],
   wine: ['bar', 'restaurant'],
   golf: ['golf_course'],
@@ -176,6 +210,184 @@ function priceLevelToString(level?: number): "$" | "$$" | "$$$" | "$$$$" {
   }
 }
 
+function parseCsvList(value?: string | null): string[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function normalizeType(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, '_');
+}
+
+function getRuntimeList(storageKey: string): string[] {
+  try {
+    const value = localStorage.getItem(storageKey);
+    return parseCsvList(value);
+  } catch {
+    return [];
+  }
+}
+
+function getDenyTypes(): Set<string> {
+  const runtime = getRuntimeList(DENY_TYPES_STORAGE_KEY).map(normalizeType);
+  const envTypes = parseCsvList(DENY_TYPES_ENV).map(normalizeType);
+  const combined = [...DEFAULT_DENY_TYPES, ...envTypes, ...runtime].map(normalizeType);
+  return new Set(combined.filter(Boolean));
+}
+
+function getDenyBrands(): string[] {
+  const runtime = getRuntimeList(DENY_BRANDS_STORAGE_KEY);
+  const envBrands = parseCsvList(DENY_BRANDS_ENV);
+  return [...envBrands, ...runtime].map((entry) => entry.toLowerCase()).filter(Boolean);
+}
+
+function shouldExcludePlace(types: string[] | undefined, name: string | undefined): boolean {
+  const denyTypes = getDenyTypes();
+  const denyBrands = getDenyBrands();
+  const normalizedTypes = (types || []).map(normalizeType);
+  if (normalizedTypes.some((type) => denyTypes.has(type))) {
+    return true;
+  }
+  if (denyBrands.length > 0 && name) {
+    const lowerName = name.toLowerCase();
+    return denyBrands.some((brand) => lowerName.includes(brand));
+  }
+  return false;
+}
+
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function mapLegacyPlaceToPlace(
+  raw: any,
+  index: number,
+  lat: number,
+  lng: number,
+  fallbackType: ActivityType
+): Place {
+  const name = raw?.name || 'Unknown Place';
+  const placeLat = raw?.geometry?.location?.lat ?? lat;
+  const placeLng = raw?.geometry?.location?.lng ?? lng;
+  const rawTypes = Array.isArray(raw?.types) ? raw.types : [];
+  const mappedType = mapGoogleTypeToCategory(rawTypes);
+  const placeType = mappedType === 'all' && fallbackType !== 'all' ? fallbackType : mappedType;
+  const photoRef = raw?.photos?.[0]?.photo_reference;
+  const imageUrl = photoRef && PLACES_API_KEY
+    ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=600&photo_reference=${photoRef}&key=${PLACES_API_KEY}`
+    : getPlaceholderImage(placeType, name, index);
+  const placeId = raw?.place_id || raw?.id || `gp-${Date.now()}-${index}`;
+  return {
+    id: placeId,
+    name,
+    description: 'Family-friendly venue',
+    address: raw?.vicinity || raw?.formatted_address || '',
+    rating: raw?.rating || 4.0,
+    tags: rawTypes.slice(0, 3).map((t: string) => t.replace(/_/g, ' ')),
+    mapsUrl: `https://www.google.com/maps/place/?q=place_id:${placeId}`,
+    type: placeType,
+    priceLevel: priceLevelToString(raw?.price_level),
+    imageUrl,
+    distance: calculateDistance(lat, lng, placeLat, placeLng),
+    ageAppropriate: 'All ages',
+  };
+}
+
+async function fetchLegacyPlaces(
+  endpoint: string,
+  params: Record<string, string | number | undefined>,
+  fallbackType: ActivityType,
+  lat: number,
+  lng: number,
+  retry: boolean
+): Promise<PlacesSearchResponse> {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    query.set(key, String(value));
+  });
+  const url = `${resolveApiUrl(endpoint)}?${query.toString()}`;
+  try {
+    const response = await fetch(url);
+    if (response.status === 409 && retry && params.pageToken) {
+      await sleep(1500);
+      return fetchLegacyPlaces(endpoint, params, fallbackType, lat, lng, false);
+    }
+    if (!response.ok) {
+      const errText = await response.text();
+      console.warn('[FamPals] Places backend error:', errText);
+      return { places: [], nextPageToken: null };
+    }
+    const data = await response.json();
+    const results = Array.isArray(data.results) ? data.results : [];
+    const filtered = results.filter((raw: any) => {
+      const rawTypes = Array.isArray(raw?.types) ? raw.types : [];
+      const rawName = raw?.name || raw?.formatted_address || '';
+      return !shouldExcludePlace(rawTypes, rawName);
+    });
+    const places = filtered.map((raw: any, index: number) =>
+      mapLegacyPlaceToPlace(raw, index, lat, lng, fallbackType)
+    );
+    return { places, nextPageToken: data.nextPageToken || null };
+  } catch (error) {
+    console.warn('[FamPals] Places backend fetch failed:', error);
+    return { places: [], nextPageToken: null };
+  }
+}
+
+export async function searchNearbyPlacesPaged(
+  lat: number,
+  lng: number,
+  type: ActivityType = 'all',
+  radiusKm: number = 10,
+  pageToken?: string
+): Promise<PlacesSearchResponse> {
+  if (!lat || !lng) return { places: [], nextPageToken: null };
+  return fetchLegacyPlaces(
+    '/api/places/nearby',
+    {
+      apiKey: CLIENT_PLACES_KEY || undefined,
+      lat,
+      lng,
+      radiusKm,
+      type,
+      pageToken,
+    },
+    type,
+    lat,
+    lng,
+    true
+  );
+}
+
+export async function textSearchPlacesPaged(
+  query: string,
+  lat: number,
+  lng: number,
+  radiusKm: number = 10,
+  pageToken?: string
+): Promise<PlacesSearchResponse> {
+  if (!query.trim()) return { places: [], nextPageToken: null };
+  return fetchLegacyPlaces(
+    '/api/places/text',
+    {
+      apiKey: CLIENT_PLACES_KEY || undefined,
+      query: query.trim(),
+      lat,
+      lng,
+      radiusKm,
+      pageToken,
+    },
+    'all',
+    lat,
+    lng,
+    true
+  );
+}
+
 export async function searchNearbyPlaces(
   lat: number,
   lng: number,
@@ -241,7 +453,13 @@ export async function searchNearbyPlaces(
       return [];
     }
 
-    const places: Place[] = data.places.map((p: any, index: number) => {
+    const rawPlaces: any[] = data.places.filter((p: any) => {
+      const rawTypes = Array.isArray(p.types) ? p.types : [];
+      const rawName = p.displayName?.text || p.name || '';
+      return !shouldExcludePlace(rawTypes, rawName);
+    });
+
+    const places: Place[] = rawPlaces.map((p: any, index: number) => {
       const placeType = mapGoogleTypeToCategory(p.types || []);
       const placeLat = p.location?.latitude || lat;
       const placeLng = p.location?.longitude || lng;
@@ -330,7 +548,13 @@ export async function textSearchPlaces(
     
     if (!data.places) return [];
 
-    const places: Place[] = data.places.map((p: any, index: number) => {
+    const rawPlaces: any[] = data.places.filter((p: any) => {
+      const rawTypes = Array.isArray(p.types) ? p.types : [];
+      const rawName = p.displayName?.text || p.name || '';
+      return !shouldExcludePlace(rawTypes, rawName);
+    });
+
+    const places: Place[] = rawPlaces.map((p: any, index: number) => {
       const placeType = mapGoogleTypeToCategory(p.types || []);
       const placeLat = p.location?.latitude || lat;
       const placeLng = p.location?.longitude || lng;

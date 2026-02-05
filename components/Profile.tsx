@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppState, Child, PartnerLink, Preferences, FOOD_PREFERENCES, ALLERGY_OPTIONS, ACCESSIBILITY_OPTIONS, ACTIVITY_PREFERENCES, PLAN_LIMITS } from '../types';
 import PlanBilling from './PlanBilling';
 import { getLimits, getPlanDisplayName, canUseAI, isPaidTier } from '../lib/entitlements';
@@ -37,11 +37,22 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
   const [adminTapCount, setAdminTapCount] = useState(0);
   const [uploadingProfilePic, setUploadingProfilePic] = useState(false);
   const profilePicInputRef = React.useRef<HTMLInputElement>(null);
+  const [profileDisplayName, setProfileDisplayName] = useState(state.profileInfo?.displayName || state.user?.displayName || '');
+  const [profileAgeInput, setProfileAgeInput] = useState(
+    state.profileInfo?.age ? String(state.profileInfo.age) : ''
+  );
+
+  useEffect(() => {
+    setProfileDisplayName(state.profileInfo?.displayName || state.user?.displayName || '');
+    setProfileAgeInput(state.profileInfo?.age ? String(state.profileInfo.age) : '');
+  }, [state.profileInfo, state.user?.displayName]);
 
   const userPrefs = state.preferences || { foodPreferences: [], allergies: [], accessibility: [], activityPreferences: [] };
   const limits = getLimits(state.entitlement);
   const isPaid = isPaidTier(state.entitlement);
-  const aiInfo = canUseAI(state.entitlement);
+  const partnerLinkRequiresPro = import.meta.env.VITE_PARTNER_LINK_REQUIRES_PRO === 'true';
+  const canLinkPartner = !partnerLinkRequiresPro || isPaidTier(state.entitlement);
+  const aiInfo = canUseAI(state.entitlement, state.familyPool);
   const planTier = state.entitlement?.plan_tier || 'free';
 
   const FREE_PREF_LIMIT = limits.preferencesPerCategory;
@@ -92,6 +103,10 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
   };
 
   const handleGenerateCode = () => {
+    if (!canLinkPartner) {
+      setShowPlanBilling(true);
+      return;
+    }
     const code = generateInviteCode();
     const partnerLink: PartnerLink = {
       inviteCode: code,
@@ -162,6 +177,11 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
   };
 
   const handleJoinWithCode = async () => {
+    if (!canLinkPartner) {
+      alert('Partner linking is available on Pro or Family plans.');
+      setShowPlanBilling(true);
+      return;
+    }
     if (!partnerCode || partnerCode.length !== 6) {
       alert('Please enter a valid 6-character code.');
       return;
@@ -304,7 +324,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
     }
   };
 
-  const userName = state.user?.displayName || 'Guest User';
+  const userName = state.profileInfo?.displayName || state.user?.displayName || 'Guest User';
   const userPhoto = state.user?.photoURL || 'https://picsum.photos/seed/guest/200';
   
   const handleProfilePicUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -338,6 +358,21 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
     }
     setUploadingProfilePic(false);
     if (profilePicInputRef.current) profilePicInputRef.current.value = '';
+  };
+
+  const handleSaveProfileInfo = () => {
+    if (isGuest) {
+      setView('login');
+      return;
+    }
+    const trimmedName = profileDisplayName.trim();
+    const parsedAge = profileAgeInput.trim() ? Number(profileAgeInput) : NaN;
+    const payload = {
+      ...(state.profileInfo || {}),
+      displayName: trimmedName || undefined,
+      age: Number.isFinite(parsedAge) ? parsedAge : undefined,
+    };
+    onUpdateState('profileInfo', payload);
   };
 
   return (
@@ -391,6 +426,37 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
             <p className="text-sky-500 font-extrabold text-xs uppercase tracking-widest mt-1">Adventure Parent</p>
           </div>
         </div>
+
+        {!isGuest && (
+          <div className="bg-white rounded-[32px] p-6 border border-slate-100 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Profile Basics</h3>
+              <button
+                onClick={handleSaveProfileInfo}
+                className="text-xs font-bold text-sky-600"
+              >
+                Save
+              </button>
+            </div>
+            <div className="space-y-3">
+              <input
+                value={profileDisplayName}
+                onChange={(e) => setProfileDisplayName(e.target.value)}
+                placeholder="Your name"
+                className="w-full h-12 rounded-2xl bg-slate-50 border border-slate-100 px-4 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-sky-200"
+              />
+              <input
+                value={profileAgeInput}
+                onChange={(e) => setProfileAgeInput(e.target.value)}
+                placeholder="Age"
+                type="number"
+                min="0"
+                className="w-full h-12 rounded-2xl bg-slate-50 border border-slate-100 px-4 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-sky-200"
+              />
+            </div>
+            <p className="text-[11px] text-slate-400">These details help personalize your recommendations.</p>
+          </div>
+        )}
 
         <div className="bg-gradient-to-br from-sky-500 to-blue-600 rounded-[40px] p-8 text-white shadow-xl shadow-sky-200 space-y-4">
           <h3 className="text-lg font-black leading-tight">Spread the Adventure</h3>
@@ -747,7 +813,20 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
                 <div className="space-y-4">
                   <p className="text-sm text-slate-500 text-center">Link with your partner to share saved places and plan adventures together.</p>
                   
-                  {showCodeInput ? (
+                  {!canLinkPartner ? (
+                    <div className="space-y-3">
+                      <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-center">
+                        <p className="text-sm font-bold text-amber-700">Partner linking is a Pro or Family feature.</p>
+                        <p className="text-xs text-amber-600 mt-1">Upgrade to start sharing places and memories.</p>
+                      </div>
+                      <button
+                        onClick={() => setShowPlanBilling(true)}
+                        className="w-full h-12 bg-amber-500 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest active-press"
+                      >
+                        View Plans
+                      </button>
+                    </div>
+                  ) : showCodeInput ? (
                     <div className="space-y-3">
                       <input 
                         placeholder="Enter 6-digit code" 
@@ -802,12 +881,13 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
               >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center text-xl">
-                    {planTier === 'lifetime' ? '👑' : planTier === 'pro' ? '⭐' : '🌱'}
+                    {planTier === 'lifetime' ? '👑' : planTier === 'family' ? 'F' : planTier === 'pro' ? '⭐' : '🌱'}
                   </div>
                   <div className="text-left">
                     <p className="font-bold text-slate-800">{getPlanDisplayName(planTier)} Plan</p>
                     <p className="text-xs text-slate-400">
                       {planTier === 'lifetime' ? 'Lifetime access' : 
+                       planTier === 'family' ? 'Family pool active' :
                        planTier === 'pro' ? 'Annual subscription' : 
                        'Upgrade for unlimited features'}
                     </p>

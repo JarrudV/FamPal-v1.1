@@ -212,7 +212,7 @@ export interface User {
   photoURL: string | null;
 }
 
-export type PlanTier = 'free' | 'pro' | 'lifetime';
+export type PlanTier = 'free' | 'pro' | 'family' | 'lifetime';
 export type PlanStatus = 'active' | 'cancelled' | 'expired';
 export type EntitlementSource = 'paystack' | 'apple' | 'google' | 'admin' | null;
 
@@ -228,6 +228,11 @@ export interface Entitlement {
   last_payment_reference?: string;
   ai_requests_this_month: number;
   ai_requests_reset_date: string;
+}
+
+export interface ProfileInfo {
+  displayName?: string | null;
+  age?: number | null;
 }
 
 export const PLAN_LIMITS = {
@@ -251,6 +256,16 @@ export const PLAN_LIMITS = {
     partnerFavorites: Infinity,
     partnerMemories: Infinity,
   },
+  family: {
+    savedPlaces: Infinity,
+    notebookEntries: Infinity,
+    memories: Infinity,
+    circles: Infinity,
+    aiRequestsPerMonth: 200,
+    preferencesPerCategory: Infinity,
+    partnerFavorites: Infinity,
+    partnerMemories: Infinity,
+  },
   lifetime: {
     savedPlaces: Infinity,
     notebookEntries: Infinity,
@@ -265,6 +280,7 @@ export const PLAN_LIMITS = {
 
 export const PLAN_PRICES = {
   pro: { amount: 7500, currency: 'ZAR', label: 'R75/year' },
+  family: { amount: 12900, currency: 'ZAR', label: 'R129/year (family)' },
   lifetime: { amount: 39900, currency: 'ZAR', label: 'R399 once-off' }
 } as const;
 
@@ -298,10 +314,17 @@ export interface UserPreferences {
 export interface AppState {
   isAuthenticated: boolean;
   user: User | null;
+  profileInfo?: ProfileInfo;
   favorites: string[]; 
   favoriteDetails: Record<string, FavoriteData>;
   savedPlaces: SavedPlace[];
   savedPlacesMigratedAt?: Timestamp;
+  onboardingCompletedAt?: Timestamp;
+  profileCompletionRequired?: boolean;
+  familyPool?: {
+    ai_requests_this_month?: number;
+    ai_requests_reset_date?: string;
+  };
   visited: string[];
   visitedPlaces: VisitedPlace[];
   reviews: UserReview[];

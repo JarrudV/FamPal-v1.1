@@ -18,7 +18,10 @@ export default function PlanBilling({ state, onClose, onUpdateState }: PlanBilli
   const entitlement = state.entitlement;
   const currentTier = entitlement?.plan_tier || 'free';
   const limits = getLimits(entitlement);
-  const aiInfo = canUseAI(entitlement);
+  const aiInfo = canUseAI(entitlement, state.familyPool);
+  const aiUsed = entitlement?.plan_tier === 'family'
+    ? (state.familyPool?.ai_requests_this_month || 0)
+    : (entitlement?.ai_requests_this_month || 0);
 
   const handleUpgrade = async (plan: 'pro' | 'lifetime') => {
     if (!state.user?.email || !state.user?.uid) {
@@ -82,8 +85,9 @@ export default function PlanBilling({ state, onClose, onUpdateState }: PlanBilli
   };
 
   const isPro = currentTier === 'pro' && entitlement?.plan_status === 'active';
+  const isFamily = currentTier === 'family' && entitlement?.plan_status === 'active';
   const isLifetime = currentTier === 'lifetime';
-  const isPaid = isPro || isLifetime;
+  const isPaid = isPro || isFamily || isLifetime;
   const canCancel = !!entitlement?.paystack_subscription_code && !!entitlement?.paystack_email_token;
 
   return (
@@ -100,12 +104,13 @@ export default function PlanBilling({ state, onClose, onUpdateState }: PlanBilli
           <div className="bg-gradient-to-br from-sky-50 to-indigo-50 rounded-2xl p-5 border border-sky-100">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-2xl shadow-sm">
-                {isLifetime ? '👑' : isPro ? '⭐' : '🌱'}
+                {isLifetime ? '👑' : isFamily ? '👨?👩?👧?👦' : isPro ? '⭐' : '🌱'}
               </div>
               <div>
                 <h3 className="font-bold text-slate-800">{getPlanDisplayName(currentTier)} Plan</h3>
                 <p className="text-xs text-slate-500">
                   {isLifetime ? 'Lifetime access - never expires' :
+                   isFamily ? 'Family pool active' :
                    isPro ? `Renews ${entitlement?.entitlement_end_date ? new Date(entitlement.entitlement_end_date).toLocaleDateString() : 'annually'}` :
                    'Free tier with usage limits'}
                 </p>
@@ -117,7 +122,7 @@ export default function PlanBilling({ state, onClose, onUpdateState }: PlanBilli
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">AI questions this month</span>
                   <span className="font-medium text-slate-800">
-                    {entitlement?.ai_requests_this_month || 0} / {aiInfo.limit === -1 ? '∞' : aiInfo.limit}
+                    {aiUsed} / {aiInfo.limit === -1 ? '∞' : aiInfo.limit}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
@@ -153,6 +158,29 @@ export default function PlanBilling({ state, onClose, onUpdateState }: PlanBilli
                         className="mt-4 w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-bold text-sm shadow-lg disabled:opacity-50"
                       >
                         {loading === 'pro' ? 'Processing...' : 'Upgrade to Pro'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-emerald-200 rounded-2xl p-5">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center text-[10px] font-bold text-emerald-700">
+                      FAMILY
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-bold text-slate-800">Family</h4>
+                      <p className="text-2xl font-bold text-emerald-600 mt-1">{PLAN_PRICES.family.label}</p>
+                      <ul className="mt-3 space-y-2 text-sm text-slate-600">
+                        <li>Shared AI pool for linked accounts</li>
+                        <li>Unlimited saved places and memories</li>
+                        <li>Everything in Pro</li>
+                      </ul>
+                      <button
+                        disabled
+                        className="mt-4 w-full py-3 bg-emerald-100 text-emerald-700 rounded-xl font-bold text-sm cursor-not-allowed"
+                      >
+                        Coming soon
                       </button>
                     </div>
                   </div>
@@ -241,3 +269,4 @@ export default function PlanBilling({ state, onClose, onUpdateState }: PlanBilli
     </div>
   );
 }
+

@@ -18,7 +18,8 @@ import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Profile from './components/Profile';
 import HomeFab from './components/HomeFab';
-import { AppState, User, getDefaultEntitlement, UserPreferences, SavedPlace } from './types';
+import Onboarding from './components/Onboarding';
+import { AppState, User, getDefaultEntitlement, UserPreferences, SavedPlace, Preferences, Child, PartnerLink, ProfileInfo } from './types';
 import { getGuestPreferences, syncGuestPreferencesToUser } from './lib/profileSync';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
@@ -39,9 +40,13 @@ const serializeUser = (firebaseUser: FirebaseUser): User => ({
 const getInitialState = (user: User | null, guestPrefs?: UserPreferences): AppState => ({
   isAuthenticated: !!user,
   user,
+  profileInfo: undefined,
   favorites: [],
   favoriteDetails: {},
   savedPlaces: [],
+  onboardingCompletedAt: undefined,
+  profileCompletionRequired: false,
+  familyPool: undefined,
   visited: [],
   visitedPlaces: [],
   reviews: [],
@@ -63,6 +68,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState('login');
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [pendingJoinCircleId, setPendingJoinCircleId] = useState<string | null>(null);
   const [savedPlacesLoaded, setSavedPlacesLoaded] = useState(false);
   const legacyFavoritesRef = useRef<string[]>([]);
@@ -75,6 +81,15 @@ const App: React.FC = () => {
   const lastJoinCodeRef = useRef<string | null>(null);
   const navigate = useNavigate();
   const PENDING_JOIN_KEY = 'fampals_pending_join_code';
+
+  type OnboardingResult = {
+    profileInfo?: ProfileInfo | null;
+    preferences?: Preferences | null;
+    children?: Child[] | null;
+    userPreferences?: UserPreferences | null;
+    partnerLink?: PartnerLink | null;
+    skipped: boolean;
+  };
 
   const handleSignIn = useCallback(async () => {
     if (!isFirebaseConfigured || !auth || !googleProvider) {
@@ -132,6 +147,7 @@ const App: React.FC = () => {
       aiResetAttemptedRef.current = null;
       lastAuthUidRef.current = null;
       setPendingJoinCircleId(null);
+      setNeedsOnboarding(false);
       setState(getInitialState(null));
       setView('login');
       return;
@@ -139,6 +155,7 @@ const App: React.FC = () => {
     try {
       await firebaseSignOut(auth);
       setState(getInitialState(null));
+      setNeedsOnboarding(false);
       setView('login');
     } catch (error: any) {
       console.error('Sign out error', error);
@@ -155,7 +172,7 @@ const App: React.FC = () => {
       const uid = auth?.currentUser?.uid || prev.user?.uid;
       if (!isGuest && uid) {
         // Centralised save via userData service
-        if (key !== 'savedPlaces' && key !== 'partnerSharedPlaces') {
+        if (key !== 'savedPlaces' && key !== 'partnerSharedPlaces' && key !== 'familyPool') {
           saveUserField(uid, key as string, value).catch(err => {
             console.error('Failed to save to Firestore:', err);
           });
@@ -206,6 +223,8 @@ const App: React.FC = () => {
           console.timeEnd('auth:resolved');
           const initialState = getInitialState(serializedUser);
           if (dbState) {
+            const onboardingCompleted = !!dbState.onboardingCompletedAt || dbState.onboardingCompleted === true;
+            setNeedsOnboarding(!onboardingCompleted);
             legacyFavoritesRef.current = Array.isArray(dbState.favorites) ? dbState.favorites : [];
             savedPlacesMigratedAtRef.current = dbState.savedPlacesMigratedAt || null;
             const loadedEntitlement = dbState.entitlement || getDefaultEntitlement();
@@ -230,6 +249,7 @@ const App: React.FC = () => {
               const favoritesFromSaved = savedPlaces.map(place => place.placeId);
               const legacyFavorites = Array.isArray(dbState.favorites) ? dbState.favorites : [];
               const partnerSharedPlaces = prev.partnerSharedPlaces || [];
+              const familyPool = prev.familyPool;
               return {
                 ...initialState,
                 user: serializedUser,
@@ -238,6 +258,7 @@ const App: React.FC = () => {
                 favoriteDetails: dbState.favoriteDetails || {},
                 savedPlaces,
                 partnerSharedPlaces,
+                familyPool,
                 visited: dbState.visited || [],
                 visitedPlaces: dbState.visitedPlaces || [],
                 reviews: dbState.reviews || [],
@@ -250,17 +271,27 @@ const App: React.FC = () => {
                 partnerLink: dbState.partnerLink || undefined,
                 spouseName: dbState.spouseName || '',
                 linkedEmail: dbState.linkedEmail || '',
+                onboardingCompletedAt: dbState.onboardingCompletedAt,
+                profileCompletionRequired: dbState.profileCompletionRequired || false,
               };
             });
+            if (!onboardingCompleted) {
+              setView('onboarding');
+            } else if (view === 'onboarding') {
+              setView('dashboard');
+            }
           } else {
             legacyFavoritesRef.current = [];
             savedPlacesMigratedAtRef.current = null;
+            setNeedsOnboarding(true);
             setState(prev => ({
               ...initialState,
               savedPlaces: prev.savedPlaces || [],
               favorites: prev.favorites || [],
               partnerSharedPlaces: prev.partnerSharedPlaces || [],
+              familyPool: prev.familyPool,
             }));
+            setView('onboarding');
           }
         });
       } else {
@@ -270,6 +301,7 @@ const App: React.FC = () => {
         migrationAttemptedRef.current = false;
         aiResetAttemptedRef.current = null;
         lastAuthUidRef.current = null;
+        setNeedsOnboarding(false);
         setPendingJoinCircleId(null);
         setState(getInitialState(null));
         setView('login');
@@ -290,6 +322,37 @@ const App: React.FC = () => {
       unsubscribe();
     };
   }, [isGuest, state.user?.uid]);
+
+  const handleOnboardingComplete = useCallback(async (result: OnboardingResult) => {
+    const uid = state.user?.uid || auth?.currentUser?.uid;
+    if (!uid) return;
+    const completedAt = Timestamp.now();
+    try {
+      await saveUserField(uid, 'onboardingCompletedAt', completedAt);
+      await saveUserField(uid, 'profileCompletionRequired', result.skipped);
+      if (result.userPreferences) {
+        handleUpdateState('userPreferences', result.userPreferences);
+      }
+      if (result.profileInfo) {
+        const mergedProfile = { ...(state.profileInfo || {}), ...result.profileInfo };
+        handleUpdateState('profileInfo', mergedProfile);
+      }
+      if (result.preferences) {
+        handleUpdateState('preferences', result.preferences);
+      }
+      if (result.children) {
+        handleUpdateState('children', result.children);
+      }
+      if (result.partnerLink && !state.partnerLink) {
+        handleUpdateState('partnerLink', result.partnerLink);
+      }
+    } catch (err) {
+      console.warn('Failed to persist onboarding state.', err);
+    } finally {
+      setNeedsOnboarding(false);
+      setView('dashboard');
+    }
+  }, [state.user?.uid, state.profileInfo, state.partnerLink, handleUpdateState]);
 
   useEffect(() => {
     if (isGuest) return;
@@ -470,6 +533,20 @@ const App: React.FC = () => {
       return <div className="flex items-center justify-center h-screen">Loading...</div>;
     }
 
+    if (!isGuest && state.user && needsOnboarding && view !== 'login') {
+      return (
+        <Onboarding
+          userName={state.user?.displayName || state.user?.email}
+          initialProfileInfo={state.profileInfo}
+          initialUserPreferences={state.userPreferences}
+          initialPreferences={state.preferences}
+          initialChildren={state.children}
+          initialPartnerLink={state.partnerLink}
+          onComplete={handleOnboardingComplete}
+        />
+      );
+    }
+
     switch (view) {
       case 'dashboard':
         return <Dashboard
@@ -481,6 +558,18 @@ const App: React.FC = () => {
           initialCircleId={pendingJoinCircleId}
           onClearInitialCircle={() => setPendingJoinCircleId(null)}
         />;
+      case 'onboarding':
+        return (
+          <Onboarding
+            userName={state.user?.displayName || state.user?.email}
+            initialProfileInfo={state.profileInfo}
+            initialUserPreferences={state.userPreferences}
+            initialPreferences={state.preferences}
+            initialChildren={state.children}
+            initialPartnerLink={state.partnerLink}
+            onComplete={handleOnboardingComplete}
+          />
+        );
       case 'profile':
         return <Profile state={state} isGuest={isGuest} onSignOut={handleSignOut} setView={setView} onUpdateState={handleUpdateState} />;
       default:

@@ -8,12 +8,12 @@ import GroupsList from './GroupsList';
 import GroupDetail from './GroupDetail';
 import PlanBilling from './PlanBilling';
 import { UpgradePrompt, LimitIndicator } from './UpgradePrompt';
-import { searchNearbyPlaces, textSearchPlaces, getPlaceDetails } from '../placesService';
-import { getLimits, canSavePlace, isPaidTier } from '../lib/entitlements';
+import { searchNearbyPlacesPaged, textSearchPlacesPaged, getPlaceDetails } from '../placesService';
+import { getLimits, canSavePlace, isPaidTier, getNextResetDate } from '../lib/entitlements';
 import { updateLocation, updateRadius, updateCategory, updateActiveCircle } from '../lib/profileSync';
 import { ShareMemoryModal } from './ShareMemory';
 import HomeFab from './HomeFab';
-import { db, doc, getDoc, collection, onSnapshot, setDoc, auth, serverTimestamp } from '../lib/firebase';
+import { db, doc, getDoc, collection, onSnapshot, setDoc, auth, serverTimestamp, increment } from '../lib/firebase';
 import { upsertSavedPlace, deleteSavedPlace } from '../lib/userData';
 import MemoryCreate from './MemoryCreate';
 import {
@@ -111,6 +111,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   const [selectedFilter, setSelectedFilter] = useState<ActivityType>(userPrefs.lastCategory || 'all');
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [placesNextPageToken, setPlacesNextPageToken] = useState<string | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   // Location state - hydrate from saved preferences
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(
@@ -239,6 +241,11 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   const isPaid = isPaidTier(state.entitlement);
   const enrichInFlightRef = useRef<Set<string>>(new Set());
   const fallbackImage = 'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=400&h=300&fit=crop';
+  const placesSearchKeyRef = useRef<string>('');
+  const familyPoolResetRef = useRef<string | null>(null);
+  const partnerLinkRequiresPro = import.meta.env.VITE_PARTNER_LINK_REQUIRES_PRO === 'true';
+  const canLinkPartner = !partnerLinkRequiresPro || isPaid;
+  const isPartnerPending = state.partnerLink?.status === 'pending';
   
   useEffect(() => {
     return () => {
@@ -413,10 +420,12 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     if (!uid || !link?.partnerUserId || link.status !== 'accepted') {
       onUpdateState('partnerSharedPlaces', []);
       setPartnerSharedMemories([]);
+      onUpdateState('familyPool', undefined);
       return;
     }
     let unsubPlaces: (() => void) | null = null;
     let unsubMemories: (() => void) | null = null;
+    let unsubThread: (() => void) | null = null;
     let cancelled = false;
     const threadId = getPartnerThreadId(uid, link.partnerUserId);
     (async () => {
@@ -425,6 +434,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         if (cancelled) return;
         const placesRef = collection(db, 'partnerThreads', threadId, 'sharedPlaces');
         const memoriesRef = collection(db, 'partnerThreads', threadId, 'sharedMemories');
+        const threadRef = doc(db, 'partnerThreads', threadId);
 
         unsubPlaces = onSnapshot(placesRef, (snap) => {
           const nextPlaces = snap.docs.map(docSnap => docSnap.data() as GroupPlace);
@@ -444,6 +454,54 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         }, (err: any) => {
           console.warn('Partner shared memories listener error.', err);
         });
+
+        unsubThread = onSnapshot(threadRef, (snap) => {
+          const data = snap.data() || {};
+          const pool = data.entitlementPool;
+          const isFamilyPlan = state.entitlement?.plan_tier === 'family';
+          if (isFamilyPlan) {
+            const poolResetDate = pool?.ai_requests_reset_date;
+            const nextResetDate = getNextResetDate();
+            const resetKey = `${threadId}:${poolResetDate || 'none'}`;
+            const shouldReset = poolResetDate ? new Date() >= new Date(poolResetDate) : true;
+            if (shouldReset && familyPoolResetRef.current !== resetKey) {
+              familyPoolResetRef.current = resetKey;
+              setDoc(threadRef, {
+                entitlementPool: {
+                  plan_tier: 'family',
+                  ai_requests_this_month: 0,
+                  ai_requests_reset_date: nextResetDate,
+                },
+                updatedAt: serverTimestamp(),
+              }, { merge: true }).catch(err => {
+                console.warn('Failed to reset family AI pool.', err);
+              });
+            } else if (!pool?.ai_requests_reset_date && familyPoolResetRef.current !== resetKey) {
+              familyPoolResetRef.current = resetKey;
+              setDoc(threadRef, {
+                entitlementPool: {
+                  plan_tier: 'family',
+                  ai_requests_this_month: pool?.ai_requests_this_month || 0,
+                  ai_requests_reset_date: nextResetDate,
+                },
+                updatedAt: serverTimestamp(),
+              }, { merge: true }).catch(err => {
+                console.warn('Failed to initialize family AI pool.', err);
+              });
+            }
+          }
+
+          if (isFamilyPlan && pool) {
+            onUpdateState('familyPool', {
+              ai_requests_this_month: pool.ai_requests_this_month || 0,
+              ai_requests_reset_date: pool.ai_requests_reset_date || getNextResetDate(),
+            });
+          } else {
+            onUpdateState('familyPool', undefined);
+          }
+        }, (err: any) => {
+          console.warn('Partner thread listener error.', err);
+        });
       } catch (err) {
         console.warn('Failed to initialize partner thread listeners.', err);
       }
@@ -453,6 +511,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
       cancelled = true;
       if (unsubPlaces) unsubPlaces();
       if (unsubMemories) unsubMemories();
+      if (unsubThread) unsubThread();
     };
   }, [state.user?.uid, state.partnerLink, isGuest, onUpdateState]);
 
@@ -530,22 +589,30 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   useEffect(() => {
     const fetchPlaces = async () => {
       if (!userLocation) return;
-      
+
+      const searchKey = `${userLocation.lat.toFixed(3)}:${userLocation.lng.toFixed(3)}:${selectedFilter}:${radiusKm}:${searchQuery.trim().toLowerCase()}`;
+      placesSearchKeyRef.current = searchKey;
       setLoading(true);
+      setLoadingMore(false);
+      setPlacesNextPageToken(null);
       try {
-        let results: Place[];
+        let response: { places: Place[]; nextPageToken: string | null };
         if (searchQuery.trim()) {
           // Use text search for queries
-          results = await textSearchPlaces(searchQuery, userLocation.lat, userLocation.lng, radiusKm);
+          response = await textSearchPlacesPaged(searchQuery, userLocation.lat, userLocation.lng, radiusKm);
         } else {
           // Use nearby search for browsing - fast and cheap
-          results = await searchNearbyPlaces(userLocation.lat, userLocation.lng, selectedFilter, radiusKm);
+          response = await searchNearbyPlacesPaged(userLocation.lat, userLocation.lng, selectedFilter, radiusKm);
         }
-        setPlaces(results);
+        if (placesSearchKeyRef.current !== searchKey) return;
+        setPlaces(response.places);
+        setPlacesNextPageToken(response.nextPageToken || null);
       } catch (error) {
         console.error('Error fetching places:', error);
       } finally {
-        setLoading(false);
+        if (placesSearchKeyRef.current === searchKey) {
+          setLoading(false);
+        }
       }
     };
     
@@ -553,6 +620,33 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
       fetchPlaces();
     }
   }, [selectedFilter, activeTab, userLocation, radiusKm, searchQuery]);
+
+  const handleLoadMorePlaces = async () => {
+    if (!userLocation || loadingMore || !placesNextPageToken) return;
+    const searchKey = `${userLocation.lat.toFixed(3)}:${userLocation.lng.toFixed(3)}:${selectedFilter}:${radiusKm}:${searchQuery.trim().toLowerCase()}`;
+    setLoadingMore(true);
+    try {
+      let response: { places: Place[]; nextPageToken: string | null };
+      if (searchQuery.trim()) {
+        response = await textSearchPlacesPaged(searchQuery, userLocation.lat, userLocation.lng, radiusKm, placesNextPageToken);
+      } else {
+        response = await searchNearbyPlacesPaged(userLocation.lat, userLocation.lng, selectedFilter, radiusKm, placesNextPageToken);
+      }
+      if (placesSearchKeyRef.current !== searchKey) return;
+      setPlaces((prev) => {
+        const existingIds = new Set(prev.map(place => place.id));
+        const deduped = response.places.filter(place => !existingIds.has(place.id));
+        return [...prev, ...deduped];
+      });
+      setPlacesNextPageToken(response.nextPageToken || null);
+    } catch (error) {
+      console.warn('Load more places failed.', error);
+    } finally {
+      if (placesSearchKeyRef.current === searchKey) {
+        setLoadingMore(false);
+      }
+    }
+  };
 
   useEffect(() => {
     if (isGuest) return;
@@ -879,8 +973,36 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
 
   const favoritePlaces = savedPlaces.map(mapSavedPlaceToPlace);
 
-  const handleIncrementAiRequests = () => {
+  const handleIncrementAiRequests = async () => {
     const current = state.entitlement?.ai_requests_this_month || 0;
+    if (
+      state.entitlement?.plan_tier === 'family' &&
+      state.partnerLink?.status === 'accepted' &&
+      state.partnerLink?.partnerUserId &&
+      state.user?.uid &&
+      db
+    ) {
+      const threadId = getPartnerThreadId(state.user.uid, state.partnerLink.partnerUserId);
+      const resetDate = state.familyPool?.ai_requests_reset_date || state.entitlement?.ai_requests_reset_date || getNextResetDate();
+      try {
+        await setDoc(doc(db, 'partnerThreads', threadId), {
+          entitlementPool: {
+            plan_tier: 'family',
+            ai_requests_this_month: increment(1),
+            ai_requests_reset_date: resetDate,
+          },
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+        onUpdateState('familyPool', {
+          ai_requests_this_month: (state.familyPool?.ai_requests_this_month || 0) + 1,
+          ai_requests_reset_date: resetDate,
+        });
+      } catch (err) {
+        console.warn('Failed to increment family AI pool.', err);
+      }
+      return;
+    }
+
     onUpdateState('entitlement', {
       ...state.entitlement,
       ai_requests_this_month: current + 1
@@ -1030,6 +1152,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
           childrenAges={state.children?.map(c => c.age) || []}
           isGuest={isGuest}
           entitlement={state.entitlement}
+          familyPool={state.familyPool}
           onIncrementAiRequests={handleIncrementAiRequests}
           circles={circles}
           partnerLink={state.partnerLink}
@@ -1091,9 +1214,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
           <TabButton label="Saved" count={state.favorites.length} active={activeTab === 'favorites'} onClick={() => setActiveTab('favorites')} />
           <TabButton label="Adventures" count={(state.visitedPlaces || []).length} active={activeTab === 'adventures'} onClick={() => setActiveTab('adventures')} />
           <TabButton label="Memories" count={state.memories.length} active={activeTab === 'memories'} onClick={() => setActiveTab('memories')} />
-          {hasLinkedPartner && (
-            <TabButton label="Partner" active={activeTab === 'partner'} onClick={() => setActiveTab('partner')} />
-          )}
+          <TabButton label="Partner" active={activeTab === 'partner'} onClick={() => setActiveTab('partner')} />
           <TabButton label="Circles" count={circles.length} active={activeTab === 'circles'} onClick={() => setActiveTab('circles')} />
         </div>
 
@@ -1281,6 +1402,17 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                     <span className="text-4xl mb-3 block">🎊</span>
                     <p className="text-slate-600 font-semibold">You've saved them all!</p>
                     <p className="text-slate-400 text-sm mt-1">Try a different category or expand your search radius.</p>
+                  </div>
+                )}
+                {placesNextPageToken && (
+                  <div className="pt-2 flex justify-center">
+                    <button
+                      onClick={handleLoadMorePlaces}
+                      disabled={loadingMore}
+                      className="px-6 py-3 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-900 text-white shadow-lg shadow-slate-200 disabled:opacity-60"
+                    >
+                      {loadingMore ? 'Loading...' : 'Load more'}
+                    </button>
                   </div>
                 )}
               </div>
@@ -1587,209 +1719,267 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
           )
         )}
 
-        {activeTab === 'partner' && hasLinkedPartner && (
+        {activeTab === 'partner' && (
           <div className="space-y-6">
-            <div className="bg-gradient-to-br from-pink-50 to-rose-50 rounded-3xl p-6 border border-rose-100">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center text-2xl shadow-sm overflow-hidden">
-                  {partnerPhotoURL ? (
-                    <img src={partnerPhotoURL} alt={partnerLabel} className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-base font-black text-rose-500">{partnerInitial}</span>
-                  )}
-                </div>
-                <div>
-                  <h3 className="font-black text-lg text-slate-800">{partnerLabel}</h3>
-                  {partnerEmail && (
-                    <p className="text-xs text-slate-500">{partnerEmail}</p>
-                  )}
-                  <p className="text-xs text-slate-500">Linked {state.partnerLink?.linkedAt ? new Date(state.partnerLink.linkedAt).toLocaleDateString() : ''}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Shared Favorites</h4>
-                {!isPaid && state.partnerSharedPlaces.length > 3 && (
-                  <span className="text-[9px] font-bold text-amber-500">Free: 3 of {state.partnerSharedPlaces.length}</span>
-                )}
-              </div>
-              {state.partnerSharedPlaces.length > 0 ? (
-                <div className="space-y-3">
-                  {state.partnerSharedPlaces.slice(0, isPaid ? undefined : 3).map((shared) => {
-                    const placeFromList = places.find(p => p.id === shared.placeId) ||
-                      favoritePlaces.find(p => p.id === shared.placeId);
-                    const fallbackImage = shared.imageUrl || 'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=200&h=200&fit=crop';
-                    const resolvedPlace: Place = placeFromList || {
-                      id: shared.placeId,
-                      name: shared.placeName,
-                      description: 'Family-friendly place',
-                      address: '',
-                      rating: undefined,
-                      tags: [],
-                      imageUrl: fallbackImage,
-                      mapsUrl: `https://www.google.com/maps/place/?q=place_id:${shared.placeId}`,
-                      type: shared.placeType || 'all',
-                    };
-                    return (
-                      <button
-                        key={shared.placeId}
-                        onClick={() => setSelectedPlace(resolvedPlace)}
-                        className="w-full text-left bg-white rounded-2xl p-4 border border-slate-100 flex items-center gap-4 hover:bg-slate-50"
-                      >
-                        <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-slate-100">
-                          <img src={resolvedPlace.imageUrl} className="w-full h-full object-cover" alt="" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-sm text-slate-800 truncate">{shared.placeName}</p>
-                          {shared.note && (
-                            <p className="text-xs text-slate-500 line-clamp-2 mt-1">{shared.note}</p>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="bg-slate-50 rounded-2xl p-6 text-center">
-                  <p className="text-sm text-slate-500">No shared favorites yet</p>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Shared Memories</h4>
-                {!isPaid && partnerSharedMemories.length > 3 && (
-                  <span className="text-[9px] font-bold text-amber-500">Free: 3 of {partnerSharedMemories.length}</span>
-                )}
-              </div>
-              {partnerSharedMemories.length > 0 ? (
-                <div className="grid grid-cols-3 gap-2">
-                  {partnerSharedMemories.slice(0, isPaid ? undefined : 3).map((memory) => {
-                  const photos = memory.photoThumbUrls || memory.photoUrls || (memory.photoThumbUrl ? [memory.photoThumbUrl] : (memory.photoUrl ? [memory.photoUrl] : []));
-                  const mainPhoto = photos[0] || memory.photoThumbUrl || memory.photoUrl;
-                    return (
-                      <div key={memory.id} className="aspect-square rounded-xl overflow-hidden">
-                        {mainPhoto ? (
-                          <img src={mainPhoto} className="w-full h-full object-cover" alt="" />
-                        ) : (
-                          <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-400 text-[10px] font-bold">
-                            Text
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="bg-slate-50 rounded-2xl p-6 text-center">
-                  <p className="text-sm text-slate-500">No shared memories yet</p>
-                </div>
-              )}
-            </div>
-            
-            {!isPaid && (state.favorites.length > 3 || state.memories.length > 3) && (
-              <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl p-4 border border-amber-100">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">✨</span>
-                  <div>
-                    <p className="font-bold text-sm text-amber-800">Upgrade to Pro</p>
-                    <p className="text-xs text-amber-600">Unlimited shared favorites, memories & notes</p>
+            {hasLinkedPartner ? (
+              <div className="bg-gradient-to-br from-pink-50 to-rose-50 rounded-3xl p-6 border border-rose-100">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center text-2xl shadow-sm overflow-hidden">
+                    {partnerPhotoURL ? (
+                      <img src={partnerPhotoURL} alt={partnerLabel} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-base font-black text-rose-500">{partnerInitial}</span>
+                    )}
                   </div>
+                  <div>
+                    <h3 className="font-black text-lg text-slate-800">{partnerLabel}</h3>
+                    {partnerEmail && (
+                      <p className="text-xs text-slate-500">{partnerEmail}</p>
+                    )}
+                    <p className="text-xs text-slate-500">Linked {state.partnerLink?.linkedAt ? new Date(state.partnerLink.linkedAt).toLocaleDateString() : ''}</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-gradient-to-br from-rose-50 to-pink-50 rounded-3xl p-6 border border-rose-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-white text-2xl flex items-center justify-center shadow-sm">💑</div>
+                    <div>
+                      <h3 className="font-black text-lg text-slate-800">Partner Space</h3>
+                      <p className="text-xs text-slate-500">Share favorites, memories, and quick notes together.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-3xl p-6 border border-slate-100 space-y-3">
+                  {isPartnerPending ? (
+                    <>
+                      <p className="text-sm font-semibold text-slate-700">Invite sent</p>
+                      <p className="text-xs text-slate-500">Your partner hasn’t accepted yet. You can view or resend your invite code in Profile.</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-semibold text-slate-700">Link your partner</p>
+                      <p className="text-xs text-slate-500">Connect accounts to share places, notes, and partner circles.</p>
+                    </>
+                  )}
+
+                  {isGuest ? (
+                    <button
+                      onClick={() => setView('login')}
+                      className="w-full px-4 py-3 bg-rose-500 text-white rounded-2xl text-sm font-bold"
+                    >
+                      Sign in to link partner
+                    </button>
+                  ) : !canLinkPartner ? (
+                    <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100">
+                      <p className="text-xs font-semibold text-amber-700">Partner linking is a Pro feature.</p>
+                      <button
+                        onClick={() => setShowPlanBilling(true)}
+                        className="mt-3 px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-bold"
+                      >
+                        Upgrade to Pro
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setView('profile')}
+                      className="w-full px-4 py-3 bg-rose-500 text-white rounded-2xl text-sm font-bold"
+                    >
+                      Link partner
+                    </button>
+                  )}
                 </div>
               </div>
             )}
 
-            <div className="space-y-4">
-              <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Partner Circles</h4>
-              <p className="text-xs text-slate-500 -mt-2">Create themed collections to share with your partner</p>
-              
-              {partnerCircles.length > 0 ? (
-                <div className="space-y-3">
-                  {partnerCircles.map((circle) => (
-                    <button
-                      key={circle.id}
-                      onClick={() => setSelectedCircle(circle)}
-                      className="w-full text-left bg-white rounded-2xl p-4 border border-slate-100 flex items-center justify-between hover:bg-slate-50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-rose-100 rounded-xl flex items-center justify-center text-lg">💑</div>
-                        <div>
-                          <p className="font-bold text-sm text-slate-800">{circle.name}</p>
-                          <p className="text-xs text-slate-500">Shared with {partnerLabel}</p>
-                        </div>
-                      </div>
-                      <span className="text-slate-300">›</span>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="bg-slate-50 rounded-2xl p-6 text-center">
-                  <p className="text-sm text-slate-500">No partner circles yet</p>
-                  <p className="text-xs text-slate-400 mt-1">Create one below to start collecting places together</p>
-                </div>
-              )}
-              
-              <div className="bg-white rounded-2xl p-4 border border-slate-100">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="e.g., Date Night, Weekend Getaways..."
-                    value={newPartnerCircleName}
-                    onChange={(e) => setNewPartnerCircleName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleCreatePartnerCircle()}
-                    className="flex-1 text-sm outline-none text-slate-700 placeholder-slate-300"
-                  />
-                  <button
-                    onClick={handleCreatePartnerCircle}
-                    disabled={creatingPartnerCircle || !newPartnerCircleName.trim()}
-                    className="px-4 py-2 bg-rose-500 text-white rounded-xl text-xs font-bold disabled:opacity-60"
-                  >
-                    {creatingPartnerCircle ? '...' : 'Create'}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Quick Notes</h4>
-              <div className="bg-white rounded-2xl p-4 border border-slate-100">
-                {noteError && (
-                  <p className="text-xs text-rose-500 mb-2">{noteError}</p>
-                )}
-                {partnerNotes.length > 0 ? (
-                  <div className="space-y-2 mb-3">
-                    {partnerNotes.map(note => (
-                      <div key={note.id} className="bg-slate-50 rounded-xl px-3 py-2">
-                        <p className="text-xs text-slate-600">{note.text}</p>
-                        <p className="text-[10px] text-slate-400 mt-1">
-                          {note.createdByName} · {new Date(note.createdAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                    ))}
+            {hasLinkedPartner && (
+              <>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Shared Favorites</h4>
+                    {!isPaid && state.partnerSharedPlaces.length > 3 && (
+                      <span className="text-[9px] font-bold text-amber-500">Free: 3 of {state.partnerSharedPlaces.length}</span>
+                    )}
                   </div>
-                ) : (
-                  <p className="text-xs text-slate-400 mb-3">No notes yet.</p>
-                )}
-                <textarea 
-                  placeholder="Leave a note for your partner..."
-                  className="w-full h-20 text-sm resize-none outline-none text-slate-700 placeholder-slate-300"
-                  value={noteInput}
-                  onChange={(e) => setNoteInput(e.target.value)}
-                />
-                <div className="flex justify-end">
-                  <button
-                    onClick={handleSendPartnerNote}
-                    disabled={noteSending}
-                    className="px-4 py-2 bg-rose-500 text-white rounded-xl text-xs font-bold disabled:opacity-60"
-                  >
-                    {noteSending ? 'Sending...' : 'Send'}
-                  </button>
+                  {state.partnerSharedPlaces.length > 0 ? (
+                    <div className="space-y-3">
+                      {state.partnerSharedPlaces.slice(0, isPaid ? undefined : 3).map((shared) => {
+                        const placeFromList = places.find(p => p.id === shared.placeId) ||
+                          favoritePlaces.find(p => p.id === shared.placeId);
+                        const fallbackImage = shared.imageUrl || 'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=200&h=200&fit=crop';
+                        const resolvedPlace: Place = placeFromList || {
+                          id: shared.placeId,
+                          name: shared.placeName,
+                          description: 'Family-friendly place',
+                          address: '',
+                          rating: undefined,
+                          tags: [],
+                          imageUrl: fallbackImage,
+                          mapsUrl: `https://www.google.com/maps/place/?q=place_id:${shared.placeId}`,
+                          type: shared.placeType || 'all',
+                        };
+                        return (
+                          <button
+                            key={shared.placeId}
+                            onClick={() => setSelectedPlace(resolvedPlace)}
+                            className="w-full text-left bg-white rounded-2xl p-4 border border-slate-100 flex items-center gap-4 hover:bg-slate-50"
+                          >
+                            <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-slate-100">
+                              <img src={resolvedPlace.imageUrl} className="w-full h-full object-cover" alt="" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-sm text-slate-800 truncate">{shared.placeName}</p>
+                              {shared.note && (
+                                <p className="text-xs text-slate-500 line-clamp-2 mt-1">{shared.note}</p>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="bg-slate-50 rounded-2xl p-6 text-center">
+                      <p className="text-sm text-slate-500">No shared favorites yet</p>
+                    </div>
+                  )}
                 </div>
-              </div>
-            </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Shared Memories</h4>
+                    {!isPaid && partnerSharedMemories.length > 3 && (
+                      <span className="text-[9px] font-bold text-amber-500">Free: 3 of {partnerSharedMemories.length}</span>
+                    )}
+                  </div>
+                  {partnerSharedMemories.length > 0 ? (
+                    <div className="grid grid-cols-3 gap-2">
+                      {partnerSharedMemories.slice(0, isPaid ? undefined : 3).map((memory) => {
+                      const photos = memory.photoThumbUrls || memory.photoUrls || (memory.photoThumbUrl ? [memory.photoThumbUrl] : (memory.photoUrl ? [memory.photoUrl] : []));
+                      const mainPhoto = photos[0] || memory.photoThumbUrl || memory.photoUrl;
+                        return (
+                          <div key={memory.id} className="aspect-square rounded-xl overflow-hidden">
+                            {mainPhoto ? (
+                              <img src={mainPhoto} className="w-full h-full object-cover" alt="" />
+                            ) : (
+                              <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-400 text-[10px] font-bold">
+                                Text
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="bg-slate-50 rounded-2xl p-6 text-center">
+                      <p className="text-sm text-slate-500">No shared memories yet</p>
+                    </div>
+                  )}
+                </div>
+            
+                {!isPaid && (state.favorites.length > 3 || state.memories.length > 3) && (
+                  <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl p-4 border border-amber-100">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">✨</span>
+                      <div>
+                        <p className="font-bold text-sm text-amber-800">Upgrade to Pro</p>
+                        <p className="text-xs text-amber-600">Unlimited shared favorites, memories & notes</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Partner Circles</h4>
+                  <p className="text-xs text-slate-500 -mt-2">Create themed collections to share with your partner</p>
+                  
+                  {partnerCircles.length > 0 ? (
+                    <div className="space-y-3">
+                      {partnerCircles.map((circle) => (
+                        <button
+                          key={circle.id}
+                          onClick={() => setSelectedCircle(circle)}
+                          className="w-full text-left bg-white rounded-2xl p-4 border border-slate-100 flex items-center justify-between hover:bg-slate-50"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-rose-100 rounded-xl flex items-center justify-center text-lg">💑</div>
+                            <div>
+                              <p className="font-bold text-sm text-slate-800">{circle.name}</p>
+                              <p className="text-xs text-slate-500">Shared with {partnerLabel}</p>
+                            </div>
+                          </div>
+                          <span className="text-slate-300">›</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="bg-slate-50 rounded-2xl p-6 text-center">
+                      <p className="text-sm text-slate-500">No partner circles yet</p>
+                      <p className="text-xs text-slate-400 mt-1">Create one below to start collecting places together</p>
+                    </div>
+                  )}
+                  
+                  <div className="bg-white rounded-2xl p-4 border border-slate-100">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="e.g., Date Night, Weekend Getaways..."
+                        value={newPartnerCircleName}
+                        onChange={(e) => setNewPartnerCircleName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleCreatePartnerCircle()}
+                        className="flex-1 text-sm outline-none text-slate-700 placeholder-slate-300"
+                      />
+                      <button
+                        onClick={handleCreatePartnerCircle}
+                        disabled={creatingPartnerCircle || !newPartnerCircleName.trim()}
+                        className="px-4 py-2 bg-rose-500 text-white rounded-xl text-xs font-bold disabled:opacity-60"
+                      >
+                        {creatingPartnerCircle ? '...' : 'Create'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Quick Notes</h4>
+                  <div className="bg-white rounded-2xl p-4 border border-slate-100">
+                    {noteError && (
+                      <p className="text-xs text-rose-500 mb-2">{noteError}</p>
+                    )}
+                    {partnerNotes.length > 0 ? (
+                      <div className="space-y-2 mb-3">
+                        {partnerNotes.map(note => (
+                          <div key={note.id} className="bg-slate-50 rounded-xl px-3 py-2">
+                            <p className="text-xs text-slate-600">{note.text}</p>
+                            <p className="text-[10px] text-slate-400 mt-1">
+                              {note.createdByName} · {new Date(note.createdAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 mb-3">No notes yet.</p>
+                    )}
+                    <textarea 
+                      placeholder="Leave a note for your partner..."
+                      className="w-full h-20 text-sm resize-none outline-none text-slate-700 placeholder-slate-300"
+                      value={noteInput}
+                      onChange={(e) => setNoteInput(e.target.value)}
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        onClick={handleSendPartnerNote}
+                        disabled={noteSending}
+                        className="px-4 py-2 bg-rose-500 text-white rounded-xl text-xs font-bold disabled:opacity-60"
+                      >
+                        {noteSending ? 'Sending...' : 'Send'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
