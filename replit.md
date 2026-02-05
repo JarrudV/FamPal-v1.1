@@ -59,3 +59,8 @@ Key features include:
   - Bottom nav now appears on dashboard and profile pages (not login or onboarding)
   - Removed unused NavButton component from Dashboard.tsx
   - Clean architecture with view-level navigation in App.tsx
+- **V2.12 Navigation & Memory Sharing Fixes**:
+  - Fixed bottom nav Saved/Circles buttons to properly switch Dashboard tabs
+  - Added initialTab and onTabChange props to Dashboard for cross-component tab control
+  - Added "Share to Partner" option in ShareMemoryModal for linked partners
+  - Bottom nav now shows active state for current tab (Home/Saved/Circles/Profile)
