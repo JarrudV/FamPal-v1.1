@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -693,26 +694,49 @@ app.post('/api/partner/link', requireAuth, async (req: AuthenticatedRequest, res
 const isProduction = process.env.NODE_ENV === 'production';
 if (isProduction) {
   // When running from repo root with `npx tsx server/index.ts`, dist is at ./dist
-  // When running from server dir, dist is at ../dist
   const distPath = path.resolve(process.cwd(), 'dist');
   console.log(`[FamPals API] Serving static files from: ${distPath}`);
   console.log(`[FamPals API] Current working directory: ${process.cwd()}`);
   
-  // Serve static files
-  app.use(express.static(distPath));
-  
-  // Handle client-side routing - serve index.html for all non-API routes
-  app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api/')) {
-      res.sendFile(path.join(distPath, 'index.html'));
-    }
-  });
+  // Check if dist folder exists
+  if (fs.existsSync(distPath)) {
+    console.log(`[FamPals API] dist folder found, serving static files`);
+    // Serve static files
+    app.use(express.static(distPath));
+    
+    // Handle client-side routing - serve index.html for all non-API routes
+    app.get('*', (req, res) => {
+      if (!req.path.startsWith('/api/')) {
+        res.sendFile(path.join(distPath, 'index.html'));
+      }
+    });
+  } else {
+    console.warn(`[FamPals API] WARNING: dist folder not found at ${distPath}`);
+    console.log(`[FamPals API] Directory contents:`, fs.readdirSync(process.cwd()));
+  }
 }
 
 const PORT = process.env.PORT || 3001;
 const HOST = '0.0.0.0';
-app.listen(Number(PORT), HOST, () => {
+
+// Start server immediately to satisfy Cloud Run health checks
+const server = app.listen(Number(PORT), HOST, () => {
   console.log(`[FamPals API] Server running on ${HOST}:${PORT}`);
   console.log(`[FamPals API] Environment: ${isProduction ? 'production' : 'development'}`);
   console.log(`[FamPals API] Paystack configured: ${!!PAYSTACK_SECRET_KEY}`);
+});
+
+// Handle server errors
+server.on('error', (err) => {
+  console.error('[FamPals API] Server error:', err);
+  process.exit(1);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('[FamPals API] SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    console.log('[FamPals API] Server closed');
+    process.exit(0);
+  });
 });
