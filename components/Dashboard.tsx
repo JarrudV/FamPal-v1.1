@@ -36,6 +36,8 @@ interface DashboardProps {
   onUpdateState: (key: keyof AppState, value: any) => void;
   initialCircleId?: string | null;
   onClearInitialCircle?: () => void;
+  initialTab?: 'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner';
+  onTabChange?: (tab: string) => void;
 }
 
 interface PartnerNote {
@@ -74,9 +76,20 @@ function getTimeAgo(date: Date): string {
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setView, onUpdateState, initialCircleId, onClearInitialCircle }) => {
+const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setView, onUpdateState, initialCircleId, onClearInitialCircle, initialTab, onTabChange }) => {
   const userPrefs = state.userPreferences || {};
-  const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner'>('explore');
+  const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner'>(initialTab || 'explore');
+  
+  React.useEffect(() => {
+    if (initialTab && initialTab !== activeTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
+  
+  const handleTabChange = (tab: 'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner') => {
+    setActiveTab(tab);
+    onTabChange?.(tab);
+  };
   const hasLinkedPartner = state.partnerLink?.status === 'accepted';
   const partnerUserId = state.partnerLink?.partnerUserId;
   const partnerName = state.partnerLink?.partnerName?.trim();
@@ -668,7 +681,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   // Handle search from header
   const handleSearch = (query: string) => {
     setSearchQuery(query);
-    setActiveTab('explore');
+    handleTabChange('explore');
   };
   
   // Refresh GPS location from device
@@ -1162,12 +1175,12 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
       ) : (
         <div className="px-4 py-4">
         <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar pb-1 scroll-pl-4" style={{ scrollPaddingLeft: '1rem', scrollPaddingRight: '1rem' }}>
-          <TabButton label="Explore" active={activeTab === 'explore'} onClick={() => setActiveTab('explore')} />
-          <TabButton label="Saved" count={state.favorites.length} active={activeTab === 'favorites'} onClick={() => setActiveTab('favorites')} />
-          <TabButton label="Adventures" count={(state.visitedPlaces || []).length} active={activeTab === 'adventures'} onClick={() => setActiveTab('adventures')} />
-          <TabButton label="Memories" count={state.memories.length} active={activeTab === 'memories'} onClick={() => setActiveTab('memories')} />
-          <TabButton label="Partner" active={activeTab === 'partner'} onClick={() => setActiveTab('partner')} />
-          <TabButton label="Circles" count={circles.length} active={activeTab === 'circles'} onClick={() => setActiveTab('circles')} />
+          <TabButton label="Explore" active={activeTab === 'explore'} onClick={() => handleTabChange('explore')} />
+          <TabButton label="Saved" count={state.favorites.length} active={activeTab === 'favorites'} onClick={() => handleTabChange('favorites')} />
+          <TabButton label="Adventures" count={(state.visitedPlaces || []).length} active={activeTab === 'adventures'} onClick={() => handleTabChange('adventures')} />
+          <TabButton label="Memories" count={state.memories.length} active={activeTab === 'memories'} onClick={() => handleTabChange('memories')} />
+          <TabButton label="Partner" active={activeTab === 'partner'} onClick={() => handleTabChange('partner')} />
+          <TabButton label="Circles" count={circles.length} active={activeTab === 'circles'} onClick={() => handleTabChange('circles')} />
         </div>
 
         {activeTab === 'explore' && (

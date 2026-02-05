@@ -70,6 +70,7 @@ const App: React.FC = () => {
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [pendingJoinCircleId, setPendingJoinCircleId] = useState<string | null>(null);
+  const [dashboardTab, setDashboardTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner'>('explore');
   const [savedPlacesLoaded, setSavedPlacesLoaded] = useState(false);
   const legacyFavoritesRef = useRef<string[]>([]);
   const savedPlacesMigratedAtRef = useRef<Timestamp | null>(null);
@@ -571,6 +572,8 @@ const App: React.FC = () => {
           onUpdateState={handleUpdateState}
           initialCircleId={pendingJoinCircleId}
           onClearInitialCircle={() => setPendingJoinCircleId(null)}
+          initialTab={dashboardTab}
+          onTabChange={(tab) => setDashboardTab(tab as typeof dashboardTab)}
         />;
       case 'onboarding':
         return (
@@ -614,9 +617,9 @@ const App: React.FC = () => {
           {showBottomNav && (
             <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-lg border-t border-slate-200/60 px-4 py-3 safe-area-inset-bottom z-50">
               <div className="flex justify-around max-w-md mx-auto">
-                <NavButton icon="🏠" label="Home" active={view === 'dashboard'} onClick={() => setView('dashboard')} />
-                <NavButton icon="💙" label="Saved" active={false} onClick={() => setView('dashboard')} />
-                <NavButton icon="👥" label="Circles" active={false} onClick={() => setView('dashboard')} />
+                <NavButton icon="🏠" label="Home" active={view === 'dashboard' && dashboardTab === 'explore'} onClick={() => { setDashboardTab('explore'); setView('dashboard'); }} />
+                <NavButton icon="💙" label="Saved" active={view === 'dashboard' && dashboardTab === 'favorites'} onClick={() => { setDashboardTab('favorites'); setView('dashboard'); }} />
+                <NavButton icon="👥" label="Circles" active={view === 'dashboard' && dashboardTab === 'circles'} onClick={() => { setDashboardTab('circles'); setView('dashboard'); }} />
                 <NavButton icon="👤" label="Profile" active={view === 'profile'} onClick={() => setView('profile')} />
               </div>
             </nav>
