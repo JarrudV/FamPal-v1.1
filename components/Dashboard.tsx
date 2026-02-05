@@ -1914,7 +1914,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
             )}
           </div>
         )}
-      </div>
+        </div>
+      )}
 
       {selectedPlace && (
         <VenueProfile 

@@ -43,3 +43,8 @@ Key features include:
 - **AI guardrails**: Added Gemini logging, caching with refresh, output token caps, and request timeouts.
 - **Family plan scaffolding**: Added a Family tier with pooled AI allowance for linked partners and entitlement-based gating for partner linking.
 - **UI stability fixes**: Added Places API fallbacks, fixed onboarding completion persistence, restored circle/adventure place clicks with images, and removed the floating Home button while keeping bottom nav visible.
+- **V2.9 Onboarding Control & Syntax Fix**:
+  - Fixed Dashboard.tsx syntax error (missing closing div tag after git pull)
+  - Added "Show Onboarding Again" button to Profile page
+  - Users can now manually trigger onboarding from settings
+  - Onboarding toggle only visible for logged-in users

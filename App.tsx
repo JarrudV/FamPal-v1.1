@@ -576,7 +576,7 @@ const App: React.FC = () => {
           />
         );
       case 'profile':
-        return <Profile state={state} isGuest={isGuest} onSignOut={handleSignOut} setView={setView} onUpdateState={handleUpdateState} />;
+        return <Profile state={state} isGuest={isGuest} onSignOut={handleSignOut} setView={setView} onUpdateState={handleUpdateState} onResetOnboarding={() => setNeedsOnboarding(true)} />;
       default:
         return <Login onLogin={handleSignIn} onGuestLogin={handleGuestLogin} error={error} />;
     }

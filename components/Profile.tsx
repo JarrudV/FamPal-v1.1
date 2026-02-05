@@ -11,6 +11,7 @@ interface ProfileProps {
   onSignOut: () => void;
   setView: (view: string) => void;
   onUpdateState: (key: keyof AppState, value: any) => void;
+  onResetOnboarding?: () => void;
 }
 
 const generateInviteCode = () => {
@@ -22,7 +23,7 @@ const generateInviteCode = () => {
   return code;
 };
 
-const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, onUpdateState }) => {
+const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, onUpdateState, onResetOnboarding }) => {
   const [childName, setChildName] = useState('');
   const [childAge, setChildAge] = useState('');
   const [spouseEmail, setSpouseEmail] = useState('');
@@ -925,6 +926,21 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
                 Cancel
               </button>
             </div>
+          </div>
+        )}
+
+        {!isGuest && onResetOnboarding && (
+          <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden mb-4">
+            <button 
+              onClick={onResetOnboarding}
+              className="w-full flex items-center justify-between p-6 text-slate-500 font-semibold text-sm hover:bg-sky-50 hover:text-sky-600 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-lg">🎓</span>
+                <span>Show Onboarding Again</span>
+              </div>
+              <span className="text-xs text-slate-400">→</span>
+            </button>
           </div>
         )}
 
