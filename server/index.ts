@@ -1,8 +1,14 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
+
+// Extend Express Request type to include verified user
+interface AuthenticatedRequest extends Request {
+  uid?: string;
+}
 
 const app = express();
 
@@ -27,7 +33,26 @@ if (!getApps().length) {
 }
 
 const db = getFirestore();
+const adminAuth = getAuth();
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY || process.env.VITE_GOOGLE_PLACES_API_KEY || '';
+
+// Middleware to verify Firebase Auth token
+async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing or invalid authorization header' });
+  }
+  
+  const idToken = authHeader.split('Bearer ')[1];
+  try {
+    const decodedToken = await adminAuth.verifyIdToken(idToken);
+    req.uid = decodedToken.uid;
+    next();
+  } catch (err: any) {
+    console.error('[FamPals API] Auth verification failed:', err?.message);
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
 
 if (!GOOGLE_PLACES_API_KEY) {
   console.warn('[FamPals API] Google Places API key is not configured. Places search will fail.');
@@ -464,6 +489,190 @@ app.get('/api/paystack/config', (_req, res) => {
     publicKey: PAYSTACK_PUBLIC_KEY,
     configured: !!PAYSTACK_SECRET_KEY 
   });
+});
+
+// Partner unlink endpoint - handles clearing both users' partnerLink fields
+// This is needed because Firestore rules only allow users to write to their own documents
+// Requires Firebase Auth token for security
+app.post('/api/partner/unlink', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.uid!; // Verified user from auth token
+    
+    console.log('[FamPals API] Partner unlink request for user:', userId);
+    
+    // Fetch user's current partnerLink to get the actual partnerId
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const userData = userDoc.data() || {};
+    const currentPartnerLink = userData.partnerLink;
+    
+    // Get the actual partner from user's document (not from request body for security)
+    const actualPartnerUserId = currentPartnerLink?.partnerUserId;
+    
+    console.log('[FamPals API] Validated partner from user doc:', actualPartnerUserId);
+    
+    const batch = db.batch();
+    
+    // Clear current user's partnerLink
+    const userRef = db.collection('users').doc(userId);
+    batch.update(userRef, { partnerLink: FieldValue.delete() });
+    
+    // If there's a valid partner link, clear their partnerLink too
+    if (actualPartnerUserId) {
+      const partnerRef = db.collection('users').doc(actualPartnerUserId);
+      batch.update(partnerRef, { partnerLink: FieldValue.delete() });
+      
+      // Also mark the partner thread as closed
+      const threadId = [userId, actualPartnerUserId].sort().join('_');
+      const threadRef = db.collection('partnerThreads').doc(threadId);
+      batch.set(threadRef, { status: 'closed', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    }
+    
+    await batch.commit();
+    console.log('[FamPals API] Partner unlink successful');
+    
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[FamPals API] Partner unlink failed:', err?.message || err);
+    res.status(500).json({ error: 'Failed to unlink partner', details: err?.message });
+  }
+});
+
+// Refresh partner status - returns current partner link info for the authenticated user
+// Requires Firebase Auth token for security
+app.get('/api/partner/status', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.uid!; // Verified user from auth token
+    
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      return res.json({ partnerLink: null });
+    }
+    
+    const userData = userDoc.data() || {};
+    const partnerLink = userData.partnerLink ? { ...userData.partnerLink } : null;
+    
+    // If linked, also get partner's current profile info
+    if (partnerLink?.partnerUserId) {
+      const partnerDoc = await db.collection('users').doc(partnerLink.partnerUserId).get();
+      if (partnerDoc.exists) {
+        const partnerData = partnerDoc.data() || {};
+        const partnerProfile = partnerData.profile || {};
+        partnerLink.partnerName = partnerProfile.displayName || partnerLink.partnerName;
+        partnerLink.partnerEmail = partnerProfile.email || partnerLink.partnerEmail;
+        partnerLink.partnerPhotoURL = partnerProfile.photoURL || partnerLink.partnerPhotoURL;
+      }
+    }
+    
+    res.json({ partnerLink });
+  } catch (err: any) {
+    console.error('[FamPals API] Partner status fetch failed:', err?.message || err);
+    res.status(500).json({ error: 'Failed to fetch partner status', details: err?.message });
+  }
+});
+
+// Partner link endpoint - handles linking two users when accepting an invite code
+// Requires Firebase Auth token for security
+// Validates that the invite code matches the partner's pending code
+app.post('/api/partner/link', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.uid!; // Verified user from auth token
+    const { partnerUserId, partnerName, selfName, inviteCode } = req.body;
+    
+    if (!partnerUserId) {
+      return res.status(400).json({ error: 'Missing partnerUserId' });
+    }
+    
+    console.log('[FamPals API] Partner link request:', { userId, partnerUserId });
+    
+    // Get partner's info and validate invite code
+    const partnerDoc = await db.collection('users').doc(partnerUserId).get();
+    if (!partnerDoc.exists) {
+      return res.status(404).json({ error: 'Partner not found' });
+    }
+    const partnerData = partnerDoc.data() || {};
+    const partnerProfile = partnerData.profile || {};
+    
+    // Validate invite code matches partner's pending invite
+    const partnerInviteCode = partnerData.partnerLink?.inviteCode;
+    const partnerStatus = partnerData.partnerLink?.status;
+    
+    // If invite code is provided, validate it matches
+    if (inviteCode && partnerInviteCode !== inviteCode) {
+      console.log('[FamPals API] Invite code mismatch:', { provided: inviteCode, expected: partnerInviteCode });
+      return res.status(403).json({ error: 'Invalid invite code' });
+    }
+    
+    // Validate partner has a pending invite code
+    if (!partnerInviteCode || partnerStatus === 'accepted') {
+      console.log('[FamPals API] Partner does not have a pending invite or is already linked');
+      return res.status(400).json({ error: 'Partner does not have a pending invite or is already linked' });
+    }
+    
+    // Get current user's info to update partner's record
+    const userDoc = await db.collection('users').doc(userId).get();
+    const userData = userDoc.exists ? userDoc.data() : {};
+    const userProfile = userData?.profile || {};
+    
+    const batch = db.batch();
+    
+    // Update current user's partnerLink to accepted
+    const userRef = db.collection('users').doc(userId);
+    batch.set(userRef, {
+      partnerLink: {
+        status: 'accepted',
+        inviteCode: partnerData.partnerLink?.inviteCode || '',
+        createdAt: FieldValue.serverTimestamp(),
+        partnerUserId,
+        partnerName: partnerProfile.displayName || partnerName || 'Partner',
+        partnerEmail: partnerProfile.email,
+        partnerPhotoURL: partnerProfile.photoURL,
+      }
+    }, { merge: true });
+    
+    // Update partner's partnerLink to mark them as linked
+    const partnerRef = db.collection('users').doc(partnerUserId);
+    batch.set(partnerRef, {
+      partnerLink: {
+        status: 'accepted',
+        inviteCode: partnerData.partnerLink?.inviteCode || '',
+        createdAt: FieldValue.serverTimestamp(),
+        partnerUserId: userId,
+        partnerName: userProfile.displayName || selfName || 'Partner',
+        partnerEmail: userProfile.email,
+        partnerPhotoURL: userProfile.photoURL,
+      }
+    }, { merge: true });
+    
+    // Create partner thread
+    const threadId = [userId, partnerUserId].sort().join('_');
+    const threadRef = db.collection('partnerThreads').doc(threadId);
+    batch.set(threadRef, {
+      members: [userId, partnerUserId],
+      createdAt: FieldValue.serverTimestamp(),
+      status: 'active',
+    }, { merge: true });
+    
+    await batch.commit();
+    console.log('[FamPals API] Partner link successful');
+    
+    res.json({ 
+      success: true, 
+      partnerLink: {
+        status: 'accepted',
+        partnerUserId,
+        partnerName: partnerProfile.displayName || partnerName || 'Partner',
+        partnerEmail: partnerProfile.email,
+        partnerPhotoURL: partnerProfile.photoURL,
+      }
+    });
+  } catch (err: any) {
+    console.error('[FamPals API] Partner link failed:', err?.message || err);
+    res.status(500).json({ error: 'Failed to link partner', details: err?.message });
+  }
 });
 
 const PORT = process.env.PORT || 3001;

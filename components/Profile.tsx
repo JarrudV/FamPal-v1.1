@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AppState, Child, PartnerLink, Preferences, FOOD_PREFERENCES, ALLERGY_OPTIONS, ACCESSIBILITY_OPTIONS, ACTIVITY_PREFERENCES, PLAN_LIMITS } from '../types';
 import PlanBilling from './PlanBilling';
 import { getLimits, getPlanDisplayName, canUseAI, isPaidTier } from '../lib/entitlements';
-import { storage, auth, db, collection, query, where, getDocs, doc, setDoc, ref, uploadBytes, getDownloadURL, writeBatch, deleteField, serverTimestamp } from '../lib/firebase';
-import { ensurePartnerThread, getPartnerThreadId } from '../lib/partnerThreads';
+import { storage, auth, db, collection, query, where, getDocs, getDoc, doc, setDoc, ref, uploadBytes, getDownloadURL, writeBatch, deleteField, serverTimestamp } from '../lib/firebase';
 
 interface ProfileProps {
   state: AppState;
@@ -217,48 +216,43 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
       const partnerData = match.data() || {};
       const partnerProfile = partnerData.profile || {};
       const partnerName = partnerProfile.displayName || partnerProfile.email || 'Partner';
-      const partnerEmail = partnerProfile.email || undefined;
-      const partnerPhotoURL = partnerProfile.photoURL || undefined;
       const partnerUserId = match.id;
 
-      // Update current user's partnerLink to accepted
-      const partnerLink: PartnerLink = {
-        inviteCode: normalizedCode,
-        linkedAt: new Date().toISOString(),
-        status: 'accepted',
-        partnerName,
-        partnerEmail,
-        partnerPhotoURL,
-        partnerUserId,
-      };
-      
-      console.log('[FamPals] Updating current user partnerLink:', partnerLink);
-      onUpdateState('partnerLink', partnerLink);
-      setPartnerCode('');
-      setShowCodeInput(false);
-
-      // Update the partner's record to mark them as linked
+      // Use backend API to link both users (bypasses Firestore rules)
       try {
+        console.log('[FamPals] Linking partner via API');
+        const idToken = await auth.currentUser.getIdToken();
         const selfProfileName = state.user?.displayName || state.user?.email || 'Partner';
-        const partnerUpdate = {
-          partnerLink: {
-            status: 'accepted',
-            linkedAt: new Date().toISOString(),
-            partnerUserId: auth.currentUser.uid,
-            partnerName: selfProfileName,
-            partnerEmail: state.user?.email || undefined,
-            partnerPhotoURL: state.user?.photoURL || undefined,
+        
+        const response = await fetch('/api/partner/link', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ 
+            partnerUserId,
+            partnerName,
+            selfName: selfProfileName,
             inviteCode: normalizedCode,
-          }
-        };
-        console.log('[FamPals] Updating partner record:', partnerUserId, partnerUpdate);
-        await setDoc(doc(db, 'users', partnerUserId), partnerUpdate, { merge: true });
-        await ensurePartnerThread(auth.currentUser.uid, partnerUserId);
-        console.log('[FamPals] Partner link complete!');
+          }),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to link');
+        }
+        
+        const data = await response.json();
+        console.log('[FamPals] Partner link successful via API:', data);
+        
+        onUpdateState('partnerLink', data.partnerLink);
+        setPartnerCode('');
+        setShowCodeInput(false);
         alert('Successfully linked with ' + partnerName + '! The Partner tab is now available.');
-      } catch (err) {
-        console.warn('[FamPals] Unable to update partner record:', err);
-        alert('Linked locally, but could not update partner. They may need to refresh.');
+      } catch (err: any) {
+        console.warn('[FamPals] Unable to link partner via API:', err);
+        alert('Unable to link with partner. Please try again.');
       }
     } catch (err) {
       console.error('[FamPals] Partner lookup failed:', err);
@@ -293,18 +287,63 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
       return;
     }
     
-    const threadId = getPartnerThreadId(uid, partnerUserId);
+    // Use backend API to unlink both users (bypasses Firestore rules)
     try {
-      const batch = writeBatch(db);
-      batch.set(doc(db, 'users', uid), { partnerLink: deleteField() }, { merge: true });
-      batch.set(doc(db, 'partnerThreads', threadId), { status: 'closed', updatedAt: serverTimestamp() }, { merge: true });
-      await batch.commit();
+      console.log('[FamPals] Unlinking partner via API');
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) {
+        throw new Error('Not authenticated');
+      }
+      
+      const response = await fetch('/api/partner/unlink', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({}), // No partnerUserId needed - server derives from user doc
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to unlink');
+      }
+      
+      console.log('[FamPals] Partner unlink successful via API');
       onUpdateState('partnerLink', undefined);
       onUpdateState('spouseName', undefined);
       onUpdateState('linkedEmail', undefined);
-    } catch (err) {
-      console.warn('Failed to unlink partner.', err);
+      alert('Partner link removed successfully.');
+    } catch (err: any) {
+      console.warn('[FamPals] Failed to unlink partner:', err);
       alert('Unable to unlink right now. Please try again.');
+    }
+  };
+  
+  const refreshPartnerStatus = async () => {
+    if (!auth?.currentUser) {
+      return;
+    }
+    try {
+      console.log('[FamPals] Refreshing partner status via API');
+      const idToken = await auth.currentUser.getIdToken();
+      
+      const response = await fetch('/api/partner/status', {
+        headers: { 'Authorization': `Bearer ${idToken}` },
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch partner status');
+      }
+      
+      const data = await response.json();
+      const partnerLink = data.partnerLink || undefined;
+      console.log('[FamPals] Refreshed partnerLink:', partnerLink);
+      onUpdateState('partnerLink', partnerLink);
+      alert('Partner status refreshed!');
+    } catch (err: any) {
+      console.warn('[FamPals] Failed to refresh partner status:', err);
+      alert('Unable to refresh partner status. Please try again.');
     }
   };
 
@@ -782,12 +821,20 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
                         </>
                       )}
                     </div>
-                    <button 
-                      onClick={handleUnlinkPartner}
-                      className="text-slate-300 hover:text-rose-500 text-xs font-bold transition-colors"
-                    >
-                      Unlink
-                    </button>
+                    <div className="flex flex-col gap-1">
+                      <button 
+                        onClick={refreshPartnerStatus}
+                        className="text-sky-400 hover:text-sky-600 text-xs font-bold transition-colors"
+                      >
+                        Refresh
+                      </button>
+                      <button 
+                        onClick={handleUnlinkPartner}
+                        className="text-slate-300 hover:text-rose-500 text-xs font-bold transition-colors"
+                      >
+                        Unlink
+                      </button>
+                    </div>
                   </div>
                   
                   {state.partnerLink.status === 'pending' && (
