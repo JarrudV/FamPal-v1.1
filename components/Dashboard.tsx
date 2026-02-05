@@ -1188,10 +1188,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
             <Filters selected={selectedFilter} onChange={handleFilterChange} />
             
             {/* Radius Slider */}
-            <div className="bg-white rounded-3xl p-5 mt-4 border border-slate-100 shadow-sm">
+            <div className="bg-white rounded-2xl p-4 mt-4 border border-slate-100 shadow-sm">
               <div className="flex justify-between items-center mb-3">
-                <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Search Radius</span>
-                <span className="text-sm font-black text-sky-500">{radiusKm} km</span>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Search Radius</span>
+                <span className="text-base font-bold text-sky-500">{radiusKm} km</span>
               </div>
               <input
                 type="range"
@@ -1199,15 +1199,15 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                 max="200"
                 value={radiusKm}
                 onChange={(e) => handleRadiusSliderChange(parseInt(e.target.value))}
-                className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                className="w-full h-2 bg-slate-200 rounded-full appearance-none cursor-pointer accent-sky-500"
               />
               <div className="flex justify-between mt-2">
-                <span className="text-[10px] text-slate-400 font-bold">1 km</span>
-                <span className="text-[10px] text-slate-400 font-bold">200 km</span>
+                <span className="text-[10px] text-slate-400 font-medium">1 km</span>
+                <span className="text-[10px] text-slate-400 font-medium">200 km</span>
               </div>
               <button
                 onClick={refreshGpsLocation}
-                className="w-full mt-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold text-slate-600 transition-colors flex items-center justify-center gap-2"
+                className="w-full mt-4 py-3 bg-slate-100 active:bg-slate-200 rounded-xl text-sm font-semibold text-slate-600 transition-colors flex items-center justify-center gap-2 min-h-[48px]"
               >
                 <span>📍</span>
                 <span>Use Current Location</span>
@@ -1218,25 +1218,25 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
             </div>
 
             {/* Who's Coming Filter */}
-            <div className="bg-white rounded-3xl p-4 mt-4 border border-slate-100 shadow-sm">
-              <span className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3 block">Who's Coming?</span>
+            <div className="bg-white rounded-2xl p-4 mt-4 border border-slate-100 shadow-sm">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 block">Who's Coming?</span>
               <div className="flex gap-2 flex-wrap">
                 <button
                   onClick={() => setPrefFilterMode('all')}
-                  className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
+                  className={`px-4 py-3 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
                     prefFilterMode === 'all'
                       ? 'bg-slate-800 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      : 'bg-slate-100 text-slate-600 active:bg-slate-200'
                   }`}
                 >
                   Everyone
                 </button>
                 <button
                   onClick={() => setPrefFilterMode('family')}
-                  className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
+                  className={`px-4 py-3 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
                     prefFilterMode === 'family'
                       ? 'bg-sky-500 text-white'
-                      : 'bg-sky-50 text-sky-600 hover:bg-sky-100'
+                      : 'bg-sky-50 text-sky-600 active:bg-sky-100'
                   }`}
                 >
                   👨‍👩‍👧‍👦 Family
@@ -1244,10 +1244,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                 {hasLinkedPartner && (
                   <button
                     onClick={() => setPrefFilterMode('partner')}
-                    className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
+                    className={`px-4 py-3 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
                       prefFilterMode === 'partner'
                         ? 'bg-rose-500 text-white'
-                        : 'bg-rose-50 text-rose-600 hover:bg-rose-100'
+                        : 'bg-rose-50 text-rose-600 active:bg-rose-100'
                     }`}
                   >
                     💑 Partner
@@ -1255,10 +1255,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                 )}
                 <button
                   onClick={() => setPrefFilterMode('solo')}
-                  className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
+                  className={`px-4 py-3 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
                     prefFilterMode === 'solo'
                       ? 'bg-purple-500 text-white'
-                      : 'bg-purple-50 text-purple-600 hover:bg-purple-100'
+                      : 'bg-purple-50 text-purple-600 active:bg-purple-100'
                   }`}
                 >
                   🧑 Just Me
@@ -1379,15 +1379,23 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                     <p className="text-slate-400 text-sm mt-1">Try a different category or expand your search radius.</p>
                   </div>
                 )}
-                {placesNextPageToken && (
-                  <div className="pt-2 flex justify-center">
+                {placesNextPageToken ? (
+                  <div className="pt-4 pb-8 flex justify-center">
                     <button
                       onClick={handleLoadMorePlaces}
                       disabled={loadingMore}
-                      className="px-6 py-3 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-900 text-white shadow-lg shadow-slate-200 disabled:opacity-60"
+                      className="px-8 py-4 rounded-2xl text-sm font-bold bg-sky-500 text-white shadow-lg shadow-sky-200 disabled:opacity-60 active:scale-95 transition-transform min-h-[52px]"
                     >
-                      {loadingMore ? 'Loading...' : 'Load more'}
+                      {loadingMore ? 'Loading more places...' : 'Load More Places'}
                     </button>
+                  </div>
+                ) : places.length > 0 && (
+                  <div className="pt-6 pb-8 text-center">
+                    <div className="inline-flex items-center gap-2 px-6 py-3 bg-slate-100 rounded-2xl">
+                      <span className="text-lg">🎉</span>
+                      <span className="text-sm font-semibold text-slate-500">You've seen all the places nearby!</span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-2">Try changing your search radius or category</p>
                   </div>
                 )}
               </div>
