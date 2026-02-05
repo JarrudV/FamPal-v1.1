@@ -70,3 +70,14 @@ Key features include:
   - Reduced VenueProfile hero image from 384px to 224-256px (responsive) for cleaner mobile experience
   - Compacted venue header buttons, tags, and text sizing for better proportions
   - Verified location refresh, button handlers, and click events work correctly
+- **V2.14 Mobile UI Improvements**:
+  - Added "Load More Places" button with proper styling when more results available
+  - Added "You've seen all the places nearby!" message when pagination exhausted
+  - Redesigned PlaceCard list variant with better mobile layout and vertical action buttons
+  - Fixed text truncation issues with min-w-0 on flex containers
+  - Improved touch targets across all interactive elements (44-48px minimum)
+- **V2.15 CSS & Touch Target Polish**:
+  - Added custom range slider thumb styling for better mobile interaction
+  - Improved safe area CSS utilities for iOS devices
+  - Refined min-height rules with :not(.no-min-size) escape hatch
+  - Updated radius slider section with better spacing and larger location button
