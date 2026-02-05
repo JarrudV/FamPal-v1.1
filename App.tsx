@@ -207,7 +207,7 @@ const App: React.FC = () => {
         const serializedUser = serializeUser(userAuth);
         console.log('[FamPals] User authenticated:', userAuth.email);
         setState(prev => ({ ...prev, isAuthenticated: true, user: serializedUser }));
-        setView('dashboard');
+        // Don't set view here - wait for Firestore to check onboarding status first
 
         // Safety timeout to prevent stuck loading state if Firestore fails
         const loadingTimeout = setTimeout(() => {
@@ -546,17 +546,20 @@ const App: React.FC = () => {
   }, [isGuest, state.user?.uid, savedPlacesLoaded, state.savedPlaces]);
 
   const renderView = () => {
-    console.log('[FamPals] renderView called - loading:', loading, 'view:', view, 'onboardingChecked:', onboardingChecked);
+    console.log('[FamPals] renderView called - loading:', loading, 'view:', view, 'onboardingChecked:', onboardingChecked, 'needsOnboarding:', needsOnboarding);
+    
+    // Show loading while waiting for auth or onboarding status check
     if (loading) {
-      return <div className="flex items-center justify-center h-screen">Loading...</div>;
+      return <div className="flex items-center justify-center h-screen bg-gradient-to-br from-sky-50 to-white"><div className="text-sky-500 text-lg">Loading...</div></div>;
     }
 
-    // Wait for onboarding check before showing dashboard (prevents flash)
-    if (!isGuest && state.user && !onboardingChecked && view !== 'login') {
-      return <div className="flex items-center justify-center h-screen">Loading...</div>;
+    // For authenticated users, wait for onboarding check to complete BEFORE rendering anything else
+    if (!isGuest && state.user && !onboardingChecked) {
+      return <div className="flex items-center justify-center h-screen bg-gradient-to-br from-sky-50 to-white"><div className="text-sky-500 text-lg">Loading...</div></div>;
     }
 
-    if (!isGuest && state.user && needsOnboarding && view !== 'login') {
+    // If authenticated and needs onboarding, show onboarding (highest priority for authenticated users)
+    if (!isGuest && state.user && needsOnboarding) {
       return (
         <Onboarding
           userName={state.user?.displayName || state.user?.email}
@@ -568,6 +571,21 @@ const App: React.FC = () => {
           onComplete={handleOnboardingComplete}
         />
       );
+    }
+
+    // For authenticated users who passed onboarding, show dashboard by default (even if view is 'login')
+    if (state.user && !needsOnboarding && view === 'login') {
+      return <Dashboard
+        state={state}
+        isGuest={isGuest}
+        onSignOut={handleSignOut}
+        setView={setView}
+        onUpdateState={handleUpdateState}
+        initialCircleId={pendingJoinCircleId}
+        onClearInitialCircle={() => setPendingJoinCircleId(null)}
+        initialTab={dashboardTab}
+        onTabChange={(tab) => setDashboardTab(tab as typeof dashboardTab)}
+      />;
     }
 
     switch (view) {

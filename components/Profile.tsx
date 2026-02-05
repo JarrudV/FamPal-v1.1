@@ -4,6 +4,8 @@ import PlanBilling from './PlanBilling';
 import { getLimits, getPlanDisplayName, canUseAI, isPaidTier } from '../lib/entitlements';
 import { storage, auth, db, collection, query, where, getDocs, getDoc, doc, setDoc, ref, uploadBytes, getDownloadURL, writeBatch, deleteField, serverTimestamp } from '../lib/firebase';
 
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
 interface ProfileProps {
   state: AppState;
   isGuest: boolean;
@@ -224,7 +226,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
         const idToken = await auth.currentUser.getIdToken();
         const selfProfileName = state.user?.displayName || state.user?.email || 'Partner';
         
-        const response = await fetch('/api/partner/link', {
+        const response = await fetch(`${API_BASE}/api/partner/link`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -295,7 +297,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
         throw new Error('Not authenticated');
       }
       
-      const response = await fetch('/api/partner/unlink', {
+      const response = await fetch(`${API_BASE}/api/partner/unlink`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -328,7 +330,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
       console.log('[FamPals] Refreshing partner status via API');
       const idToken = await auth.currentUser.getIdToken();
       
-      const response = await fetch('/api/partner/status', {
+      const response = await fetch(`${API_BASE}/api/partner/status`, {
         headers: { 'Authorization': `Bearer ${idToken}` },
       });
       
