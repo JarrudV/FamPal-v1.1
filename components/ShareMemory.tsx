@@ -6,6 +6,9 @@ interface ShareMemoryProps {
   memory: Memory;
   circles?: CircleDoc[];
   onShareToCircle?: (memory: Memory, circleId: string) => void;
+  onShareToPartner?: (memory: Memory) => void;
+  hasLinkedPartner?: boolean;
+  partnerName?: string;
   onClose: () => void;
 }
 
@@ -66,7 +69,7 @@ export async function shareMemory(memory: Memory): Promise<{ success: boolean; m
   }
 }
 
-export function ShareMemoryModal({ memory, circles = [], onShareToCircle, onClose }: ShareMemoryProps) {
+export function ShareMemoryModal({ memory, circles = [], onShareToCircle, onShareToPartner, hasLinkedPartner, partnerName, onClose }: ShareMemoryProps) {
   const [copied, setCopied] = useState(false);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
   const mapsUrl = getMapsUrl(memory.placeName, memory.placeId);
@@ -157,6 +160,27 @@ export function ShareMemoryModal({ memory, circles = [], onShareToCircle, onClos
               <span>Copy Link</span>
             </button>
           </div>
+          
+          {hasLinkedPartner && onShareToPartner && (
+            <>
+              <div className="border-t border-slate-100 my-4" />
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Share to Partner</p>
+              <button
+                onClick={() => {
+                  onShareToPartner(memory);
+                  setShareStatus(`Shared with ${partnerName || 'partner'}!`);
+                  setTimeout(() => {
+                    setShareStatus(null);
+                    onClose();
+                  }, 1500);
+                }}
+                className="flex items-center gap-2 bg-pink-50 text-pink-700 px-4 py-3 rounded-xl text-sm font-semibold hover:bg-pink-100 w-full"
+              >
+                <span>💕</span>
+                <span>Share with {partnerName || 'Partner'}</span>
+              </button>
+            </>
+          )}
           
           {circles.length > 0 && onShareToCircle && (
             <>

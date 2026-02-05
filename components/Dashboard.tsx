@@ -2059,6 +2059,19 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
             const { id, ...payload } = memory;
             handleTagMemoryToCircle(circleId, payload);
           }}
+          hasLinkedPartner={hasLinkedPartner}
+          partnerName={partnerName || undefined}
+          onShareToPartner={hasLinkedPartner ? async (memory) => {
+            if (!db || !state.user?.uid || !partnerUserId) return;
+            const threadId = getPartnerThreadId(state.user.uid, partnerUserId);
+            const sharedRef = doc(db, 'partnerThreads', threadId, 'sharedMemories', memory.id);
+            await setDoc(sharedRef, {
+              ...memory,
+              sharedAt: Timestamp.now(),
+              sharedBy: state.user.uid,
+              sharedWithPartner: true,
+            }).catch((err) => console.warn('Failed to share memory with partner.', err));
+          } : undefined}
           onClose={() => setShareMemory(null)}
         />
       )}
