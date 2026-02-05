@@ -59,19 +59,6 @@ const TabButton: React.FC<TabButtonProps> = ({ label, count, active, onClick }) 
   </button>
 );
 
-type NavButtonProps = { icon: string; label: string; active: boolean; onClick: () => void };
-const NavButton: React.FC<NavButtonProps> = ({ icon, label, active, onClick }) => (
-  <button 
-    onClick={onClick}
-    aria-label={label}
-    className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl transition-all min-w-[60px] min-h-[52px] ${
-      active ? 'text-sky-500 bg-sky-50' : 'text-slate-400 hover:text-slate-600'
-    }`}
-  >
-    <span className="text-xl">{icon}</span>
-    <span className="text-[11px] font-semibold capitalize">{label}</span>
-  </button>
-);
 
 function getTimeAgo(date: Date): string {
   const now = new Date();
@@ -2022,14 +2009,6 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         />
       )}
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-lg border-t border-slate-200/60 px-4 py-3 safe-area-inset-bottom z-50">
-        <div className="flex justify-around max-w-md mx-auto">
-          <NavButton icon="🏠" label="Home" active={activeTab === 'explore'} onClick={() => setActiveTab('explore')} />
-          <NavButton icon="💙" label="Saved" active={activeTab === 'favorites'} onClick={() => setActiveTab('favorites')} />
-          <NavButton icon="👥" label="Circles" active={activeTab === 'circles'} onClick={() => setActiveTab('circles')} />
-          <NavButton icon="👤" label="Profile" active={false} onClick={() => setView('profile')} />
-        </div>
-      </nav>
       {showPlanBilling && (
         <PlanBilling 
           state={state} 

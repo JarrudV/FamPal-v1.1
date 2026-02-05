@@ -54,3 +54,8 @@ Key features include:
   - Added "Use Current Location" button in Explore tab radius section
   - Users can now refresh their GPS location on demand
   - Better location error handling with user feedback
+- **V2.11 Global Bottom Navigation**:
+  - Moved bottom navigation from Dashboard.tsx to App.tsx for global accessibility
+  - Bottom nav now appears on dashboard and profile pages (not login or onboarding)
+  - Removed unused NavButton component from Dashboard.tsx
+  - Clean architecture with view-level navigation in App.tsx
