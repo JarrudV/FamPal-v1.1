@@ -64,3 +64,9 @@ Key features include:
   - Added initialTab and onTabChange props to Dashboard for cross-component tab control
   - Added "Share to Partner" option in ShareMemoryModal for linked partners
   - Bottom nav now shows active state for current tab (Home/Saved/Circles/Profile)
+- **V2.13 Stability & UI Polish**:
+  - Fixed onboarding flash by deferring setLoading(false) until after Firestore check completes
+  - Added 8-second safety timeout to prevent stuck loading if Firestore fails
+  - Reduced VenueProfile hero image from 384px to 224-256px (responsive) for cleaner mobile experience
+  - Compacted venue header buttons, tags, and text sizing for better proportions
+  - Verified location refresh, button handlers, and click events work correctly

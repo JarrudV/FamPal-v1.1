@@ -204,14 +204,19 @@ const App: React.FC = () => {
           aiResetAttemptedRef.current = null;
           lastAuthUidRef.current = userAuth.uid;
         }
-        // Immediately show the dashboard shell so UI is responsive
         const serializedUser = serializeUser(userAuth);
         console.log('[FamPals] User authenticated:', userAuth.email);
         setState(prev => ({ ...prev, isAuthenticated: true, user: serializedUser }));
-        console.log('[FamPals] Setting view to dashboard');
         setView('dashboard');
-        setLoading(false);
-        console.log('[FamPals] Loading set to false, view should be dashboard now');
+
+        // Safety timeout to prevent stuck loading state if Firestore fails
+        const loadingTimeout = setTimeout(() => {
+          if (loading) {
+            console.warn('[FamPals] Firestore timeout - forcing load');
+            setLoading(false);
+            setOnboardingChecked(true);
+          }
+        }, 8000);
 
         // Upsert profile (non-blocking) and start listening for data
         upsertUserProfile(userAuth.uid, serializedUser).catch(err => console.error(err));
@@ -221,6 +226,7 @@ const App: React.FC = () => {
           unsubProfile();
         }
         unsubProfile = listenToUserDoc(userAuth.uid, (dbState) => {
+          clearTimeout(loadingTimeout);
           console.timeEnd('auth:resolved');
           const initialState = getInitialState(serializedUser);
           if (dbState) {
@@ -277,6 +283,7 @@ const App: React.FC = () => {
                 profileCompletionRequired: dbState.profileCompletionRequired || false,
               };
             });
+            setLoading(false);
             if (!onboardingCompleted) {
               setView('onboarding');
             } else if (view === 'onboarding') {
@@ -294,6 +301,7 @@ const App: React.FC = () => {
               partnerSharedPlaces: prev.partnerSharedPlaces || [],
               familyPool: prev.familyPool,
             }));
+            setLoading(false);
             setView('onboarding');
           }
         });
