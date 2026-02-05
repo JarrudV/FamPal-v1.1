@@ -81,3 +81,11 @@ Key features include:
   - Improved safe area CSS utilities for iOS devices
   - Refined min-height rules with :not(.no-min-size) escape hatch
   - Updated radius slider section with better spacing and larger location button
+- **V2.16 Secure Partner Link/Unlink API**:
+  - Created secure backend API endpoints for partner operations using Firebase Admin SDK
+  - `POST /api/partner/unlink` - Server derives partnerUserId from user's Firestore doc (not request body) to prevent IDOR attacks
+  - `POST /api/partner/link` - Validates invite code matches partner's pending invite before linking
+  - `GET /api/partner/status` - Returns current partner link status for authenticated user
+  - Added `requireAuth` middleware that verifies Firebase ID tokens
+  - Added "Refresh Partner Status" button to Profile page for manual sync
+  - Frontend passes Firebase Auth tokens in Authorization headers for all partner API calls
