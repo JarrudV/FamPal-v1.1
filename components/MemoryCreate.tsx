@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { Place, Memory, Entitlement } from '../types';
 import { canAddMemory } from '../lib/entitlements';
-import { storage, auth, ref, uploadBytes, getDownloadURL } from '../lib/firebase';
+import { storage, auth, ref, uploadBytesResumable, getDownloadURL } from '../lib/firebase';
 import { shareMemory } from './ShareMemory';
 
 interface MemoryCreateProps {
@@ -140,10 +140,49 @@ const MemoryCreate: React.FC<MemoryCreateProps> = ({
     }
   }, [fixedPlace]);
 
+  const [uploadProgress, setUploadProgress] = useState<string>('');
+
+  const uploadWithProgress = (storageRef: any, blob: Blob, label: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error(`Upload timed out after 30 seconds (${label})`));
+      }, 30000);
+
+      try {
+        const task = uploadBytesResumable(storageRef, blob);
+        task.on('state_changed',
+          (snapshot: any) => {
+            const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+            console.log(`[FamPals] ${label}: ${pct}% (${snapshot.bytesTransferred}/${snapshot.totalBytes})`);
+            setUploadProgress(`${label}: ${pct}%`);
+          },
+          (err: any) => {
+            clearTimeout(timeout);
+            console.error(`[FamPals] ${label} error:`, err?.code, err?.message);
+            reject(err);
+          },
+          async () => {
+            clearTimeout(timeout);
+            try {
+              const url = await getDownloadURL(task.snapshot.ref);
+              console.log(`[FamPals] ${label} done, URL obtained`);
+              resolve(url);
+            } catch (urlErr) {
+              reject(urlErr);
+            }
+          }
+        );
+      } catch (err) {
+        clearTimeout(timeout);
+        reject(err);
+      }
+    });
+  };
+
   const handleAddPhoto = async (file: File) => {
     console.log('[FamPals] handleAddPhoto called, file:', file.name, 'size:', file.size, 'type:', file.type);
     if (photos.length >= MAX_PHOTOS) {
-      setError(`Maximum ${MAX_PHOTOS} photos per memory.`);
+      setError(`Maximum ${MAX_PHOTOS} photo per memory.`);
       return;
     }
     if (!storage) {
@@ -159,6 +198,7 @@ const MemoryCreate: React.FC<MemoryCreateProps> = ({
 
     setError(null);
     setUploading(true);
+    setUploadProgress('Compressing...');
     try {
       const timestamp = Date.now();
       const folder = fixedPlace?.id || selectedPlaceId || 'general';
@@ -166,26 +206,34 @@ const MemoryCreate: React.FC<MemoryCreateProps> = ({
       console.log('[FamPals] Compressing photo...');
       const fullBlob = await compressImage(file, MAX_WIDTH, JPEG_QUALITY);
       const thumbBlob = await compressImage(file, THUMB_WIDTH, THUMB_QUALITY);
-      console.log('[FamPals] Compressed. Full:', fullBlob.size, 'Thumb:', thumbBlob.size);
+      console.log('[FamPals] Compressed. Full:', fullBlob.size, 'bytes, Thumb:', thumbBlob.size, 'bytes');
+
       const fullRef = ref(storage, `${baseName}_full.jpg`);
       const thumbRef = ref(storage, `${baseName}_thumb.jpg`);
-      console.log('[FamPals] Uploading to Firebase Storage...');
-      await uploadBytes(fullRef, fullBlob);
-      await uploadBytes(thumbRef, thumbBlob);
-      console.log('[FamPals] Upload complete. Getting download URLs...');
+
+      console.log('[FamPals] Starting uploads to Firebase Storage...');
       const [fullUrl, thumbUrl] = await Promise.all([
-        getDownloadURL(fullRef),
-        getDownloadURL(thumbRef),
+        uploadWithProgress(fullRef, fullBlob, 'Photo'),
+        uploadWithProgress(thumbRef, thumbBlob, 'Thumbnail'),
       ]);
-      console.log('[FamPals] Photo URLs obtained:', { fullUrl: fullUrl.substring(0, 80), thumbUrl: thumbUrl.substring(0, 80) });
+
+      console.log('[FamPals] Both uploads complete!');
       setPhotos(prev => [...prev, fullUrl]);
       setThumbs(prev => [...prev, thumbUrl]);
+      setUploadProgress('');
       tryExtractExifGeo(file).then((result) => {
         if (result) setGeo(result);
       });
     } catch (err: any) {
       console.error('[FamPals] Photo upload FAILED:', err?.message || err, err?.code, err);
-      setError(`Photo upload failed: ${err?.message || 'Unknown error'}. Please try again.`);
+      let friendlyMsg = err?.message || 'Unknown error';
+      if (err?.code === 'storage/unauthorized') {
+        friendlyMsg = 'Storage permission denied. Please check Firebase Storage rules.';
+      } else if (err?.code === 'storage/retry-limit-exceeded') {
+        friendlyMsg = 'Upload failed due to network issues. Please check your connection and try again.';
+      }
+      setError(`Photo upload failed: ${friendlyMsg}`);
+      setUploadProgress('');
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -403,7 +451,7 @@ const MemoryCreate: React.FC<MemoryCreateProps> = ({
                   className="w-20 h-20 bg-white rounded-xl border-2 border-dashed border-sky-200 flex flex-col items-center justify-center text-sky-300 hover:border-sky-400"
                 >
                   {uploading ? (
-                    <span className="text-xs animate-pulse">Uploading...</span>
+                    <span className="text-xs animate-pulse text-center">{uploadProgress || 'Preparing...'}</span>
                   ) : (
                     <>
                       <span className="text-lg">📷</span>

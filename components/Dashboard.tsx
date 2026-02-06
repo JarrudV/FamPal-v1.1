@@ -12,7 +12,7 @@ import { searchNearbyPlacesPaged, textSearchPlacesPaged, getPlaceDetails } from 
 import { getLimits, canSavePlace, isPaidTier, getNextResetDate } from '../lib/entitlements';
 import { updateLocation, updateRadius, updateCategory, updateActiveCircle } from '../lib/profileSync';
 import { ShareMemoryModal } from './ShareMemory';
-import { db, doc, getDoc, collection, onSnapshot, setDoc, auth, serverTimestamp, increment, storage, ref, uploadBytes, getDownloadURL } from '../lib/firebase';
+import { db, doc, getDoc, collection, onSnapshot, setDoc, auth, serverTimestamp, increment, storage, ref, uploadBytesResumable, getDownloadURL } from '../lib/firebase';
 import { upsertSavedPlace, deleteSavedPlace } from '../lib/userData';
 import MemoryCreate from './MemoryCreate';
 import {
@@ -1040,35 +1040,56 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         return new Promise((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error('fail')), 'image/jpeg', q));
       };
 
-      console.log('[FamPals] Adding photo to memory', memoryId);
+      const uploadWithTimeout = (storageRef: any, blob: Blob, label: string): Promise<string> => {
+        return new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error(`${label} upload timed out`)), 30000);
+          try {
+            const task = uploadBytesResumable(storageRef, blob);
+            task.on('state_changed',
+              (snap: any) => console.log(`[FamPals] ${label}: ${Math.round((snap.bytesTransferred / snap.totalBytes) * 100)}%`),
+              (err: any) => { clearTimeout(timeout); reject(err); },
+              async () => {
+                clearTimeout(timeout);
+                try { resolve(await getDownloadURL(task.snapshot.ref)); }
+                catch (e) { reject(e); }
+              }
+            );
+          } catch (e) { clearTimeout(timeout); reject(e); }
+        });
+      };
+
+      console.log('[FamPals] Adding photo to memory', memoryId, 'file:', file.name, file.size);
       const fullBlob = await compress(file, 1600, 0.7);
       const thumbBlob = await compress(file, 400, 0.6);
+      console.log('[FamPals] Compressed. Full:', fullBlob.size, 'Thumb:', thumbBlob.size);
       const fullRef = ref(storage, `${baseName}_full.jpg`);
       const thumbRef = ref(storage, `${baseName}_thumb.jpg`);
-      await uploadBytes(fullRef, fullBlob);
-      await uploadBytes(thumbRef, thumbBlob);
+
       const [fullUrl, thumbUrl] = await Promise.all([
-        getDownloadURL(fullRef),
-        getDownloadURL(thumbRef),
+        uploadWithTimeout(fullRef, fullBlob, 'Photo'),
+        uploadWithTimeout(thumbRef, thumbBlob, 'Thumbnail'),
       ]);
       console.log('[FamPals] Photo added to memory successfully');
 
       const updated = state.memories.map(m => {
         if (m.id !== memoryId) return m;
-        const existingPhotos = m.photoUrls || (m.photoUrl ? [m.photoUrl] : []);
-        const existingThumbs = m.photoThumbUrls || (m.photoThumbUrl ? [m.photoThumbUrl] : []);
         return {
           ...m,
-          photoUrl: m.photoUrl || fullUrl,
-          photoUrls: [...existingPhotos, fullUrl],
-          photoThumbUrl: m.photoThumbUrl || thumbUrl,
-          photoThumbUrls: [...existingThumbs, thumbUrl],
+          photoUrl: fullUrl,
+          photoUrls: [fullUrl],
+          photoThumbUrl: thumbUrl,
+          photoThumbUrls: [thumbUrl],
         };
       });
       onUpdateState('memories', updated);
     } catch (err: any) {
-      console.error('[FamPals] Failed to add photo to memory:', err?.message || err);
-      alert('Failed to upload photo. Please try again.');
+      console.error('[FamPals] Failed to add photo to memory:', err?.code, err?.message || err);
+      const msg = err?.code === 'storage/unauthorized'
+        ? 'Storage permission denied. Check Firebase Storage rules.'
+        : err?.message?.includes('timed out')
+        ? 'Upload timed out. Check your connection and try again.'
+        : `Upload failed: ${err?.message || 'Unknown error'}`;
+      alert(msg);
     } finally {
       setUploadingMemoryId(null);
     }

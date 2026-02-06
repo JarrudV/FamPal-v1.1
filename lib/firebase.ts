@@ -35,6 +35,7 @@ import {
   getStorage,
   ref,
   uploadBytes,
+  uploadBytesResumable,
   getDownloadURL
 } from 'firebase/storage';
 
@@ -112,5 +113,6 @@ export {
   Timestamp,
   ref,
   uploadBytes,
+  uploadBytesResumable,
   getDownloadURL
 };
