@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { CircleDoc } from '../lib/circles';
 
-const MAX_CIRCLES = 2;
-
 const SAMPLE_CIRCLES = [
   { id: 'sample1', name: 'Date Nights', members: 2, places: 5 },
   { id: 'sample2', name: 'Kids Weekends', members: 4, places: 8 },
@@ -16,15 +14,16 @@ interface GroupsListProps {
   onDeleteCircle?: (circleId: string) => void;
   isGuest: boolean;
   userId?: string;
+  maxCircles?: number;
 }
 
-const GroupsList: React.FC<GroupsListProps> = ({ circles, onCreateCircle, onJoinCircle, onSelectCircle, onDeleteCircle, isGuest, userId }) => {
+const GroupsList: React.FC<GroupsListProps> = ({ circles, onCreateCircle, onJoinCircle, onSelectCircle, onDeleteCircle, isGuest, userId, maxCircles = 2 }) => {
   const [showCreate, setShowCreate] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  const canCreateMore = circles.length < MAX_CIRCLES;
+  const canCreateMore = maxCircles === Infinity || circles.length < maxCircles;
 
   const handleCreate = () => {
     console.log("[FamPals] handleCreate called, name:", newGroupName, "canCreateMore:", canCreateMore);
@@ -117,14 +116,14 @@ const GroupsList: React.FC<GroupsListProps> = ({ circles, onCreateCircle, onJoin
           </button>
         ) : (
           <span className="text-xs text-slate-400 bg-slate-100 px-3 py-1.5 rounded-lg">
-            {MAX_CIRCLES}/{MAX_CIRCLES} circles
+            {circles.length}/{maxCircles === Infinity ? '∞' : maxCircles} circles
           </span>
         )}
       </div>
 
       {!canCreateMore && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
-          You've reached the maximum of {MAX_CIRCLES} circles. Delete a circle to create a new one.
+          You've reached the maximum of {maxCircles} circles. Delete a circle to create a new one, or upgrade your plan for unlimited circles.
         </div>
       )}
 

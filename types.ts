@@ -239,9 +239,9 @@ export const PLAN_LIMITS = {
   free: {
     savedPlaces: 25,
     notebookEntries: 25,
-    memories: 10,
+    memories: 15,
     circles: 2,
-    aiRequestsPerMonth: 10,
+    aiRequestsPerMonth: 15,
     preferencesPerCategory: 3,
     partnerFavorites: 3,
     partnerMemories: 3,

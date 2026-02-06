@@ -1666,6 +1666,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
             isGuest={isGuest}
             onDeleteCircle={handleDeleteCircle}
             userId={state.user?.uid}
+            maxCircles={getLimits(state.entitlement).circles}
           />
         )}
 
