@@ -207,7 +207,7 @@ function mapGoogleTypeToCategory(types: string[]): ActivityType {
   return 'all';
 }
 
-function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): string {
+function calculateDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLng = (lng2 - lng1) * Math.PI / 180;
@@ -215,7 +215,11 @@ function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
     Math.sin(dLng/2) * Math.sin(dLng/2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  const d = R * c;
+  return R * c;
+}
+
+function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): string {
+  const d = calculateDistanceKm(lat1, lng1, lat2, lng2);
   return d < 1 ? `${Math.round(d * 1000)}m` : `${d.toFixed(1)}km`;
 }
 
@@ -541,13 +545,21 @@ export async function searchNearbyPlacesTextApi(
       };
     });
 
+    const filteredPlaces = places.filter(p => {
+      const pLat = (p as any).lat;
+      const pLng = (p as any).lng;
+      if (!pLat || !pLng) return true;
+      const distKm = calculateDistanceKm(lat, lng, pLat, pLng);
+      return distKm <= radiusKm;
+    });
+
     const result: PlacesSearchResponse = {
-      places,
+      places: filteredPlaces,
       nextPageToken: data.nextPageToken || null
     };
 
     setCache(PLACES_CACHE_KEY, cacheKey, result);
-    console.log(`[FamPals] Cached ${places.length} places from Text Search, hasMore: ${!!data.nextPageToken}`);
+    console.log(`[FamPals] Text Search: ${places.length} total, ${filteredPlaces.length} within ${radiusKm}km, hasMore: ${!!data.nextPageToken}`);
 
     return result;
   } catch (error) {

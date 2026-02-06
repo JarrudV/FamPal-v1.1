@@ -7,23 +7,24 @@ import { canUseAI } from '../lib/entitlements';
 import MemoryCreate from './MemoryCreate';
 import { CircleDoc } from '../lib/circles';
 
-function getNavigationUrl(place: Place, placeDetails?: PlaceDetails | null): string {
+function getNavigationUrls(place: Place, placeDetails?: PlaceDetails | null) {
   const lat = (place as any).lat || placeDetails?.lat;
   const lng = (place as any).lng || placeDetails?.lng;
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  
+
   if (lat && lng) {
-    if (isIOS) {
-      return `https://maps.apple.com/?daddr=${lat},${lng}`;
-    }
-    return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+    return {
+      google: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`,
+      apple: `https://maps.apple.com/?daddr=${lat},${lng}`,
+      waze: `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`,
+    };
   }
-  
+
   const address = encodeURIComponent(place.address || place.name);
-  if (isIOS) {
-    return `https://maps.apple.com/?daddr=${address}`;
-  }
-  return `https://www.google.com/maps/dir/?api=1&destination=${address}`;
+  return {
+    google: `https://www.google.com/maps/dir/?api=1&destination=${address}`,
+    apple: `https://maps.apple.com/?daddr=${address}`,
+    waze: `https://waze.com/ul?q=${address}&navigate=yes`,
+  };
 }
 
 interface CombinedPreferences {
@@ -95,6 +96,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [lastAiQuestion, setLastAiQuestion] = useState('');
   const [aiCached, setAiCached] = useState(false);
+  const [showNavModal, setShowNavModal] = useState(false);
   
   // Swipe gesture handling
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -435,32 +437,35 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
             <section className="space-y-4">
               <h3 className="text-xl font-extrabold text-[#1E293B]">Contact Details</h3>
               <div className="grid grid-cols-1 gap-3">
-                {place.phone && (
-                  <a href={`tel:${place.phone}`} className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-100 hover:bg-sky-50 transition-colors">
+                {(place.phone || placeDetails?.phone) && (
+                  <a href={`tel:${place.phone || placeDetails?.phone}`} className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-100 hover:bg-sky-50 transition-colors">
                     <span className="text-2xl">📞</span>
                     <div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phone</p>
-                      <p className="text-sm font-bold text-sky-600">{place.phone}</p>
+                      <p className="text-sm font-bold text-sky-600">{place.phone || placeDetails?.phone}</p>
                     </div>
                   </a>
                 )}
-                {place.website && (
-                  <a href={place.website.startsWith('http') ? place.website : `https://${place.website}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-100 hover:bg-sky-50 transition-colors">
-                    <span className="text-2xl">🌐</span>
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Website</p>
-                      <p className="text-sm font-bold text-sky-600 truncate max-w-[200px]">{place.website.replace(/^https?:\/\//, '')}</p>
-                    </div>
-                  </a>
-                )}
-                {!place.phone && !place.website && (
+                {(place.website || placeDetails?.website) && (() => {
+                  const siteUrl = place.website || placeDetails?.website || '';
+                  return (
+                    <a href={siteUrl.startsWith('http') ? siteUrl : `https://${siteUrl}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-100 hover:bg-sky-50 transition-colors">
+                      <span className="text-2xl">🌐</span>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Website</p>
+                        <p className="text-sm font-bold text-sky-600 truncate max-w-[200px]">{siteUrl.replace(/^https?:\/\//, '')}</p>
+                      </div>
+                    </a>
+                  );
+                })()}
+                {!place.phone && !placeDetails?.phone && !place.website && !placeDetails?.website && !loadingDetails && (
                   <p className="text-sm text-slate-400 italic">Contact details not available</p>
                 )}
+                {loadingDetails && !place.phone && !place.website && (
+                  <p className="text-sm text-slate-400 italic">Loading contact details...</p>
+                )}
                 <button 
-                  onClick={() => {
-                    const navUrl = getNavigationUrl(place, placeDetails);
-                    window.open(navUrl, '_blank');
-                  }} 
+                  onClick={() => setShowNavModal(true)} 
                   className="w-full h-16 bg-[#0EA5E9] text-white rounded-3xl font-extrabold mt-4 shadow-xl shadow-sky-100 flex items-center justify-center gap-2 active:scale-95 transition-all"
                 >
                   Navigate 🚀
@@ -737,6 +742,52 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
       </div>
       
       {/* Floating Home Button removed from here — rendered globally in App.tsx */}
+
+      {showNavModal && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center" onClick={() => setShowNavModal(false)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div className="relative w-full max-w-lg bg-white rounded-t-[32px] p-6 pb-10 animate-slide-up" onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
+            <h3 className="text-lg font-black text-[#1E293B] text-center mb-5">Open with</h3>
+            <div className="flex flex-col gap-3">
+              {(() => {
+                const urls = getNavigationUrls(place, placeDetails);
+                return (
+                  <>
+                    <button
+                      onClick={() => { window.open(urls.google, '_blank'); setShowNavModal(false); }}
+                      className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl active:scale-95 transition-all"
+                    >
+                      <span className="text-2xl">🗺️</span>
+                      <span className="font-bold text-[#1E293B]">Google Maps</span>
+                    </button>
+                    <button
+                      onClick={() => { window.open(urls.apple, '_blank'); setShowNavModal(false); }}
+                      className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl active:scale-95 transition-all"
+                    >
+                      <span className="text-2xl">🍎</span>
+                      <span className="font-bold text-[#1E293B]">Apple Maps</span>
+                    </button>
+                    <button
+                      onClick={() => { window.open(urls.waze, '_blank'); setShowNavModal(false); }}
+                      className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl active:scale-95 transition-all"
+                    >
+                      <span className="text-2xl">🚗</span>
+                      <span className="font-bold text-[#1E293B]">Waze</span>
+                    </button>
+                  </>
+                );
+              })()}
+            </div>
+            <button
+              onClick={() => setShowNavModal(false)}
+              className="w-full mt-4 p-4 text-slate-400 font-bold text-sm rounded-2xl active:bg-slate-50 transition-all"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
