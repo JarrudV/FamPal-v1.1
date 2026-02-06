@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { Place, FavoriteData, ACTIVITY_OPTIONS, Memory, Entitlement, PartnerLink, GroupPlace } from '../types';
 import { askAboutPlace, generateFamilySummary } from '../geminiService';
 import { getPlaceDetails, PlaceDetails, PlaceReview } from '../placesService';
@@ -97,7 +96,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [lastAiQuestion, setLastAiQuestion] = useState('');
   const [aiCached, setAiCached] = useState(false);
-  const [showNavModal, setShowNavModal] = useState(false);
+  const [showNavOptions, setShowNavOptions] = useState(false);
   
   // Swipe gesture handling
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -465,12 +464,97 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                 {loadingDetails && !place.phone && !place.website && (
                   <p className="text-sm text-slate-400 italic">Loading contact details...</p>
                 )}
-                <button 
-                  onClick={() => setShowNavModal(true)} 
-                  className="w-full h-16 bg-[#0EA5E9] text-white rounded-3xl font-extrabold mt-4 shadow-xl shadow-sky-100 flex items-center justify-center gap-2 active:scale-95 transition-all"
-                >
-                  Navigate 🚀
-                </button>
+                {!showNavOptions ? (
+                  <button 
+                    onClick={() => setShowNavOptions(true)} 
+                    className="w-full h-16 bg-[#0EA5E9] text-white rounded-3xl font-extrabold mt-4 shadow-xl shadow-sky-100 flex items-center justify-center gap-2 active:scale-95 transition-all"
+                  >
+                    Navigate 🚀
+                  </button>
+                ) : (
+                  <div className="mt-4 space-y-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Open with</p>
+                      <button onClick={() => setShowNavOptions(false)} className="text-xs text-slate-400 font-bold">Close</button>
+                    </div>
+                    {(() => {
+                      const urls = getNavigationUrls(place, placeDetails);
+                      return (
+                        <>
+                          <a
+                            href={urls.google}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-100 active:scale-95 transition-all"
+                          >
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
+                              <svg viewBox="0 0 48 48" width="40" height="40">
+                                <path fill="#1C9957" d="M42,24.5v-1L36,18l-5.8,4.3c0,0-1.2,1.3-1.2,3.2c0,2.1,1.5,3.7,1.5,3.7L36,34L42,24.5z"/>
+                                <path fill="#3F51B5" d="M42,24.5L36,34l-10.5-4.8c0,0-1.5-1.6-1.5-3.7c0-1.9,1.2-3.2,1.2-3.2L31.5,18L42,24.5z"/>
+                                <path fill="#FFEB3B" d="M36,34l-10.5-4.8c0,0,3,5.8,3,9.8c0,3-1.5,5-1.5,5L36,34z"/>
+                                <path fill="#F44336" d="M27,44c0,0,1.5-2,1.5-5c0-4-3-9.8-3-9.8L18,34l4.5,7.5C24,44,27,44,27,44z"/>
+                                <path fill="#1C9957" d="M18,34l7.5-4.8c0,0-1.2-1.3-1.2-3.2c0-1.9,1.2-3.2,1.2-3.2L18,18c0,0-6,5.3-6,11.5C12,33,18,34,18,34z"/>
+                                <path fill="#4CAF50" d="M18,18l7.5,4.8c0,0,1.3-1.4,3-1.8V14c0,0-3.5,0-6,1.5C20,17,18,18,18,18z"/>
+                                <path fill="#F44336" d="M28.5,14v7c1.7,0.4,3,1.8,3,3.5c0,2.1-1.5,3.7-1.5,3.7L36,34c0,0,6-5,6-10.5c0-7-7.5-11-7.5-11L28.5,14z"/>
+                                <path fill="#1A237E" d="M28.5,14c0,0-2-2-5-2c-5,0-9.5,5-9.5,5l4.5,1.5C20,17,22.5,14,28.5,14z"/>
+                                <circle fill="#1A237E" cx="27" cy="25.5" r="3.5"/>
+                                <circle fill="#FFF" cx="27" cy="25.5" r="1.5"/>
+                              </svg>
+                            </div>
+                            <span className="font-bold text-[#1E293B]">Google Maps</span>
+                          </a>
+                          <a
+                            href={urls.apple}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-100 active:scale-95 transition-all"
+                          >
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
+                              <svg viewBox="0 0 48 48" width="40" height="40">
+                                <defs>
+                                  <linearGradient id="appleMapsGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#78D45E"/>
+                                    <stop offset="50%" stopColor="#5EB8E0"/>
+                                    <stop offset="100%" stopColor="#4A90D9"/>
+                                  </linearGradient>
+                                </defs>
+                                <rect width="48" height="48" rx="10" fill="url(#appleMapsGrad)"/>
+                                <path d="M18 14 L30 10 L36 22 L24 38 L12 30 Z" fill="rgba(255,255,255,0.3)" stroke="white" strokeWidth="1.5"/>
+                                <path d="M18 14 L30 10 L36 22" fill="rgba(255,255,255,0.5)"/>
+                                <path d="M24 20 L20 28 L28 24 Z" fill="white" opacity="0.9"/>
+                                <circle cx="24" cy="24" r="2" fill="white"/>
+                                <polygon points="24,18 25,23 24,24 23,23" fill="#E74C3C"/>
+                                <polygon points="24,30 23,25 24,24 25,25" fill="white"/>
+                              </svg>
+                            </div>
+                            <span className="font-bold text-[#1E293B]">Apple Maps</span>
+                          </a>
+                          <a
+                            href={urls.waze}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-100 active:scale-95 transition-all"
+                          >
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
+                              <svg viewBox="0 0 48 48" width="40" height="40">
+                                <rect width="48" height="48" rx="10" fill="#33CCFF"/>
+                                <ellipse cx="24" cy="26" rx="12" ry="11" fill="white"/>
+                                <ellipse cx="24" cy="25" rx="10" ry="9" fill="white"/>
+                                <path d="M28 16 C30 12 34 14 32 18" fill="white"/>
+                                <circle cx="20" cy="24" r="2.5" fill="#333"/>
+                                <circle cx="28" cy="24" r="2.5" fill="#333"/>
+                                <circle cx="19.5" cy="23" r="0.8" fill="white"/>
+                                <circle cx="27.5" cy="23" r="0.8" fill="white"/>
+                                <path d="M19 30 Q24 34 29 30" fill="none" stroke="#333" strokeWidth="1.5" strokeLinecap="round"/>
+                              </svg>
+                            </div>
+                            <span className="font-bold text-[#1E293B]">Waze</span>
+                          </a>
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
                 
                 <div className="grid grid-cols-2 gap-3 mt-4">
                   <button 
@@ -743,95 +827,6 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
       </div>
       
       {/* Floating Home Button removed from here — rendered globally in App.tsx */}
-
-      {showNavModal && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-end justify-center" onClick={() => setShowNavModal(false)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
-          <div className="absolute inset-0 bg-black/40" />
-          <div className="relative w-full max-w-lg bg-white rounded-t-[32px] p-6 pb-10 animate-slide-up" onClick={e => e.stopPropagation()}>
-            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
-            <h3 className="text-lg font-black text-[#1E293B] text-center mb-5">Open with</h3>
-            <div className="flex flex-col gap-3">
-              {(() => {
-                const urls = getNavigationUrls(place, placeDetails);
-                return (
-                  <>
-                    <button
-                      onClick={() => { window.open(urls.google, '_blank'); setShowNavModal(false); }}
-                      className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl active:scale-95 transition-all"
-                    >
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
-                        <svg viewBox="0 0 48 48" width="40" height="40">
-                          <path fill="#1C9957" d="M42,24.5v-1L36,18l-5.8,4.3c0,0-1.2,1.3-1.2,3.2c0,2.1,1.5,3.7,1.5,3.7L36,34L42,24.5z"/>
-                          <path fill="#3F51B5" d="M42,24.5L36,34l-10.5-4.8c0,0-1.5-1.6-1.5-3.7c0-1.9,1.2-3.2,1.2-3.2L31.5,18L42,24.5z"/>
-                          <path fill="#FFEB3B" d="M36,34l-10.5-4.8c0,0,3,5.8,3,9.8c0,3-1.5,5-1.5,5L36,34z"/>
-                          <path fill="#F44336" d="M27,44c0,0,1.5-2,1.5-5c0-4-3-9.8-3-9.8L18,34l4.5,7.5C24,44,27,44,27,44z"/>
-                          <path fill="#1C9957" d="M18,34l7.5-4.8c0,0-1.2-1.3-1.2-3.2c0-1.9,1.2-3.2,1.2-3.2L18,18c0,0-6,5.3-6,11.5C12,33,18,34,18,34z"/>
-                          <path fill="#4CAF50" d="M18,18l7.5,4.8c0,0,1.3-1.4,3-1.8V14c0,0-3.5,0-6,1.5C20,17,18,18,18,18z"/>
-                          <path fill="#F44336" d="M28.5,14v7c1.7,0.4,3,1.8,3,3.5c0,2.1-1.5,3.7-1.5,3.7L36,34c0,0,6-5,6-10.5c0-7-7.5-11-7.5-11L28.5,14z"/>
-                          <path fill="#1A237E" d="M28.5,14c0,0-2-2-5-2c-5,0-9.5,5-9.5,5l4.5,1.5C20,17,22.5,14,28.5,14z"/>
-                          <circle fill="#1A237E" cx="27" cy="25.5" r="3.5"/>
-                          <circle fill="#FFF" cx="27" cy="25.5" r="1.5"/>
-                        </svg>
-                      </div>
-                      <span className="font-bold text-[#1E293B]">Google Maps</span>
-                    </button>
-                    <button
-                      onClick={() => { window.open(urls.apple, '_blank'); setShowNavModal(false); }}
-                      className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl active:scale-95 transition-all"
-                    >
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
-                        <svg viewBox="0 0 48 48" width="40" height="40">
-                          <defs>
-                            <linearGradient id="appleMapsGrad" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#78D45E"/>
-                              <stop offset="50%" stopColor="#5EB8E0"/>
-                              <stop offset="100%" stopColor="#4A90D9"/>
-                            </linearGradient>
-                          </defs>
-                          <rect width="48" height="48" rx="10" fill="url(#appleMapsGrad)"/>
-                          <path d="M18 14 L30 10 L36 22 L24 38 L12 30 Z" fill="rgba(255,255,255,0.3)" stroke="white" strokeWidth="1.5"/>
-                          <path d="M18 14 L30 10 L36 22" fill="rgba(255,255,255,0.5)"/>
-                          <path d="M24 20 L20 28 L28 24 Z" fill="white" opacity="0.9"/>
-                          <circle cx="24" cy="24" r="2" fill="white"/>
-                          <polygon points="24,18 25,23 24,24 23,23" fill="#E74C3C"/>
-                          <polygon points="24,30 23,25 24,24 25,25" fill="white"/>
-                        </svg>
-                      </div>
-                      <span className="font-bold text-[#1E293B]">Apple Maps</span>
-                    </button>
-                    <button
-                      onClick={() => { window.open(urls.waze, '_blank'); setShowNavModal(false); }}
-                      className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl active:scale-95 transition-all"
-                    >
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
-                        <svg viewBox="0 0 48 48" width="40" height="40">
-                          <rect width="48" height="48" rx="10" fill="#33CCFF"/>
-                          <ellipse cx="24" cy="26" rx="12" ry="11" fill="white"/>
-                          <ellipse cx="24" cy="25" rx="10" ry="9" fill="white"/>
-                          <path d="M28 16 C30 12 34 14 32 18" fill="white"/>
-                          <circle cx="20" cy="24" r="2.5" fill="#333"/>
-                          <circle cx="28" cy="24" r="2.5" fill="#333"/>
-                          <circle cx="19.5" cy="23" r="0.8" fill="white"/>
-                          <circle cx="27.5" cy="23" r="0.8" fill="white"/>
-                          <path d="M19 30 Q24 34 29 30" fill="none" stroke="#333" strokeWidth="1.5" strokeLinecap="round"/>
-                        </svg>
-                      </div>
-                      <span className="font-bold text-[#1E293B]">Waze</span>
-                    </button>
-                  </>
-                );
-              })()}
-            </div>
-            <button
-              onClick={() => setShowNavModal(false)}
-              className="w-full mt-4 p-4 text-slate-400 font-bold text-sm rounded-2xl active:bg-slate-50 transition-all"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>,
-        document.body
-      )}
     </div>
   );
 };
