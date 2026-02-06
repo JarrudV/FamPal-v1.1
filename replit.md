@@ -96,3 +96,9 @@ Key features include:
   - Authenticated users now go directly to dashboard (not login) after refresh
   - Firebase Admin SDK now uses Application Default Credentials (ADC) on Cloud Run
   - All environment variables configured with proper BUILD/RUNTIME availability
+- **V2.19 Navigation Icons & PWA App Icons**:
+  - Replaced emoji icons in navigation modal with official-style SVG brand icons for Google Maps, Apple Maps, and Waze
+  - Added proper PWA web app manifest (manifest.json) with app name, theme, and icon references
+  - Generated clean PNG app icons (192px, 512px) from the existing SVG favicon using ImageMagick
+  - Apple touch icons now use clean PNGs without watermarks for proper home screen appearance
+  - App is now properly installable as a PWA on both iOS and Android home screens
