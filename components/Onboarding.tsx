@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import type { ActivityType, UserPreferences, Preferences, Child, PartnerLink, ProfileInfo } from '../types';
 import { FOOD_PREFERENCES, ALLERGY_OPTIONS, ACTIVITY_PREFERENCES } from '../types';
 
@@ -19,15 +19,15 @@ interface OnboardingProps {
   }) => void;
 }
 
-const CATEGORY_OPTIONS: { key: ActivityType; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'restaurant', label: 'Food' },
-  { key: 'outdoor', label: 'Outdoors' },
-  { key: 'indoor', label: 'Indoor' },
-  { key: 'active', label: 'Active' },
-  { key: 'hike', label: 'Hike' },
-  { key: 'wine', label: 'Wine' },
-  { key: 'golf', label: 'Golf' },
+const CATEGORY_OPTIONS: { key: ActivityType; label: string; icon: string }[] = [
+  { key: 'all', label: 'All', icon: '🌟' },
+  { key: 'restaurant', label: 'Food', icon: '🍕' },
+  { key: 'outdoor', label: 'Outdoors', icon: '🌿' },
+  { key: 'indoor', label: 'Indoor', icon: '🎮' },
+  { key: 'active', label: 'Active', icon: '⚽' },
+  { key: 'hike', label: 'Hike', icon: '🥾' },
+  { key: 'wine', label: 'Wine', icon: '🍷' },
+  { key: 'golf', label: 'Golf', icon: '⛳' },
 ];
 
 const generateInviteCode = () => {
@@ -45,6 +45,13 @@ const getDefaultPreferences = (): Preferences => ({
   accessibility: [],
   activityPreferences: [],
 });
+
+const STEP_GRADIENTS = [
+  'from-sky-400 via-blue-500 to-indigo-600',
+  'from-emerald-400 via-teal-500 to-cyan-600',
+  'from-pink-400 via-rose-500 to-red-500',
+  'from-violet-400 via-purple-500 to-indigo-600',
+];
 
 const Onboarding: React.FC<OnboardingProps> = ({
   userName,
@@ -71,16 +78,8 @@ const Onboarding: React.FC<OnboardingProps> = ({
   const [childAge, setChildAge] = useState('');
   const [partnerLink, setPartnerLink] = useState<PartnerLink | null>(initialPartnerLink || null);
 
-  const steps = useMemo(() => ([
-    { title: 'Welcome', subtitle: `Hi ${userName || 'there'}! Let’s get FamPals set up for you.` },
-    { title: 'Core Features', subtitle: 'Discover places, save favorites, and track adventures.' },
-    { title: 'Circles', subtitle: 'Create circles to share places with friends and family.' },
-    { title: 'AI + Pro', subtitle: 'Get tailored suggestions with AI. Pro unlocks more power.' },
-    { title: 'Partner Linking', subtitle: 'Link with a partner to share favorites and notes.' },
-    { title: 'Preferences', subtitle: 'Set your defaults and add dependants.' },
-  ]), [userName]);
-
-  const isLastStep = step === steps.length - 1;
+  const totalSteps = 4;
+  const isLastStep = step === totalSteps - 1;
 
   const handleSkip = () => {
     const result = buildResult(true);
@@ -93,19 +92,21 @@ const Onboarding: React.FC<OnboardingProps> = ({
       onComplete(result);
       return;
     }
-    setStep((prev) => Math.min(prev + 1, steps.length - 1));
+    setStep((prev) => Math.min(prev + 1, totalSteps - 1));
   };
 
   const handleBack = () => {
     setStep((prev) => Math.max(prev - 1, 0));
   };
 
-  const togglePreference = (key: keyof Preferences, value: string) => {
-    const current = preferences[key] || [];
-    const exists = current.includes(value);
-    const next = exists ? current.filter((item) => item !== value) : [...current, value];
-    setPreferences({ ...preferences, [key]: next });
-  };
+  const togglePreference = useCallback((key: keyof Preferences, value: string) => {
+    setPreferences(prev => {
+      const current = prev[key] || [];
+      const exists = current.includes(value);
+      const next = exists ? current.filter((item) => item !== value) : [...current, value];
+      return { ...prev, [key]: next };
+    });
+  }, []);
 
   const handleAddChild = () => {
     if (!childName.trim() || !childAge.trim()) return;
@@ -166,268 +167,436 @@ const Onboarding: React.FC<OnboardingProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] px-6 py-8 flex flex-col">
-      <div className="flex items-center justify-between text-xs text-slate-400 font-bold uppercase tracking-widest">
-        <span>Step {step + 1} / {steps.length}</span>
-        <button onClick={handleSkip} className="text-slate-500 hover:text-slate-700">Skip</button>
-      </div>
-
-      <div className="mt-8 flex-1 flex flex-col gap-6">
-        <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm">
-          <h2 className="text-xl font-black text-slate-800">{steps[step].title}</h2>
-          <p className="text-sm text-slate-500 mt-2">{steps[step].subtitle}</p>
+    <div className="min-h-screen bg-white flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between px-6 pt-6 pb-2">
+        <div className="flex items-center gap-2">
+          {Array.from({ length: totalSteps }).map((_, i) => (
+            <div
+              key={i}
+              className={`h-1.5 rounded-full transition-all duration-500 ${
+                i === step
+                  ? 'w-8 bg-gradient-to-r ' + STEP_GRADIENTS[step]
+                  : i < step
+                  ? 'w-4 bg-slate-300'
+                  : 'w-4 bg-slate-200'
+              }`}
+            />
+          ))}
         </div>
-
-        {step === 0 && (
-          <div className="bg-white rounded-3xl p-6 border border-slate-100 space-y-4">
-            <div>
-              <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Your Name</p>
-              <input
-                value={profileName}
-                onChange={(e) => setProfileName(e.target.value)}
-                placeholder="Enter your name"
-                className="w-full h-12 rounded-2xl bg-slate-50 border border-slate-100 px-4 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-sky-200"
-              />
-            </div>
-            <div>
-              <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Your Age</p>
-              <input
-                type="number"
-                min="0"
-                value={profileAge}
-                onChange={(e) => setProfileAge(e.target.value)}
-                placeholder="Optional"
-                className="w-full h-12 rounded-2xl bg-slate-50 border border-slate-100 px-4 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-sky-200"
-              />
-            </div>
-            <p className="text-[11px] text-slate-400">You can edit these later in Profile.</p>
-          </div>
-        )}
-
-        {step === 1 && (
-          <div className="space-y-3 text-sm text-slate-600">
-            <div className="bg-white rounded-2xl p-4 border border-slate-100">Explore nearby family-friendly places with smart filters.</div>
-            <div className="bg-white rounded-2xl p-4 border border-slate-100">Save favorites and track visits for easy planning.</div>
-            <div className="bg-white rounded-2xl p-4 border border-slate-100">Share memories and invite others into circles.</div>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="bg-white rounded-2xl p-5 border border-slate-100 text-sm text-slate-600">
-            Circles help you collect places by theme and share them with friends, family, or your partner.
-          </div>
-        )}
-
-        {step === 3 && (
-          <div className="bg-white rounded-2xl p-5 border border-slate-100 text-sm text-slate-600">
-            Ask AI for tailored ideas. Pro unlocks higher limits and more features.
-          </div>
-        )}
-
-        {step === 4 && (
-          <div className="space-y-4">
-            <div className="bg-white rounded-2xl p-5 border border-slate-100 text-sm text-slate-600">
-              Link a partner to share favorites, memories, and quick notes together.
-            </div>
-            <div className="bg-white rounded-3xl p-5 border border-slate-100 space-y-3">
-              {partnerLink?.status === 'accepted' ? (
-                <p className="text-sm text-slate-600">Partner already linked.</p>
-              ) : partnerLink?.inviteCode ? (
-                <>
-                  <div>
-                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Your Invite Code</p>
-                    <div className="text-2xl font-black text-sky-600 tracking-[0.3em] text-center">
-                      {partnerLink.inviteCode}
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleSharePartnerLink}
-                    className="w-full h-12 bg-green-500 text-white rounded-2xl text-xs font-bold uppercase tracking-widest"
-                  >
-                    Share via WhatsApp
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={handleGeneratePartnerLink}
-                  className="w-full h-12 bg-sky-500 text-white rounded-2xl text-xs font-bold uppercase tracking-widest"
-                >
-                  Generate Invite Code
-                </button>
-              )}
-              <p className="text-[11px] text-slate-400">You can manage partner linking later in Profile.</p>
-            </div>
-          </div>
-        )}
-
-        {step === 5 && (
-          <div className="space-y-4">
-            <div className="bg-white rounded-3xl p-6 border border-slate-100 space-y-4">
-              <div>
-                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Search Radius</p>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-bold text-slate-700">{radiusKm} km</span>
-                  <span className="text-[10px] text-slate-400">1 - 200 km</span>
-                </div>
-                <input
-                  type="range"
-                  min="1"
-                  max="200"
-                  value={radiusKm}
-                  onChange={(e) => setRadiusKm(parseInt(e.target.value, 10))}
-                  className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-sky-500"
-                />
-              </div>
-
-              <div>
-                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Starting Category</p>
-                <div className="flex flex-wrap gap-2">
-                  {CATEGORY_OPTIONS.map(option => (
-                    <button
-                      key={option.key}
-                      onClick={() => setCategory(option.key)}
-                      className={`px-3 py-2 rounded-full text-[11px] font-bold transition-all ${
-                        category === option.key
-                          ? 'bg-sky-500 text-white'
-                          : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-3xl p-6 border border-slate-100 space-y-5">
-              <div>
-                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Eating Habits</p>
-                <div className="flex flex-wrap gap-2">
-                  {FOOD_PREFERENCES.map(pref => (
-                    <button
-                      key={pref}
-                      onClick={() => togglePreference('foodPreferences', pref)}
-                      className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${
-                        preferences.foodPreferences.includes(pref)
-                          ? 'bg-green-500 text-white'
-                          : 'bg-slate-100 text-slate-500'
-                      }`}
-                    >
-                      {pref}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Allergies</p>
-                <div className="flex flex-wrap gap-2">
-                  {ALLERGY_OPTIONS.map(pref => (
-                    <button
-                      key={pref}
-                      onClick={() => togglePreference('allergies', pref)}
-                      className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${
-                        preferences.allergies.includes(pref)
-                          ? 'bg-rose-500 text-white'
-                          : 'bg-slate-100 text-slate-500'
-                      }`}
-                    >
-                      {pref}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Activity Preferences</p>
-                <div className="flex flex-wrap gap-2">
-                  {ACTIVITY_PREFERENCES.map(pref => (
-                    <button
-                      key={pref}
-                      onClick={() => togglePreference('activityPreferences', pref)}
-                      className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${
-                        preferences.activityPreferences.includes(pref)
-                          ? 'bg-violet-500 text-white'
-                          : 'bg-slate-100 text-slate-500'
-                      }`}
-                    >
-                      {pref}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-3xl p-6 border border-slate-100 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Dependants</h3>
-                <span className="text-[10px] text-slate-400">{children.length} added</span>
-              </div>
-
-              {children.length > 0 && (
-                <div className="space-y-2">
-                  {children.map(child => (
-                    <div key={child.id} className="flex items-center justify-between bg-slate-50 rounded-2xl px-4 py-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-700">{child.name}</p>
-                        <p className="text-[10px] text-slate-400">Age {child.age}</p>
-                      </div>
-                      <button
-                        onClick={() => handleRemoveChild(child.id)}
-                        className="text-xs font-bold text-rose-500"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                <input
-                  value={childName}
-                  onChange={(e) => setChildName(e.target.value)}
-                  placeholder="Child name"
-                  className="flex-1 h-12 rounded-2xl bg-slate-50 border border-slate-100 px-4 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-sky-200"
-                />
-                <input
-                  value={childAge}
-                  onChange={(e) => setChildAge(e.target.value)}
-                  placeholder="Age"
-                  type="number"
-                  min="0"
-                  className="w-24 h-12 rounded-2xl bg-slate-50 border border-slate-100 px-3 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-sky-200"
-                />
-              </div>
-              <button
-                onClick={handleAddChild}
-                className="w-full h-12 bg-slate-900 text-white rounded-2xl text-xs font-bold uppercase tracking-widest"
-              >
-                Add dependant
-              </button>
-            </div>
-          </div>
-        )}
+        <button onClick={handleSkip} className="text-xs font-semibold text-slate-400 active:text-slate-600 px-2 py-1">
+          Skip
+        </button>
       </div>
 
-      <div className="flex items-center gap-3 mt-6">
-        {step > 0 && (
+      <div className="flex-1 flex flex-col" key={step}>
+        {step === 0 && <StepWelcome
+          userName={userName}
+          profileName={profileName}
+          setProfileName={setProfileName}
+          profileAge={profileAge}
+          setProfileAge={setProfileAge}
+        />}
+        {step === 1 && <StepFeatures />}
+        {step === 2 && <StepFamily
+          children={children}
+          childName={childName}
+          setChildName={setChildName}
+          childAge={childAge}
+          setChildAge={setChildAge}
+          handleAddChild={handleAddChild}
+          handleRemoveChild={handleRemoveChild}
+          partnerLink={partnerLink}
+          handleGeneratePartnerLink={handleGeneratePartnerLink}
+          handleSharePartnerLink={handleSharePartnerLink}
+        />}
+        {step === 3 && <StepPreferences
+          radiusKm={radiusKm}
+          setRadiusKm={setRadiusKm}
+          category={category}
+          setCategory={setCategory}
+          preferences={preferences}
+          togglePreference={togglePreference}
+        />}
+      </div>
+
+      <div className="px-6 pb-8 pt-4">
+        <div className="flex items-center gap-3">
+          {step > 0 && (
+            <button
+              onClick={handleBack}
+              className="h-14 w-14 flex items-center justify-center rounded-2xl border-2 border-slate-200 active:scale-95 transition-all"
+            >
+              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-slate-500">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
           <button
-            onClick={handleBack}
-            className="flex-1 h-12 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-500"
+            onClick={handleNext}
+            className={`flex-1 h-14 rounded-2xl text-sm font-bold text-white active:scale-[0.98] transition-all shadow-lg bg-gradient-to-r ${STEP_GRADIENTS[step]}`}
           >
-            Back
+            {isLastStep ? "Let's Go!" : 'Continue'}
           </button>
-        )}
-        <button
-          onClick={handleNext}
-          className="flex-1 h-12 bg-slate-900 text-white rounded-2xl text-sm font-bold"
-        >
-          {isLastStep ? 'Finish' : 'Next'}
-        </button>
+        </div>
       </div>
     </div>
   );
 };
+
+const StepWelcome: React.FC<{
+  userName?: string | null;
+  profileName: string;
+  setProfileName: (v: string) => void;
+  profileAge: string;
+  setProfileAge: (v: string) => void;
+}> = ({ userName, profileName, setProfileName, profileAge, setProfileAge }) => (
+  <div className="flex-1 flex flex-col px-6 pt-4 pb-2">
+    <div className="flex flex-col items-center text-center mb-8">
+      <div className="w-28 h-28 rounded-full bg-gradient-to-br from-sky-400 to-indigo-600 flex items-center justify-center mb-6 shadow-xl shadow-sky-200/50">
+        <span className="text-5xl">👋</span>
+      </div>
+      <h1 className="text-3xl font-black text-slate-900 mb-2">
+        Welcome{userName ? `, ${userName.split(' ')[0]}` : ''}!
+      </h1>
+      <p className="text-base text-slate-500 max-w-xs leading-relaxed">
+        Let's set up your family profile so we can find the best activities near you.
+      </p>
+    </div>
+
+    <div className="space-y-4 flex-1">
+      <div>
+        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">What should we call you?</label>
+        <input
+          value={profileName}
+          onChange={(e) => setProfileName(e.target.value)}
+          placeholder="Your name"
+          className="w-full h-14 rounded-2xl bg-slate-50 border-2 border-slate-100 px-5 text-base font-semibold text-slate-700 outline-none focus:border-sky-300 focus:bg-white transition-all"
+        />
+      </div>
+      <div>
+        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Your age (optional)</label>
+        <input
+          type="number"
+          min="0"
+          value={profileAge}
+          onChange={(e) => setProfileAge(e.target.value)}
+          placeholder="e.g. 34"
+          className="w-full h-14 rounded-2xl bg-slate-50 border-2 border-slate-100 px-5 text-base font-semibold text-slate-700 outline-none focus:border-sky-300 focus:bg-white transition-all"
+        />
+      </div>
+    </div>
+  </div>
+);
+
+const FeatureCard: React.FC<{ icon: string; title: string; description: string; gradient: string; delay: number }> = ({
+  icon, title, description, gradient, delay,
+}) => (
+  <div
+    className="flex items-start gap-4 p-4 rounded-2xl bg-white border border-slate-100 shadow-sm"
+    style={{ animationDelay: `${delay}ms` }}
+  >
+    <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center flex-shrink-0 shadow-md`}>
+      <span className="text-xl">{icon}</span>
+    </div>
+    <div className="flex-1 min-w-0">
+      <h3 className="text-sm font-bold text-slate-800">{title}</h3>
+      <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{description}</p>
+    </div>
+  </div>
+);
+
+const StepFeatures: React.FC = () => (
+  <div className="flex-1 flex flex-col px-6 pt-4 pb-2">
+    <div className="flex flex-col items-center text-center mb-6">
+      <div className="w-28 h-28 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-600 flex items-center justify-center mb-6 shadow-xl shadow-emerald-200/50">
+        <span className="text-5xl">🗺️</span>
+      </div>
+      <h1 className="text-2xl font-black text-slate-900 mb-2">
+        Here's what you can do
+      </h1>
+      <p className="text-sm text-slate-500 max-w-xs">
+        Everything you need for family adventures, in one place.
+      </p>
+    </div>
+
+    <div className="space-y-3 flex-1">
+      <FeatureCard
+        icon="📍"
+        title="Discover Places"
+        description="Find family-friendly restaurants, parks, trails and more nearby."
+        gradient="from-sky-400 to-blue-500"
+        delay={0}
+      />
+      <FeatureCard
+        icon="❤️"
+        title="Save & Track"
+        description="Bookmark favourites and log your family adventures."
+        gradient="from-rose-400 to-pink-500"
+        delay={100}
+      />
+      <FeatureCard
+        icon="👥"
+        title="Circles & Sharing"
+        description="Create groups with friends and family to share recommendations."
+        gradient="from-amber-400 to-orange-500"
+        delay={200}
+      />
+      <FeatureCard
+        icon="✨"
+        title="AI Suggestions"
+        description="Get personalised activity ideas powered by AI."
+        gradient="from-violet-400 to-purple-500"
+        delay={300}
+      />
+    </div>
+  </div>
+);
+
+const StepFamily: React.FC<{
+  children: Child[];
+  childName: string;
+  setChildName: (v: string) => void;
+  childAge: string;
+  setChildAge: (v: string) => void;
+  handleAddChild: () => void;
+  handleRemoveChild: (id: string) => void;
+  partnerLink: PartnerLink | null;
+  handleGeneratePartnerLink: () => void;
+  handleSharePartnerLink: () => void;
+}> = ({
+  children, childName, setChildName, childAge, setChildAge,
+  handleAddChild, handleRemoveChild,
+  partnerLink, handleGeneratePartnerLink, handleSharePartnerLink,
+}) => (
+  <div className="flex-1 flex flex-col px-6 pt-4 pb-2 overflow-y-auto">
+    <div className="flex flex-col items-center text-center mb-6">
+      <div className="w-28 h-28 rounded-full bg-gradient-to-br from-pink-400 to-red-500 flex items-center justify-center mb-6 shadow-xl shadow-pink-200/50">
+        <span className="text-5xl">👨‍👩‍👧‍👦</span>
+      </div>
+      <h1 className="text-2xl font-black text-slate-900 mb-2">
+        Your Family
+      </h1>
+      <p className="text-sm text-slate-500 max-w-xs">
+        Add your kids so we can recommend age-appropriate activities.
+      </p>
+    </div>
+
+    <div className="space-y-4 flex-1">
+      <div className="bg-slate-50 rounded-3xl p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-slate-700">Kids</h3>
+          <span className="text-xs font-semibold text-slate-400 bg-white px-3 py-1 rounded-full">{children.length} added</span>
+        </div>
+
+        {children.length > 0 && (
+          <div className="space-y-2">
+            {children.map(child => (
+              <div key={child.id} className="flex items-center justify-between bg-white rounded-2xl px-4 py-3 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-pink-300 to-rose-400 flex items-center justify-center text-white text-sm font-bold">
+                    {child.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-700">{child.name}</p>
+                    <p className="text-[11px] text-slate-400">{child.age} {child.age === 1 ? 'year' : 'years'} old</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleRemoveChild(child.id)}
+                  className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center active:scale-90 transition-all"
+                >
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-rose-400">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <input
+            value={childName}
+            onChange={(e) => setChildName(e.target.value)}
+            placeholder="Name"
+            className="flex-1 h-12 rounded-2xl bg-white border-2 border-slate-100 px-4 text-sm font-semibold text-slate-700 outline-none focus:border-pink-300 transition-all"
+          />
+          <input
+            value={childAge}
+            onChange={(e) => setChildAge(e.target.value)}
+            placeholder="Age"
+            type="number"
+            min="0"
+            className="w-20 h-12 rounded-2xl bg-white border-2 border-slate-100 px-3 text-sm font-semibold text-slate-700 outline-none focus:border-pink-300 transition-all text-center"
+          />
+          <button
+            onClick={handleAddChild}
+            className="h-12 w-12 rounded-2xl bg-gradient-to-br from-pink-400 to-rose-500 text-white flex items-center justify-center shadow-md active:scale-90 transition-all flex-shrink-0"
+          >
+            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-slate-50 rounded-3xl p-5 space-y-3">
+        <div className="flex items-center gap-3 mb-1">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center">
+            <span className="text-lg">💑</span>
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-700">Partner Link</h3>
+            <p className="text-[11px] text-slate-400">Share favourites and plan together</p>
+          </div>
+        </div>
+
+        {partnerLink?.status === 'accepted' ? (
+          <div className="bg-green-50 rounded-2xl p-4 text-center">
+            <p className="text-sm font-semibold text-green-700">Partner linked</p>
+          </div>
+        ) : partnerLink?.inviteCode ? (
+          <div className="space-y-3">
+            <div className="bg-white rounded-2xl p-4 text-center shadow-sm">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Your invite code</p>
+              <div className="text-2xl font-black text-violet-600 tracking-[0.3em]">{partnerLink.inviteCode}</div>
+            </div>
+            <button
+              onClick={handleSharePartnerLink}
+              className="w-full h-12 bg-gradient-to-r from-green-400 to-emerald-500 text-white rounded-2xl text-xs font-bold uppercase tracking-wider shadow-md active:scale-[0.98] transition-all"
+            >
+              Share via WhatsApp
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={handleGeneratePartnerLink}
+            className="w-full h-12 bg-white border-2 border-dashed border-violet-200 text-violet-500 rounded-2xl text-xs font-bold uppercase tracking-wider active:scale-[0.98] transition-all"
+          >
+            Generate Invite Code
+          </button>
+        )}
+        <p className="text-[10px] text-slate-400 text-center">You can always do this later in your Profile</p>
+      </div>
+    </div>
+  </div>
+);
+
+const StepPreferences: React.FC<{
+  radiusKm: number;
+  setRadiusKm: (v: number) => void;
+  category: ActivityType;
+  setCategory: (v: ActivityType) => void;
+  preferences: Preferences;
+  togglePreference: (key: keyof Preferences, value: string) => void;
+}> = ({ radiusKm, setRadiusKm, category, setCategory, preferences, togglePreference }) => (
+  <div className="flex-1 flex flex-col px-6 pt-4 pb-2 overflow-y-auto">
+    <div className="flex flex-col items-center text-center mb-6">
+      <div className="w-28 h-28 rounded-full bg-gradient-to-br from-violet-400 to-indigo-600 flex items-center justify-center mb-6 shadow-xl shadow-violet-200/50">
+        <span className="text-5xl">⚙️</span>
+      </div>
+      <h1 className="text-2xl font-black text-slate-900 mb-2">
+        Your Preferences
+      </h1>
+      <p className="text-sm text-slate-500 max-w-xs">
+        Help us personalise your experience. You can change these anytime.
+      </p>
+    </div>
+
+    <div className="space-y-5 flex-1">
+      <div className="bg-slate-50 rounded-3xl p-5 space-y-4">
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Search Radius</label>
+            <span className="text-sm font-black text-violet-600 bg-violet-50 px-3 py-1 rounded-full">{radiusKm} km</span>
+          </div>
+          <input
+            type="range"
+            min="1"
+            max="200"
+            value={radiusKm}
+            onChange={(e) => setRadiusKm(parseInt(e.target.value, 10))}
+            className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-violet-500"
+          />
+          <div className="flex justify-between mt-1">
+            <span className="text-[10px] text-slate-400">1 km</span>
+            <span className="text-[10px] text-slate-400">200 km</span>
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2 block">Default Category</label>
+          <div className="grid grid-cols-4 gap-2">
+            {CATEGORY_OPTIONS.map(option => (
+              <button
+                key={option.key}
+                onClick={() => setCategory(option.key)}
+                className={`flex flex-col items-center gap-1 py-3 rounded-2xl text-[10px] font-bold transition-all active:scale-95 ${
+                  category === option.key
+                    ? 'bg-gradient-to-br from-violet-400 to-indigo-500 text-white shadow-md'
+                    : 'bg-white text-slate-500 border border-slate-100'
+                }`}
+              >
+                <span className="text-lg">{option.icon}</span>
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-slate-50 rounded-3xl p-5 space-y-5">
+        <PreferenceSection
+          title="Eating Habits"
+          options={FOOD_PREFERENCES}
+          selected={preferences.foodPreferences}
+          onToggle={(v) => togglePreference('foodPreferences', v)}
+          activeColor="bg-emerald-500"
+        />
+        <PreferenceSection
+          title="Allergies"
+          options={ALLERGY_OPTIONS}
+          selected={preferences.allergies}
+          onToggle={(v) => togglePreference('allergies', v)}
+          activeColor="bg-rose-500"
+        />
+        <PreferenceSection
+          title="Activities You Love"
+          options={ACTIVITY_PREFERENCES}
+          selected={preferences.activityPreferences}
+          onToggle={(v) => togglePreference('activityPreferences', v)}
+          activeColor="bg-violet-500"
+        />
+      </div>
+    </div>
+  </div>
+);
+
+const PreferenceSection: React.FC<{
+  title: string;
+  options: readonly string[];
+  selected: string[];
+  onToggle: (value: string) => void;
+  activeColor: string;
+}> = ({ title, options, selected, onToggle, activeColor }) => (
+  <div>
+    <label className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2 block">{title}</label>
+    <div className="flex flex-wrap gap-2">
+      {options.map(opt => (
+        <button
+          key={opt}
+          onClick={() => onToggle(opt)}
+          className={`px-3.5 py-2 rounded-full text-[11px] font-bold transition-all active:scale-95 ${
+            selected.includes(opt)
+              ? `${activeColor} text-white shadow-sm`
+              : 'bg-white text-slate-500 border border-slate-100'
+          }`}
+        >
+          {opt}
+        </button>
+      ))}
+    </div>
+  </div>
+);
 
 export default Onboarding;

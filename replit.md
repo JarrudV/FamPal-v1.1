@@ -102,3 +102,14 @@ Key features include:
   - Generated clean PNG app icons (192px, 512px) from the existing SVG favicon using ImageMagick
   - Apple touch icons now use clean PNGs without watermarks for proper home screen appearance
   - App is now properly installable as a PWA on both iOS and Android home screens
+- **V2.20 Onboarding Redesign**:
+  - Completely redesigned onboarding from 6 plain text steps to 4 visually engaging steps
+  - Step 1 (Welcome): Gradient hero circle with wave emoji, name and age inputs
+  - Step 2 (Features): Colourful feature cards with gradient icons for Discover, Save, Circles, and AI
+  - Step 3 (Family): Kids management with avatar initials, partner invite with dashed-border CTA
+  - Step 4 (Preferences): Category grid with emoji icons, radius slider, food/allergy/activity chips
+  - Animated progress dots with gradient fills that change colour per step
+  - Gradient CTA button that matches the current step's colour theme
+  - Back button is a compact icon instead of full-width text button
+  - Replaced navigation map SVG icons with official PNG icons (Google Maps, Apple Maps, Waze)
+  - Inline navigation options instead of portal modal for better mobile UX
