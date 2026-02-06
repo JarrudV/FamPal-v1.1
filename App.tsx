@@ -270,7 +270,18 @@ const App: React.FC = () => {
                 visited: dbState.visited || [],
                 visitedPlaces: dbState.visitedPlaces || [],
                 reviews: dbState.reviews || [],
-                memories: dbState.memories || [],
+                memories: (() => {
+                  const mems = dbState.memories || [];
+                  if (mems.length > 0) {
+                    console.log('[FamPals] Loaded memories from Firestore:', mems.length, 'first memory photos:', {
+                      photoUrl: mems[0]?.photoUrl,
+                      photoUrls: mems[0]?.photoUrls,
+                      photoThumbUrl: mems[0]?.photoThumbUrl,
+                      photoThumbUrls: mems[0]?.photoThumbUrls,
+                    });
+                  }
+                  return mems;
+                })(),
                 children: dbState.children || [],
                 groups: dbState.groups || [],
                 friendCircles: dbState.friendCircles || [],

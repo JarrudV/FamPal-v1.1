@@ -141,11 +141,18 @@ const MemoryCreate: React.FC<MemoryCreateProps> = ({
   }, [fixedPlace]);
 
   const handleAddPhoto = async (file: File) => {
+    console.log('[FamPals] handleAddPhoto called, file:', file.name, 'size:', file.size, 'type:', file.type);
     if (photos.length >= MAX_PHOTOS) {
       setError(`Maximum ${MAX_PHOTOS} photos per memory.`);
       return;
     }
-    if (!storage || !auth?.currentUser) {
+    if (!storage) {
+      console.error('[FamPals] Photo upload: storage is null');
+      setError('Photo upload is unavailable. Firebase Storage not configured.');
+      return;
+    }
+    if (!auth?.currentUser) {
+      console.error('[FamPals] Photo upload: not signed in');
       setError('Photo upload is unavailable. Please sign in again.');
       return;
     }
@@ -156,24 +163,29 @@ const MemoryCreate: React.FC<MemoryCreateProps> = ({
       const timestamp = Date.now();
       const folder = fixedPlace?.id || selectedPlaceId || 'general';
       const baseName = `memories/${auth.currentUser.uid}/${folder}/${timestamp}`;
+      console.log('[FamPals] Compressing photo...');
       const fullBlob = await compressImage(file, MAX_WIDTH, JPEG_QUALITY);
       const thumbBlob = await compressImage(file, THUMB_WIDTH, THUMB_QUALITY);
+      console.log('[FamPals] Compressed. Full:', fullBlob.size, 'Thumb:', thumbBlob.size);
       const fullRef = ref(storage, `${baseName}_full.jpg`);
       const thumbRef = ref(storage, `${baseName}_thumb.jpg`);
+      console.log('[FamPals] Uploading to Firebase Storage...');
       await uploadBytes(fullRef, fullBlob);
       await uploadBytes(thumbRef, thumbBlob);
+      console.log('[FamPals] Upload complete. Getting download URLs...');
       const [fullUrl, thumbUrl] = await Promise.all([
         getDownloadURL(fullRef),
         getDownloadURL(thumbRef),
       ]);
+      console.log('[FamPals] Photo URLs obtained:', { fullUrl: fullUrl.substring(0, 80), thumbUrl: thumbUrl.substring(0, 80) });
       setPhotos(prev => [...prev, fullUrl]);
       setThumbs(prev => [...prev, thumbUrl]);
       tryExtractExifGeo(file).then((result) => {
         if (result) setGeo(result);
       });
-    } catch (err) {
-      setError('Failed to upload photo. Please try again.');
-      console.warn('Memory photo upload failed.', err);
+    } catch (err: any) {
+      console.error('[FamPals] Photo upload FAILED:', err?.message || err, err?.code, err);
+      setError(`Photo upload failed: ${err?.message || 'Unknown error'}. Please try again.`);
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';

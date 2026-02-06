@@ -12,7 +12,7 @@ import { searchNearbyPlacesPaged, textSearchPlacesPaged, getPlaceDetails } from 
 import { getLimits, canSavePlace, isPaidTier, getNextResetDate } from '../lib/entitlements';
 import { updateLocation, updateRadius, updateCategory, updateActiveCircle } from '../lib/profileSync';
 import { ShareMemoryModal } from './ShareMemory';
-import { db, doc, getDoc, collection, onSnapshot, setDoc, auth, serverTimestamp, increment } from '../lib/firebase';
+import { db, doc, getDoc, collection, onSnapshot, setDoc, auth, serverTimestamp, increment, storage, ref, uploadBytes, getDownloadURL } from '../lib/firebase';
 import { upsertSavedPlace, deleteSavedPlace } from '../lib/userData';
 import MemoryCreate from './MemoryCreate';
 import {
@@ -1004,6 +1004,76 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     }
   }, [onUpdateState, places, state.favorites, state.memories, state.visitedPlaces, isGuest, state.partnerLink, state.user?.uid]);
 
+  const memoryPhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploadingMemoryId, setUploadingMemoryId] = useState<string | null>(null);
+
+  const handleAddPhotoToMemory = useCallback(async (memoryId: string, file: File) => {
+    if (!storage || !auth?.currentUser) {
+      console.error('[FamPals] Cannot add photo: storage or auth missing');
+      return;
+    }
+    setUploadingMemoryId(memoryId);
+    try {
+      const timestamp = Date.now();
+      const baseName = `memories/${auth.currentUser.uid}/edit/${timestamp}`;
+
+      const loadImg = (f: File): Promise<HTMLImageElement | ImageBitmap> => {
+        if ('createImageBitmap' in window) return createImageBitmap(f);
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+          img.src = URL.createObjectURL(f);
+        });
+      };
+      const compress = async (f: File, maxW: number, q: number): Promise<Blob> => {
+        const image = await loadImg(f);
+        const w = 'width' in image ? image.width : (image as ImageBitmap).width;
+        const h = 'height' in image ? image.height : (image as ImageBitmap).height;
+        const scale = Math.min(1, maxW / w);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(w * scale);
+        canvas.height = Math.round(h * scale);
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(image as CanvasImageSource, 0, 0, canvas.width, canvas.height);
+        if ('close' in image) (image as ImageBitmap).close();
+        return new Promise((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error('fail')), 'image/jpeg', q));
+      };
+
+      console.log('[FamPals] Adding photo to memory', memoryId);
+      const fullBlob = await compress(file, 1600, 0.7);
+      const thumbBlob = await compress(file, 400, 0.6);
+      const fullRef = ref(storage, `${baseName}_full.jpg`);
+      const thumbRef = ref(storage, `${baseName}_thumb.jpg`);
+      await uploadBytes(fullRef, fullBlob);
+      await uploadBytes(thumbRef, thumbBlob);
+      const [fullUrl, thumbUrl] = await Promise.all([
+        getDownloadURL(fullRef),
+        getDownloadURL(thumbRef),
+      ]);
+      console.log('[FamPals] Photo added to memory successfully');
+
+      const updated = state.memories.map(m => {
+        if (m.id !== memoryId) return m;
+        const existingPhotos = m.photoUrls || (m.photoUrl ? [m.photoUrl] : []);
+        const existingThumbs = m.photoThumbUrls || (m.photoThumbUrl ? [m.photoThumbUrl] : []);
+        return {
+          ...m,
+          photoUrl: m.photoUrl || fullUrl,
+          photoUrls: [...existingPhotos, fullUrl],
+          photoThumbUrl: m.photoThumbUrl || thumbUrl,
+          photoThumbUrls: [...existingThumbs, thumbUrl],
+        };
+      });
+      onUpdateState('memories', updated);
+    } catch (err: any) {
+      console.error('[FamPals] Failed to add photo to memory:', err?.message || err);
+      alert('Failed to upload photo. Please try again.');
+    } finally {
+      setUploadingMemoryId(null);
+    }
+  }, [state.memories, onUpdateState]);
+
   const favoritePlaces = savedPlaces.map(mapSavedPlaceToPlace);
 
   const handleIncrementAiRequests = async () => {
@@ -1681,21 +1751,19 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                         <p className="text-slate-800 text-sm leading-relaxed">{memory.caption}</p>
                       </div>
                       
-                      {photos.length > 0 && (
+                      {photos.length > 0 ? (
                         <div className={`${photos.length === 1 ? '' : 'grid grid-cols-2 gap-0.5'}`}>
                           {photos.slice(0, 4).map((photo, idx) => (
                             <div key={idx} className={`relative ${photos.length === 1 ? 'aspect-video' : 'aspect-square'} bg-slate-100`}>
                               <img
                                 src={photo}
-                                crossOrigin="anonymous"
                                 className="w-full h-full object-cover"
                                 alt=""
                                 onError={(e) => {
                                   const target = e.currentTarget;
                                   if (!target.dataset.retried) {
                                     target.dataset.retried = 'true';
-                                    target.crossOrigin = '';
-                                    target.src = photo;
+                                    target.src = photo + (photo.includes('?') ? '&' : '?') + 't=' + Date.now();
                                   } else {
                                     target.style.display = 'none';
                                     const parent = target.parentElement;
@@ -1716,6 +1784,32 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                             </div>
                           ))}
                         </div>
+                      ) : (
+                        <label className="block mx-4 mb-3 cursor-pointer">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleAddPhotoToMemory(memory.id, file);
+                              e.target.value = '';
+                            }}
+                          />
+                          <div className="flex items-center justify-center gap-2 py-3 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-sky-300 hover:text-sky-400 transition-colors">
+                            {uploadingMemoryId === memory.id ? (
+                              <span className="text-xs font-medium">Uploading...</span>
+                            ) : (
+                              <>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                <span className="text-xs font-medium">Add a Photo</span>
+                              </>
+                            )}
+                          </div>
+                        </label>
                       )}
                       
                       {memory.placeName && (
@@ -1728,6 +1822,34 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                       )}
                       
                       <div className="flex border-t border-slate-100">
+                        {photos.length > 0 && photos.length < 3 && (
+                          <>
+                            <label className="flex-1 flex items-center justify-center gap-2 py-3 text-slate-500 hover:bg-slate-50 transition-colors cursor-pointer">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleAddPhotoToMemory(memory.id, file);
+                                  e.target.value = '';
+                                }}
+                              />
+                              {uploadingMemoryId === memory.id ? (
+                                <span className="text-xs font-medium">Uploading...</span>
+                              ) : (
+                                <>
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  </svg>
+                                  <span className="text-sm font-medium">Add Photo</span>
+                                </>
+                              )}
+                            </label>
+                            <div className="w-px bg-slate-100"></div>
+                          </>
+                        )}
                         <button
                           onClick={() => setShareMemory(memory)}
                           className="flex-1 flex items-center justify-center gap-2 py-3 text-slate-500 hover:bg-slate-50 transition-colors"
@@ -1735,7 +1857,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                           </svg>
-                          <span className="text-sm font-medium">Share to Circle</span>
+                          <span className="text-sm font-medium">Share</span>
                         </button>
                         <div className="w-px bg-slate-100"></div>
                         <button
