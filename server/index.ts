@@ -28,13 +28,33 @@ app.get('/health', (_req, res) => {
   res.status(200).send('OK');
 });
 
-app.use(cors({ origin: true }));
+const replitDomains = process.env.REPLIT_DOMAINS?.split(',').map((domain) => domain.trim()).filter(Boolean) ?? [];
+const replitOrigins = replitDomains.map((domain) => `https://${domain}`);
+const allowedOrigins = [
+  'https://app.fampal.co.za',
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:5000',
+  'http://localhost:8080',
+  ...replitOrigins,
+];
+
+const isProduction = process.env.NODE_ENV === 'production';
+app.use(cors({
+  origin: isProduction
+    ? (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(null, false);
+    }
+    : true,
+}));
 app.use(express.json({ verify: (req: any, _res, buf) => { req.rawBody = buf; } }));
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || '';
 const PAYSTACK_PUBLIC_KEY = process.env.PAYSTACK_PUBLIC_KEY || '';
 const APP_URL = process.env.APP_URL
-  || (process.env.REPLIT_DOMAINS?.split(',')[0] ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000');
+  || (replitDomains[0] ? `https://${replitDomains[0]}` : 'http://localhost:5000');
 
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY || process.env.VITE_GOOGLE_PLACES_API_KEY || '';
 
@@ -711,10 +731,9 @@ app.post('/api/partner/link', requireAuth, async (req: AuthenticatedRequest, res
 });
 
 // In production, serve the built frontend
-const isProduction = process.env.NODE_ENV === 'production';
 if (isProduction) {
-  // When running from repo root with `npx tsx server/index.ts`, dist is at ./dist
-  const distPath = path.resolve(process.cwd(), 'dist');
+  // Prefer dist relative to compiled server output (dist-server/../dist)
+  const distPath = path.resolve(__dirname, '..', 'dist');
   console.log(`[FamPals API] Serving static files from: ${distPath}`);
   console.log(`[FamPals API] Current working directory: ${process.cwd()}`);
   
@@ -725,7 +744,7 @@ if (isProduction) {
     app.use(express.static(distPath));
     
     // Handle client-side routing - serve index.html for all non-API routes
-    app.get('*', (req, res) => {
+    app.get(/.*/, (req, res) => {
       if (!req.path.startsWith('/api/')) {
         res.sendFile(path.join(distPath, 'index.html'));
       }
