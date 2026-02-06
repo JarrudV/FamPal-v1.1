@@ -22,7 +22,7 @@ interface MemoryCreateProps {
   enableSocialShare?: boolean;
 }
 
-const MAX_PHOTOS = 3;
+const MAX_PHOTOS = 1;
 const MAX_WIDTH = 1600;
 const THUMB_WIDTH = 400;
 const JPEG_QUALITY = 0.7;
@@ -403,11 +403,11 @@ const MemoryCreate: React.FC<MemoryCreateProps> = ({
                   className="w-20 h-20 bg-white rounded-xl border-2 border-dashed border-sky-200 flex flex-col items-center justify-center text-sky-300 hover:border-sky-400"
                 >
                   {uploading ? (
-                    <span className="text-xs">...</span>
+                    <span className="text-xs animate-pulse">Uploading...</span>
                   ) : (
                     <>
                       <span className="text-lg">📷</span>
-                      <span className="text-[9px] font-bold">{photos.length}/{MAX_PHOTOS}</span>
+                      <span className="text-[9px] font-bold">Add Photo</span>
                     </>
                   )}
                 </button>

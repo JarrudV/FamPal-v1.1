@@ -1822,34 +1822,6 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                       )}
                       
                       <div className="flex border-t border-slate-100">
-                        {photos.length > 0 && photos.length < 3 && (
-                          <>
-                            <label className="flex-1 flex items-center justify-center gap-2 py-3 text-slate-500 hover:bg-slate-50 transition-colors cursor-pointer">
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (file) handleAddPhotoToMemory(memory.id, file);
-                                  e.target.value = '';
-                                }}
-                              />
-                              {uploadingMemoryId === memory.id ? (
-                                <span className="text-xs font-medium">Uploading...</span>
-                              ) : (
-                                <>
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  </svg>
-                                  <span className="text-sm font-medium">Add Photo</span>
-                                </>
-                              )}
-                            </label>
-                            <div className="w-px bg-slate-100"></div>
-                          </>
-                        )}
                         <button
                           onClick={() => setShareMemory(memory)}
                           className="flex-1 flex items-center justify-center gap-2 py-3 text-slate-500 hover:bg-slate-50 transition-colors"
