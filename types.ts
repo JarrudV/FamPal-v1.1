@@ -240,7 +240,7 @@ export const PLAN_LIMITS = {
     savedPlaces: 25,
     notebookEntries: 25,
     memories: 15,
-    circles: 2,
+    circles: 5,
     aiRequestsPerMonth: 15,
     preferencesPerCategory: 3,
     partnerFavorites: 3,
