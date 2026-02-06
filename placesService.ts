@@ -74,6 +74,18 @@ export interface PlaceReview {
   profilePhotoUrl?: string;
 }
 
+const categoryToTextQuery: Record<ActivityType, string> = {
+  all: 'family friendly activities things to do',
+  restaurant: 'family friendly restaurants cafes',
+  outdoor: 'parks nature reserves outdoor activities',
+  indoor: 'indoor activities museums entertainment',
+  active: 'sports activities playgrounds adventure parks',
+  hike: 'hiking trails nature walks',
+  wine: 'wine farms wineries wine tasting',
+  golf: 'golf courses',
+  kids: 'child friendly activities playgrounds kids entertainment',
+};
+
 const categoryToPlaceTypes: Record<ActivityType, string[]> = {
   all: [
     'tourist_attraction',
@@ -94,7 +106,7 @@ const categoryToPlaceTypes: Record<ActivityType, string[]> = {
   indoor: ['museum', 'aquarium', 'bowling_alley', 'movie_theater', 'library'],
   active: ['gym', 'sports_complex', 'swimming_pool', 'playground', 'amusement_park'],
   hike: ['national_park', 'state_park', 'park'],
-  wine: ['bar', 'restaurant'],
+  wine: ['winery', 'bar', 'restaurant'],
   golf: ['golf_course'],
   kids: ['playground', 'amusement_park', 'zoo', 'aquarium', 'park', 'museum', 'library', 'bowling_alley'],
 };
@@ -189,8 +201,9 @@ function mapGoogleTypeToCategory(types: string[]): ActivityType {
   if (types.some(t => ['museum', 'aquarium', 'bowling_alley', 'movie_theater', 'library'].includes(t))) return 'indoor';
   if (types.some(t => ['gym', 'sports_complex', 'swimming_pool', 'playground'].includes(t))) return 'active';
   if (types.some(t => ['national_park', 'state_park'].includes(t))) return 'hike';
-  if (types.some(t => ['bar', 'wine_bar'].includes(t))) return 'wine';
+  if (types.some(t => ['winery', 'bar', 'wine_bar'].includes(t))) return 'wine';
   if (types.some(t => ['golf_course'].includes(t))) return 'golf';
+  if (types.some(t => ['playground', 'amusement_park', 'zoo', 'aquarium'].includes(t))) return 'kids';
   return 'all';
 }
 
@@ -353,30 +366,28 @@ export async function searchNearbyPlacesPaged(
   pageToken?: string
 ): Promise<PlacesSearchResponse> {
   if (!lat || !lng) return { places: [], nextPageToken: null };
-  if (!API_BASE && PLACES_API_KEY) {
-    const places = await searchNearbyPlaces(lat, lng, type, radiusKm);
-    return { places, nextPageToken: null };
+  if (PLACES_API_KEY) {
+    return searchNearbyPlacesTextApi(lat, lng, type, radiusKm, undefined, pageToken);
   }
-  const response = await fetchLegacyPlaces(
-    '/api/places/nearby',
-    {
-      apiKey: CLIENT_PLACES_KEY || undefined,
+  if (API_BASE) {
+    const response = await fetchLegacyPlaces(
+      '/api/places/nearby',
+      {
+        apiKey: CLIENT_PLACES_KEY || undefined,
+        lat,
+        lng,
+        radiusKm,
+        type,
+        pageToken,
+      },
+      type,
       lat,
       lng,
-      radiusKm,
-      type,
-      pageToken,
-    },
-    type,
-    lat,
-    lng,
-    true
-  );
-  if (response.error && !pageToken && PLACES_API_KEY) {
-    const places = await searchNearbyPlaces(lat, lng, type, radiusKm);
-    return { places, nextPageToken: null };
+      true
+    );
+    return response;
   }
-  return response;
+  return { places: [], nextPageToken: null };
 }
 
 export async function textSearchPlacesPaged(
@@ -420,46 +431,63 @@ export async function searchNearbyPlaces(
   radiusKm: number = 10,
   searchQuery?: string
 ): Promise<Place[]> {
+  const result = await searchNearbyPlacesTextApi(lat, lng, type, radiusKm, searchQuery);
+  return result.places;
+}
+
+export async function searchNearbyPlacesTextApi(
+  lat: number,
+  lng: number,
+  type: ActivityType = 'all',
+  radiusKm: number = 10,
+  searchQuery?: string,
+  pageToken?: string
+): Promise<PlacesSearchResponse> {
   if (!PLACES_API_KEY) {
     console.warn("Google Places API key missing");
-    return [];
+    return { places: [], nextPageToken: null };
   }
 
-  const cacheKey = `${lat.toFixed(3)}:${lng.toFixed(3)}:${type}:${radiusKm}:${searchQuery || ''}`;
-  
-  const cached = getCached<Place[]>(PLACES_CACHE_KEY, cacheKey);
+  const cacheKey = `text-cat:${lat.toFixed(3)}:${lng.toFixed(3)}:${type}:${radiusKm}:${searchQuery || ''}:${pageToken || ''}`;
+
+  const cached = getCached<PlacesSearchResponse>(PLACES_CACHE_KEY, cacheKey);
   if (cached) {
     console.log('[FamPals] Loaded places from cache (instant)');
     return cached;
   }
 
   try {
-    const radiusMeters = Math.min(radiusKm * 1000, 50000);
+    const radiusMeters = radiusKm * 1000;
     const placeTypes = categoryToPlaceTypes[type] || categoryToPlaceTypes.all;
-    
+    const categoryQuery = searchQuery || categoryToTextQuery[type] || categoryToTextQuery.all;
+
     const requestBody: any = {
-      includedTypes: placeTypes,
-      maxResultCount: 20,
-      locationRestriction: {
+      textQuery: categoryQuery,
+      pageSize: 20,
+      locationBias: {
         circle: {
           center: { latitude: lat, longitude: lng },
-          radius: radiusMeters
+          radius: Math.min(radiusMeters, 50000)
         }
-      }
+      },
     };
 
-    if (searchQuery) {
-      requestBody.textQuery = searchQuery;
+    if (type !== 'all' && type !== 'kids' && placeTypes.length === 1) {
+      requestBody.includedType = placeTypes[0];
+    }
+
+    if (pageToken) {
+      requestBody.pageToken = pageToken;
     }
 
     const response = await fetch(
-      'https://places.googleapis.com/v1/places:searchNearby',
+      'https://places.googleapis.com/v1/places:searchText',
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': PLACES_API_KEY,
-          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.types,places.priceLevel,places.location,places.photos,places.primaryTypeDisplayName,places.regularOpeningHours'
+          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.types,places.priceLevel,places.location,places.photos,places.primaryTypeDisplayName,places.regularOpeningHours,nextPageToken'
         },
         body: JSON.stringify(requestBody)
       }
@@ -467,15 +495,15 @@ export async function searchNearbyPlaces(
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Places API error:', errorText);
-      return [];
+      console.error('Places Text Search API error:', errorText);
+      return { places: [], nextPageToken: null };
     }
 
     const data = await response.json();
-    
+
     if (!data.places || !Array.isArray(data.places)) {
       console.log('[FamPals] No places found for this search');
-      return [];
+      return { places: [], nextPageToken: null };
     }
 
     const rawPlaces: any[] = data.places.filter((p: any) => {
@@ -488,7 +516,7 @@ export async function searchNearbyPlaces(
       const placeType = mapGoogleTypeToCategory(p.types || []);
       const placeLat = p.location?.latitude || lat;
       const placeLng = p.location?.longitude || lng;
-      
+
       return {
         id: p.id || `gp-${Date.now()}-${index}`,
         name: p.displayName?.text || 'Unknown Place',
@@ -499,7 +527,7 @@ export async function searchNearbyPlaces(
         mapsUrl: `https://www.google.com/maps/place/?q=place_id:${p.id}`,
         type: placeType,
         priceLevel: priceLevelToString(p.priceLevel),
-        imageUrl: p.photos?.[0] 
+        imageUrl: p.photos?.[0]
           ? `https://places.googleapis.com/v1/${p.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${PLACES_API_KEY}`
           : getPlaceholderImage(placeType, p.displayName?.text || '', index),
         distance: calculateDistance(lat, lng, placeLat, placeLng),
@@ -513,13 +541,18 @@ export async function searchNearbyPlaces(
       };
     });
 
-    setCache(PLACES_CACHE_KEY, cacheKey, places);
-    console.log(`[FamPals] Cached ${places.length} places from Google`);
-    
-    return places;
+    const result: PlacesSearchResponse = {
+      places,
+      nextPageToken: data.nextPageToken || null
+    };
+
+    setCache(PLACES_CACHE_KEY, cacheKey, result);
+    console.log(`[FamPals] Cached ${places.length} places from Text Search, hasMore: ${!!data.nextPageToken}`);
+
+    return result;
   } catch (error) {
-    console.error('Error fetching nearby places:', error);
-    return [];
+    console.error('Error fetching places via Text Search:', error);
+    return { places: [], nextPageToken: null };
   }
 }
 
@@ -556,10 +589,10 @@ export async function textSearchPlaces(
           locationBias: {
             circle: {
               center: { latitude: lat, longitude: lng },
-              radius: radiusKm * 1000
+              radius: Math.min(radiusKm * 1000, 50000)
             }
           },
-          maxResultCount: 20
+          pageSize: 20
         })
       }
     );
