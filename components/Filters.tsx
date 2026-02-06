@@ -10,6 +10,7 @@ interface FiltersProps {
 const Filters: React.FC<FiltersProps> = ({ selected, onChange }) => {
   const categories: {id: ActivityType, label: string, icon: string}[] = [
     { id: 'all', label: 'All', icon: '✨' },
+    { id: 'kids', label: 'Kids', icon: '🧒' },
     { id: 'restaurant', label: 'Dine', icon: '🍕' },
     { id: 'wine', label: 'Wine Farms', icon: '🍷' },
     { id: 'outdoor', label: 'Parks', icon: '🌳' },

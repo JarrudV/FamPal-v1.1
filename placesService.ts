@@ -96,6 +96,7 @@ const categoryToPlaceTypes: Record<ActivityType, string[]> = {
   hike: ['national_park', 'state_park', 'park'],
   wine: ['bar', 'restaurant'],
   golf: ['golf_course'],
+  kids: ['playground', 'amusement_park', 'zoo', 'aquarium', 'park', 'museum', 'library', 'bowling_alley'],
 };
 
 const placeholderImages: Record<string, string[]> = {
@@ -129,6 +130,11 @@ const placeholderImages: Record<string, string[]> = {
   golf: [
     "https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?w=600&h=400&fit=crop",
     "https://images.unsplash.com/photo-1535131749006-b7f58c99034b?w=600&h=400&fit=crop",
+  ],
+  kids: [
+    "https://images.unsplash.com/photo-1566140967404-b8b3932483f5?w=600&h=400&fit=crop",
+    "https://images.unsplash.com/photo-1527689638836-411945a2b57c?w=600&h=400&fit=crop",
+    "https://images.unsplash.com/photo-1519331379826-f10be5486c6f?w=600&h=400&fit=crop",
   ],
   all: [
     "https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=600&h=400&fit=crop",

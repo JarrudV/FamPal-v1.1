@@ -19,7 +19,7 @@ export interface Place {
   fullSummary?: string;
 }
 
-export type ActivityType = 'restaurant' | 'outdoor' | 'indoor' | 'active' | 'hike' | 'wine' | 'golf' | 'all';
+export type ActivityType = 'restaurant' | 'outdoor' | 'indoor' | 'active' | 'hike' | 'wine' | 'golf' | 'kids' | 'all';
 
 export interface VisitedPlace {
   placeId: string;
