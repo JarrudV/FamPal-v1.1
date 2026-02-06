@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Place, FavoriteData, ACTIVITY_OPTIONS, Memory, Entitlement, PartnerLink, GroupPlace } from '../types';
 import { askAboutPlace, generateFamilySummary } from '../geminiService';
 import { getPlaceDetails, PlaceDetails, PlaceReview } from '../placesService';
@@ -743,8 +744,8 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
       
       {/* Floating Home Button removed from here — rendered globally in App.tsx */}
 
-      {showNavModal && (
-        <div className="fixed inset-0 z-[60] flex items-end justify-center" onClick={() => setShowNavModal(false)}>
+      {showNavModal && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-end justify-center" onClick={() => setShowNavModal(false)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
           <div className="absolute inset-0 bg-black/40" />
           <div className="relative w-full max-w-lg bg-white rounded-t-[32px] p-6 pb-10 animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
@@ -828,7 +829,8 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
               Cancel
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
