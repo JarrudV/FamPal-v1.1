@@ -1609,14 +1609,22 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
               />
 
               <div className="space-y-4">
-                {state.memories.map(memory => {
+                {[...state.memories]
+                  .sort((a, b) => {
+                    const dateA = a.date ? new Date(a.date).getTime() : 0;
+                    const dateB = b.date ? new Date(b.date).getTime() : 0;
+                    return dateB - dateA;
+                  })
+                  .map(memory => {
                   const photos = memory.photoThumbUrls || memory.photoUrls || (memory.photoThumbUrl ? [memory.photoThumbUrl] : (memory.photoUrl ? [memory.photoUrl] : []));
                   const memoryDate = memory.date ? new Date(memory.date) : null;
                   const timeAgo = memoryDate && !isNaN(memoryDate.getTime()) ? getTimeAgo(memoryDate) : 'Recently';
+                  const dateForInput = memoryDate && !isNaN(memoryDate.getTime())
+                    ? memoryDate.toISOString().split('T')[0]
+                    : '';
                   
                   return (
                     <div key={memory.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                      {/* Post Header */}
                       <div className="flex items-center gap-3 p-4 pb-3">
                         <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-sky-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
                           {state.user?.displayName?.charAt(0)?.toUpperCase() || '👤'}
@@ -1625,7 +1633,34 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                           <p className="font-semibold text-slate-800 text-sm truncate">
                             {state.user?.displayName || 'You'}
                           </p>
-                          <p className="text-xs text-slate-400">{timeAgo}</p>
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-slate-400">{timeAgo}</span>
+                            <span className="text-slate-300 text-xs">·</span>
+                            <label className="relative inline-flex items-center cursor-pointer group">
+                              <input
+                                type="date"
+                                value={dateForInput}
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    const newDate = new Date(e.target.value + 'T12:00:00').toISOString();
+                                    const updated = state.memories.map(m =>
+                                      m.id === memory.id ? { ...m, date: newDate } : m
+                                    );
+                                    onUpdateState('memories', updated);
+                                  }
+                                }}
+                                className="absolute inset-0 opacity-0 w-full cursor-pointer"
+                              />
+                              <span className="text-[11px] text-sky-500 font-medium group-active:text-sky-700">
+                                {memoryDate && !isNaN(memoryDate.getTime())
+                                  ? memoryDate.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })
+                                  : 'Set date'}
+                              </span>
+                              <svg className="w-3 h-3 ml-0.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                              </svg>
+                            </label>
+                          </div>
                         </div>
                         <button
                           onClick={() => {
@@ -1642,17 +1677,37 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                         </button>
                       </div>
                       
-                      {/* Caption */}
                       <div className="px-4 pb-3">
                         <p className="text-slate-800 text-sm leading-relaxed">{memory.caption}</p>
                       </div>
                       
-                      {/* Photos */}
                       {photos.length > 0 && (
                         <div className={`${photos.length === 1 ? '' : 'grid grid-cols-2 gap-0.5'}`}>
                           {photos.slice(0, 4).map((photo, idx) => (
                             <div key={idx} className={`relative ${photos.length === 1 ? 'aspect-video' : 'aspect-square'} bg-slate-100`}>
-                              <img src={photo} className="w-full h-full object-cover" alt="" />
+                              <img
+                                src={photo}
+                                crossOrigin="anonymous"
+                                className="w-full h-full object-cover"
+                                alt=""
+                                onError={(e) => {
+                                  const target = e.currentTarget;
+                                  if (!target.dataset.retried) {
+                                    target.dataset.retried = 'true';
+                                    target.crossOrigin = '';
+                                    target.src = photo;
+                                  } else {
+                                    target.style.display = 'none';
+                                    const parent = target.parentElement;
+                                    if (parent && !parent.querySelector('.photo-fallback')) {
+                                      const fallback = document.createElement('div');
+                                      fallback.className = 'photo-fallback absolute inset-0 flex items-center justify-center bg-slate-100';
+                                      fallback.innerHTML = '<span class="text-3xl">📷</span>';
+                                      parent.appendChild(fallback);
+                                    }
+                                  }
+                                }}
+                              />
                               {idx === 3 && photos.length > 4 && (
                                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                                   <span className="text-white font-bold text-lg">+{photos.length - 4}</span>
@@ -1663,7 +1718,6 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                         </div>
                       )}
                       
-                      {/* Location Tag */}
                       {memory.placeName && (
                         <div className="px-4 py-3 flex items-center gap-2 border-t border-slate-100">
                           <svg className="w-4 h-4 text-rose-500" fill="currentColor" viewBox="0 0 24 24">
@@ -1673,7 +1727,6 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                         </div>
                       )}
                       
-                      {/* Action Buttons */}
                       <div className="flex border-t border-slate-100">
                         <button
                           onClick={() => setShareMemory(memory)}
