@@ -399,18 +399,6 @@ const MemoryCreate: React.FC<MemoryCreateProps> = ({
             </div>
           )}
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                handleAddPhoto(file);
-              }
-            }}
-            className="hidden"
-          />
 
           {circleOptions.length > 0 && (
             <div>
@@ -429,39 +417,6 @@ const MemoryCreate: React.FC<MemoryCreateProps> = ({
           )}
 
           <div className="space-y-4">
-            <div className="flex gap-2 flex-wrap">
-              {photos.map((photo, idx) => (
-                <div key={idx} className="relative w-20 h-20 rounded-xl overflow-hidden">
-                  <img src={thumbs[idx] || photo} className="w-full h-full object-cover" alt="" />
-                  <button
-                    onClick={() => {
-                      setPhotos(prev => prev.filter((_, i) => i !== idx));
-                      setThumbs(prev => prev.filter((_, i) => i !== idx));
-                    }}
-                    className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              {photos.length < MAX_PHOTOS && (
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  className="w-20 h-20 bg-white rounded-xl border-2 border-dashed border-sky-200 flex flex-col items-center justify-center text-sky-300 hover:border-sky-400"
-                >
-                  {uploading ? (
-                    <span className="text-xs animate-pulse text-center">{uploadProgress || 'Preparing...'}</span>
-                  ) : (
-                    <>
-                      <span className="text-lg">📷</span>
-                      <span className="text-[9px] font-bold">Add Photo</span>
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-
             <textarea
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
