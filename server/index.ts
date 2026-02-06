@@ -23,7 +23,7 @@ interface AuthenticatedRequest extends Request {
 
 const app = express();
 
-// Health check endpoint - respond BEFORE any initialization
+// Health check endpoint - respond BEFORE any initialization or middleware
 app.get('/health', (_req, res) => {
   res.status(200).send('OK');
 });
@@ -35,6 +35,15 @@ const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || '';
 const PAYSTACK_PUBLIC_KEY = process.env.PAYSTACK_PUBLIC_KEY || '';
 const APP_URL = process.env.APP_URL
   || (process.env.REPLIT_DOMAINS?.split(',')[0] ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000');
+
+const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY || process.env.VITE_GOOGLE_PLACES_API_KEY || '';
+
+console.log('[FamPals API] Startup config:', {
+  port: process.env.PORT || 8080,
+  nodeEnv: process.env.NODE_ENV,
+  paystackConfigured: !!PAYSTACK_SECRET_KEY,
+  placesConfigured: !!GOOGLE_PLACES_API_KEY,
+});
 
 // Initialize Firebase Admin SDK
 // In production on Cloud Run/App Hosting, uses Application Default Credentials (ADC)
@@ -59,10 +68,8 @@ try {
   console.log('[FamPals API] Firebase Admin SDK initialized successfully');
 } catch (err) {
   console.error('[FamPals API] Firebase Admin init error:', err);
-  throw err; // Re-throw to fail fast and show in logs
+  process.exit(1);
 }
-const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY || process.env.VITE_GOOGLE_PLACES_API_KEY || '';
-
 // Middleware to verify Firebase Auth token
 async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
@@ -725,16 +732,21 @@ if (isProduction) {
     });
   } else {
     console.warn(`[FamPals API] WARNING: dist folder not found at ${distPath}`);
-    console.log(`[FamPals API] Directory contents:`, fs.readdirSync(process.cwd()));
+    try {
+      console.log(`[FamPals API] Directory contents:`, fs.readdirSync(process.cwd()));
+    } catch (err) {
+      console.warn('[FamPals API] Unable to read working directory contents:', err);
+    }
   }
 }
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 8080;
 const HOST = '0.0.0.0';
 
 // Start server immediately to satisfy Cloud Run health checks
 const server = app.listen(Number(PORT), HOST, () => {
   console.log(`[FamPals API] Server running on ${HOST}:${PORT}`);
+  console.log(`[FamPals API] listening on ${PORT}`);
   console.log(`[FamPals API] Environment: ${isProduction ? 'production' : 'development'}`);
   console.log(`[FamPals API] Paystack configured: ${!!PAYSTACK_SECRET_KEY}`);
 });
