@@ -1034,6 +1034,25 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
         )}
 
         <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+          <button
+            onClick={() => {
+              const current = localStorage.getItem('fampals_netflix_layout') === 'true';
+              localStorage.setItem('fampals_netflix_layout', current ? 'false' : 'true');
+              window.location.reload();
+            }}
+            className="w-full flex items-center justify-between p-6 text-slate-500 font-semibold text-sm hover:bg-sky-50 hover:text-sky-600 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-lg">🎬</span>
+              <span>Browse Layout</span>
+            </div>
+            <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full font-bold">
+              {localStorage.getItem('fampals_netflix_layout') === 'true' ? 'Browse' : 'Classic'}
+            </span>
+          </button>
+        </div>
+
+        <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
           <button 
             onClick={onSignOut}
             className="w-full flex items-center justify-between p-6 text-slate-400 font-black text-xs uppercase tracking-widest hover:bg-rose-50 hover:text-rose-500 transition-colors"

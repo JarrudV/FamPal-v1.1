@@ -16,6 +16,7 @@ import {
 import { listenToUserDoc, upsertUserProfile, saveUserField, listenToSavedPlaces, upsertSavedPlace } from './lib/userData';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
+import DashboardNetflix from './components/DashboardNetflix';
 import Profile from './components/Profile';
 import Onboarding from './components/Onboarding';
 import { AppState, User, getDefaultEntitlement, UserPreferences, SavedPlace, Preferences, Child, PartnerLink, ProfileInfo } from './types';
@@ -78,6 +79,9 @@ const App: React.FC = () => {
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [pendingJoinCircleId, setPendingJoinCircleId] = useState<string | null>(null);
   const [dashboardTab, setDashboardTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner'>('explore');
+  const [useNetflixLayout, setUseNetflixLayout] = useState(() => {
+    try { return localStorage.getItem('fampals_netflix_layout') === 'true'; } catch { return false; }
+  });
   const [savedPlacesLoaded, setSavedPlacesLoaded] = useState(false);
   const legacyFavoritesRef = useRef<string[]>([]);
   const savedPlacesMigratedAtRef = useRef<Timestamp | null>(null);
@@ -591,34 +595,26 @@ const App: React.FC = () => {
       );
     }
 
-    // For authenticated users who passed onboarding, show dashboard by default (even if view is 'login')
+    const dashboardProps = {
+      state,
+      isGuest,
+      onSignOut: handleSignOut,
+      setView,
+      onUpdateState: handleUpdateState,
+      initialCircleId: pendingJoinCircleId,
+      onClearInitialCircle: () => setPendingJoinCircleId(null),
+      initialTab: dashboardTab,
+      onTabChange: (tab: string) => setDashboardTab(tab as typeof dashboardTab),
+    };
+    const DashboardComponent = useNetflixLayout ? DashboardNetflix : Dashboard;
+
     if (state.user && !needsOnboarding && view === 'login') {
-      return <Dashboard
-        state={state}
-        isGuest={isGuest}
-        onSignOut={handleSignOut}
-        setView={setView}
-        onUpdateState={handleUpdateState}
-        initialCircleId={pendingJoinCircleId}
-        onClearInitialCircle={() => setPendingJoinCircleId(null)}
-        initialTab={dashboardTab}
-        onTabChange={(tab) => setDashboardTab(tab as typeof dashboardTab)}
-      />;
+      return <DashboardComponent {...dashboardProps} />;
     }
 
     switch (view) {
       case 'dashboard':
-        return <Dashboard
-          state={state}
-          isGuest={isGuest}
-          onSignOut={handleSignOut}
-          setView={setView}
-          onUpdateState={handleUpdateState}
-          initialCircleId={pendingJoinCircleId}
-          onClearInitialCircle={() => setPendingJoinCircleId(null)}
-          initialTab={dashboardTab}
-          onTabChange={(tab) => setDashboardTab(tab as typeof dashboardTab)}
-        />;
+        return <DashboardComponent {...dashboardProps} />;
       case 'onboarding':
         return (
           <Onboarding

@@ -78,9 +78,10 @@ Key features include:
 - `components/GroupsList.tsx` - Circles list component
 - `components/Profile.tsx` - User profile page
 - `components/Onboarding.tsx` - Onboarding flow
+- `components/DashboardNetflix.tsx` - Netflix-style browse dashboard (alternative layout)
 
 ## Recent Updates
 - **V1.3.0 (2026-02-08)**: Intent-first Explore with Netflix-style layered refinement lenses, Explore performance improvements (core/optional query strategy, parallel page-1 loading, background pagination, abortable requests, 5-minute intent cache), accessibility and family-facilities confirmed/suggested model, version display on Profile page.
 - **V1.2.0 (2026-02-07)**: Must-haves filtering UX and Explore ranking improvements.
 - **V1.1.0 (2026-02-06)**: Partner space enhancements, sharing improvements, and profile sync updates.
-- **Replit session**: Increased free tier limits (memories 10→15, AI 10→15, circles 2→5), fixed circles entitlement bug where Pro users were hardcoded to 2 circles.
+- **Replit session**: DashboardNetflix.tsx — Netflix-style browse layout with horizontal scrolling rows per category (Play & Kids, Eat & Drink, Outdoors, etc.), hero card, skeleton loading, snap scrolling, mobile-first 160px cards. Layout toggle in Profile page (localStorage-backed, no disruption to classic layout). Increased free tier limits (memories 10→15, AI 10→15, circles 2→5), fixed circles entitlement bug where Pro users were hardcoded to 2 circles.
