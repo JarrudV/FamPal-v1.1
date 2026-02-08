@@ -74,6 +74,13 @@ const LENS_DEFINITIONS: Record<ExploreLensKey, LensDefinition> = {
       { id: 'pizza', label: 'Pizza', matches: (caps) => caps.foodKeywords.has('pizza'), conflicts: (caps) => !caps.servesFood },
       { id: 'sushi', label: 'Sushi', matches: (caps) => caps.foodKeywords.has('sushi'), conflicts: (caps) => !caps.servesFood },
       { id: 'burgers', label: 'Burgers', matches: (caps) => caps.foodKeywords.has('burger') || caps.foodKeywords.has('burgers'), conflicts: (caps) => !caps.servesFood },
+      { id: 'steak', label: 'Steak', matches: (caps) => caps.foodKeywords.has('steak') || caps.foodKeywords.has('steakhouse'), conflicts: (caps) => !caps.servesFood },
+      { id: 'seafood', label: 'Seafood', matches: (caps) => caps.foodKeywords.has('seafood') || caps.foodKeywords.has('fish'), conflicts: (caps) => !caps.servesFood },
+      { id: 'italian', label: 'Italian', matches: (caps) => caps.foodKeywords.has('italian') || caps.foodKeywords.has('pasta'), conflicts: (caps) => !caps.servesFood },
+      { id: 'indian', label: 'Indian', matches: (caps) => caps.foodKeywords.has('indian') || caps.foodKeywords.has('curry'), conflicts: (caps) => !caps.servesFood },
+      { id: 'mexican', label: 'Mexican', matches: (caps) => caps.foodKeywords.has('mexican') || caps.foodKeywords.has('tacos'), conflicts: (caps) => !caps.servesFood },
+      { id: 'asian', label: 'Asian', matches: (caps) => caps.foodKeywords.has('asian') || caps.foodKeywords.has('thai') || caps.foodKeywords.has('chinese') || caps.foodKeywords.has('vietnamese') || caps.foodKeywords.has('korean'), conflicts: (caps) => !caps.servesFood },
+      { id: 'ice_cream', label: 'Ice cream', matches: (caps) => caps.foodKeywords.has('ice cream') || caps.foodKeywords.has('gelato'), conflicts: (caps) => !caps.servesFood },
       { id: 'wine_tasting', label: 'Wine tasting', matches: (caps) => caps.venueTypes.has('wine_farm') || caps.foodKeywords.has('wine tasting') },
       { id: 'farm_stall', label: 'Farm stall', matches: (caps) => caps.foodKeywords.has('farm stall') || caps.foodKeywords.has('farm shop'), conflicts: (caps) => !caps.servesFood },
     ],
@@ -142,8 +149,8 @@ const LENS_DEFINITIONS: Record<ExploreLensKey, LensDefinition> = {
 };
 
 const INTENT_LENS_MAP: Record<ExploreIntent, ExploreLensKey[]> = {
-  all: ['venueTypes', 'kidPrefs', 'accessibility', 'indoorOutdoor', 'foodTypes'],
-  eat_drink: ['foodTypes', 'venueTypes', 'kidPrefs', 'accessibility', 'indoorOutdoor'],
+  all: ['venueTypes', 'foodTypes', 'kidPrefs', 'accessibility', 'indoorOutdoor'],
+  eat_drink: ['venueTypes', 'foodTypes', 'kidPrefs', 'accessibility', 'indoorOutdoor'],
   play_kids: ['venueTypes', 'kidPrefs', 'accessibility', 'indoorOutdoor'],
   outdoors: ['venueTypes', 'kidPrefs', 'accessibility', 'indoorOutdoor'],
   things_to_do: ['venueTypes', 'kidPrefs', 'accessibility', 'indoorOutdoor'],
@@ -280,7 +287,14 @@ export function derivePlaceCapabilities(place: Place): PlaceCapabilities {
   if (isWineFarm) venueTypes.add('wine_farm');
 
   const isCoffeeFocused = keywordMatches(nameAndDesc, ['coffee']) && !isWineFarm;
-  const foodKwList = ['bakery', 'brunch', 'breakfast', 'pizza', 'sushi', 'burger', 'burgers', 'wine tasting', 'farm stall', 'farm shop', 'pet friendly', 'quiet'];
+  const foodKwList = [
+    'bakery', 'brunch', 'breakfast', 'pizza', 'sushi', 'burger', 'burgers',
+    'steak', 'steakhouse', 'seafood', 'fish',
+    'italian', 'pasta', 'indian', 'curry', 'mexican', 'tacos',
+    'asian', 'thai', 'chinese', 'vietnamese', 'korean',
+    'ice cream', 'gelato',
+    'wine tasting', 'farm stall', 'farm shop', 'pet friendly', 'quiet',
+  ];
   if (isCoffeeFocused) foodKeywords.add('coffee');
   foodKwList.forEach((keyword) => {
     if (text.includes(keyword)) foodKeywords.add(keyword);
