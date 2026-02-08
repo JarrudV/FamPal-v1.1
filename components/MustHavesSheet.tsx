@@ -106,7 +106,7 @@ export default function MustHavesSheet({
           </div>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="p-6 pb-32 space-y-5">
           {lensDefinitions.map((lens) => {
             const selectedCount = getGroupSelectedCount(filters, lens.key);
             const strictEnabled = filters.strict[lens.key];
