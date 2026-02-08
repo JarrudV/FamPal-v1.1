@@ -690,7 +690,7 @@ const App: React.FC = () => {
         <div>
           {renderView()}
           {showBottomNav && (
-            <nav className="fixed bottom-0 left-0 right-0 bottom-nav-blur border-t border-slate-200/60 px-2 pt-2 pb-1 safe-area-inset-bottom z-50">
+            <nav className="fixed bottom-0 left-0 right-0 bottom-nav-blur border-t border-slate-200/60 px-2 pt-2 pb-2 safe-area-inset-bottom z-50">
               <div className="flex justify-around max-w-md mx-auto">
                 <NavButton type="home" label="Home" active={view === 'dashboard' && dashboardTab === 'explore'} onClick={() => { setDashboardTab('explore'); setView('dashboard'); }} />
                 <NavButton type="saved" label="Saved" active={view === 'dashboard' && dashboardTab === 'favorites'} onClick={() => { setDashboardTab('favorites'); setView('dashboard'); }} />
