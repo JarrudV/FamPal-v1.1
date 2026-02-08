@@ -1,115 +1,86 @@
 # FamPals - Parents Local Guide
 
 ## Overview
-FamPals is a React-based mobile application designed to help parents discover and plan family-friendly activities. It leverages Google authentication, Firebase for data persistence, and AI-powered recommendations. The app aims to be a comprehensive local guide, assisting families in finding, sharing, and organizing outings while providing personalized experiences based on user and child preferences. Its core purpose is to simplify activity planning for parents, enhancing family adventures and creating lasting memories.
+FamPals is a React-based mobile application designed to help parents discover and plan family-friendly activities. It leverages Google authentication, Firebase for data persistence, and AI-powered recommendations. The app aims to be a comprehensive local guide, assisting families in finding, sharing, and organizing outings while providing personalized experiences based on user and child preferences. Its core purpose is to simplify activity planning for parents, enhancing family adventures and creating lasting memories. Currently at **v1.3.0** with ~20 test users.
 
 ## User Preferences
-The user prefers iterative development and detailed explanations. The user wants the agent to ask before making major changes.
+The user prefers iterative development and detailed explanations. The user wants the agent to ask before making major changes. The user actively develops in VS Code and pushes to GitHub - always check for upstream changes when starting a session.
 
 ## System Architecture
 The application is built with React 19 and TypeScript, utilizing Vite 7 for building and Tailwind CSS v4 for styling. Firebase provides backend services including authentication and Firestore for data storage. The UI/UX prioritizes a mobile-first, responsive design with clear navigation and engaging visuals.
+
+### Backend
+- Node.js/Express backend server (server/index.ts) running on port 8080
+- Firebase Admin SDK for server-side auth verification and Firestore access
+- Paystack integration for payments/subscriptions
+- Google Places API proxy for location searches
+- Explore intent configuration (server/exploreIntentConfig.ts)
+
+### Frontend
+- React 19 + TypeScript with Vite 7
+- Tailwind CSS v4 for styling
+- Firebase client SDK for auth and Firestore
+- PWA-capable with manifest.json and app icons
 
 Key features include:
 - **Authentication**: Google Sign-In and a guest mode.
 - **Location Services**: Automatic geolocation with a radius slider for searching places within 1-200km.
 - **Profile Management**: Users can manage their profiles, add children with ages, and link with a partner.
 - **AI Recommendations**: Google Gemini API is used for AI-driven place recommendations.
+- **Intent-first Explore**: Netflix-style layered refinement lenses with optional strict toggles for discovering places.
 - **Content Sharing**: One-tap sharing of place details via WhatsApp and integration with Google Calendar for event planning.
-- **Image Handling**: Category-specific placeholder images and user photo uploads for memories via Firebase Storage.
 - **Personalization**: User and child preferences (food, allergies, accessibility, activities) are incorporated into AI recommendations.
-- **Performance Optimization**: Aggressive caching (5-min TTL for places, place details by ID) is implemented to reduce API calls and improve responsiveness.
+- **Performance Optimization**: Aggressive caching (5-min TTL for places, intent cache), incremental result streaming, background pagination, abortable requests.
 - **Cost Optimization**: Google Places API is used for browsing and search to minimize Gemini API usage, reserving Gemini solely for explicit "Ask AI" actions.
 - **Persistence**: User preferences, including last location, radius, and category, persist across sessions via Firestore for logged-in users and localStorage for guests.
 - **Social Features**: Friend Circles allow users to create private groups, share saved places, and invite members. A dedicated Partner Space facilitates shared favorites and memories with a linked partner.
 - **Activity Tracking**: An "Adventures" tab allows users to mark visited places, add notes, and track their family's past outings.
-- **Discovery Mode**: A toggle to hide saved places from the explore feed, encouraging discovery of new venues.
+- **Accessibility & Family Facilities**: Confirmed/suggested model for accessibility features and family facilities, preserved in ranking and filtering.
+- **Must-Haves Filtering**: MustHavesSheet component for strict filtering requirements.
 - **Mobile Responsiveness**: Designed with iOS safe area insets, preventing horizontal overflow, and ensuring accessible touch targets.
+- **PWA Support**: Installable as a web app on iOS and Android with proper manifest and icons.
+
+## Plan Limits (Entitlements)
+| Feature | Free | Pro | Family/Lifetime |
+|---|---|---|---|
+| Saved Places | 25 | Unlimited | Unlimited |
+| Memories | 15 | Unlimited | Unlimited |
+| Circles | 5 | Unlimited | Unlimited |
+| AI Requests/mo | 15 | 100 | 200 |
+| Preferences | 3/category | Unlimited | Unlimited |
+| Partner Favorites | 3 | Unlimited | Unlimited |
+| Partner Memories | 3 | Unlimited | Unlimited |
 
 ## External Dependencies
-- **Firebase**: Used for user authentication (Google Sign-In), Firestore database for data persistence (user profiles, preferences, saved places, circles, memories), and Firebase Storage for photo uploads.
-- **Google Gemini API**: Powers AI-driven place recommendations and custom inquiries about venues.
-- **Google Places API**: Used for browsing, searching, and fetching detailed information about locations, optimizing cost and performance.
-- **OpenStreetMap Nominatim**: Utilized for reverse geocoding to convert coordinates into human-readable addresses.
-- **Unsplash**: Provides category-specific placeholder images for venues.
-- **WhatsApp**: Integrated for sharing place details directly from the app.
-- **Google Calendar**: Allows users to quickly add planned activities to their calendar.
+- **Firebase**: User authentication (Google Sign-In), Firestore database, Firebase App Hosting (Cloud Run).
+- **Google Gemini API**: AI-driven place recommendations.
+- **Google Places API**: Browsing, searching, and fetching detailed location information.
+- **Paystack**: Payment processing for Pro/Family/Lifetime plans.
+- **OpenStreetMap Nominatim**: Reverse geocoding.
+- **WhatsApp**: Sharing place details.
+- **Google Calendar**: Adding planned activities.
+
+## Key Files
+- `App.tsx` - Main app component with routing and global bottom nav
+- `types.ts` - Type definitions and plan limits (PLAN_LIMITS)
+- `lib/entitlements.ts` - Entitlement checking logic
+- `lib/exploreFilters.ts` - Explore filtering logic
+- `lib/placeAccessibility.ts` - Accessibility data handling
+- `lib/placeFamilyFacilities.ts` - Family facilities data
+- `placesService.ts` - Google Places API service
+- `server/index.ts` - Express backend server
+- `server/exploreIntentConfig.ts` - Explore intent configuration
+- `components/Dashboard.tsx` - Main dashboard with tabs
+- `components/Filters.tsx` - Category/filter components
+- `components/MustHavesSheet.tsx` - Must-haves filtering UI
+- `components/VenueProfile.tsx` - Venue detail view
+- `components/PlaceCard.tsx` - Place card component
+- `components/GroupsList.tsx` - Circles list component
+- `components/Profile.tsx` - User profile page
+- `components/Onboarding.tsx` - Onboarding flow
 
 ## Recent Updates
-- **Places pagination**: Added a "Load more" flow for Explore results that appends pages without resetting filters or location.
-- **Places filtering**: Added a configurable denylist to remove petrol stations/convenience venues from Places results, with optional brand exclusions.
-- **Partner tab CTA**: Partner tab is visible for all users with an unlinked empty state and optional Pro gate via `VITE_PARTNER_LINK_REQUIRES_PRO`.
-- **Onboarding flow**: First login now routes to onboarding with core feature screens and preference setup, tracked in Firestore.
-- **Onboarding profile capture**: Collects name, age, preferences, dependants, and optional partner invite during first run.
-- **AI guardrails**: Added Gemini logging, caching with refresh, output token caps, and request timeouts.
-- **Family plan scaffolding**: Added a Family tier with pooled AI allowance for linked partners and entitlement-based gating for partner linking.
-- **UI stability fixes**: Added Places API fallbacks, fixed onboarding completion persistence, restored circle/adventure place clicks with images, and removed the floating Home button while keeping bottom nav visible.
-- **V2.9 Onboarding Control & Syntax Fix**:
-  - Fixed Dashboard.tsx syntax error (missing closing div tag after git pull)
-  - Added "Show Onboarding Again" button to Profile page
-  - Users can now manually trigger onboarding from settings
-  - Onboarding toggle only visible for logged-in users
-- **V2.10 Onboarding Flash Fix & Location Refresh**:
-  - Fixed onboarding screen flashing briefly before dashboard loads
-  - Added onboardingChecked state to prevent premature rendering
-  - Added "Use Current Location" button in Explore tab radius section
-  - Users can now refresh their GPS location on demand
-  - Better location error handling with user feedback
-- **V2.11 Global Bottom Navigation**:
-  - Moved bottom navigation from Dashboard.tsx to App.tsx for global accessibility
-  - Bottom nav now appears on dashboard and profile pages (not login or onboarding)
-  - Removed unused NavButton component from Dashboard.tsx
-  - Clean architecture with view-level navigation in App.tsx
-- **V2.12 Navigation & Memory Sharing Fixes**:
-  - Fixed bottom nav Saved/Circles buttons to properly switch Dashboard tabs
-  - Added initialTab and onTabChange props to Dashboard for cross-component tab control
-  - Added "Share to Partner" option in ShareMemoryModal for linked partners
-  - Bottom nav now shows active state for current tab (Home/Saved/Circles/Profile)
-- **V2.13 Stability & UI Polish**:
-  - Fixed onboarding flash by deferring setLoading(false) until after Firestore check completes
-  - Added 8-second safety timeout to prevent stuck loading if Firestore fails
-  - Reduced VenueProfile hero image from 384px to 224-256px (responsive) for cleaner mobile experience
-  - Compacted venue header buttons, tags, and text sizing for better proportions
-  - Verified location refresh, button handlers, and click events work correctly
-- **V2.14 Mobile UI Improvements**:
-  - Added "Load More Places" button with proper styling when more results available
-  - Added "You've seen all the places nearby!" message when pagination exhausted
-  - Redesigned PlaceCard list variant with better mobile layout and vertical action buttons
-  - Fixed text truncation issues with min-w-0 on flex containers
-  - Improved touch targets across all interactive elements (44-48px minimum)
-- **V2.15 CSS & Touch Target Polish**:
-  - Added custom range slider thumb styling for better mobile interaction
-  - Improved safe area CSS utilities for iOS devices
-  - Refined min-height rules with :not(.no-min-size) escape hatch
-  - Updated radius slider section with better spacing and larger location button
-- **V2.16 Secure Partner Link/Unlink API**:
-  - Created secure backend API endpoints for partner operations using Firebase Admin SDK
-  - `POST /api/partner/unlink` - Server derives partnerUserId from user's Firestore doc (not request body) to prevent IDOR attacks
-  - `POST /api/partner/link` - Validates invite code matches partner's pending invite before linking
-  - `GET /api/partner/status` - Returns current partner link status for authenticated user
-  - Added `requireAuth` middleware that verifies Firebase ID tokens
-  - Added "Refresh Partner Status" button to Profile page for manual sync
-  - Frontend passes Firebase Auth tokens in Authorization headers for all partner API calls
-- **V2.17 Full-Stack Deployment & Onboarding Fix**:
-  - Configured apphosting.yaml for Cloud Run deployment (replaces static-only deployment)
-  - Server now serves built frontend in production from `dist/` folder
-  - Fixed onboarding flash by waiting for Firestore check before rendering
-  - Authenticated users now go directly to dashboard (not login) after refresh
-  - Firebase Admin SDK now uses Application Default Credentials (ADC) on Cloud Run
-  - All environment variables configured with proper BUILD/RUNTIME availability
-- **V2.19 Navigation Icons & PWA App Icons**:
-  - Replaced emoji icons in navigation modal with official-style SVG brand icons for Google Maps, Apple Maps, and Waze
-  - Added proper PWA web app manifest (manifest.json) with app name, theme, and icon references
-  - Generated clean PNG app icons (192px, 512px) from the existing SVG favicon using ImageMagick
-  - Apple touch icons now use clean PNGs without watermarks for proper home screen appearance
-  - App is now properly installable as a PWA on both iOS and Android home screens
-- **V2.20 Onboarding Redesign**:
-  - Completely redesigned onboarding from 6 plain text steps to 4 visually engaging steps
-  - Step 1 (Welcome): Gradient hero circle with wave emoji, name and age inputs
-  - Step 2 (Features): Colourful feature cards with gradient icons for Discover, Save, Circles, and AI
-  - Step 3 (Family): Kids management with avatar initials, partner invite with dashed-border CTA
-  - Step 4 (Preferences): Category grid with emoji icons, radius slider, food/allergy/activity chips
-  - Animated progress dots with gradient fills that change colour per step
-  - Gradient CTA button that matches the current step's colour theme
-  - Back button is a compact icon instead of full-width text button
-  - Replaced navigation map SVG icons with official PNG icons (Google Maps, Apple Maps, Waze)
-  - Inline navigation options instead of portal modal for better mobile UX
+- **V1.3.0 (2026-02-08)**: Intent-first Explore with Netflix-style layered refinement lenses, Explore performance improvements (core/optional query strategy, parallel page-1 loading, background pagination, abortable requests, 5-minute intent cache), accessibility and family-facilities confirmed/suggested model, version display on Profile page.
+- **V1.2.0 (2026-02-07)**: Must-haves filtering UX and Explore ranking improvements.
+- **V1.1.0 (2026-02-06)**: Partner space enhancements, sharing improvements, and profile sync updates.
+- **Replit session**: Increased free tier limits (memories 10→15, AI 10→15, circles 2→5), fixed circles entitlement bug where Pro users were hardcoded to 2 circles.

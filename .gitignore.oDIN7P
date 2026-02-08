@@ -1,0 +1,27 @@
+
+# Dependencies
+/node_modules
+
+# Production
+/dist
+
+# Vite
+.env.local
+.env.*.local
+.env
+.env.staging
+.env.production
+env
+env.staging
+env.production
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Misc
+.DS_Store
+attached_assets/
+dist-server/
