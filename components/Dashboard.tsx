@@ -612,6 +612,26 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     }
   };
 
+  const applyFlickerGuard = useCallback((previous: Place[], incoming: Place[]): Place[] => {
+    if (previous.length === 0 || incoming.length === 0) return incoming;
+    const previousIds = new Set(previous.map((place) => place.id));
+    const incomingIds = new Set(incoming.map((place) => place.id));
+    let changed = 0;
+    previousIds.forEach((id) => {
+      if (!incomingIds.has(id)) changed += 1;
+    });
+    incomingIds.forEach((id) => {
+      if (!previousIds.has(id)) changed += 1;
+    });
+    const baseline = Math.max(previousIds.size, 1);
+    const deltaRatio = changed / baseline;
+    if (deltaRatio > 0.05) return incoming;
+
+    const appended = incoming.filter((place) => !previousIds.has(place.id));
+    if (appended.length === 0) return previous;
+    return [...previous, ...appended];
+  }, []);
+
   useEffect(() => {
     if (!apiBase) return;
     let cancelled = false;
@@ -869,26 +889,6 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
 
   const clearExploreFilters = useCallback(() => {
     setExploreFilters(createDefaultExploreFilters());
-  }, []);
-
-  const applyFlickerGuard = useCallback((previous: Place[], incoming: Place[]): Place[] => {
-    if (previous.length === 0 || incoming.length === 0) return incoming;
-    const previousIds = new Set(previous.map((place) => place.id));
-    const incomingIds = new Set(incoming.map((place) => place.id));
-    let changed = 0;
-    previousIds.forEach((id) => {
-      if (!incomingIds.has(id)) changed += 1;
-    });
-    incomingIds.forEach((id) => {
-      if (!previousIds.has(id)) changed += 1;
-    });
-    const baseline = Math.max(previousIds.size, 1);
-    const deltaRatio = changed / baseline;
-    if (deltaRatio > 0.05) return incoming;
-
-    const appended = incoming.filter((place) => !previousIds.has(place.id));
-    if (appended.length === 0) return previous;
-    return [...previous, ...appended];
   }, []);
 
   const mapSavedPlaceToPlace = (saved: SavedPlace): Place => {
