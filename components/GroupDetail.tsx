@@ -338,7 +338,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({
                     {/* Post Header */}
                     <div className="flex items-center gap-3 p-3">
                       <div className="w-9 h-9 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                        {memory.createdByName?.charAt(0)?.toUpperCase() || '👤'}
+                        {memory.createdByName?.charAt(0)?.toUpperCase() || 'M'}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-slate-800 text-sm truncate">

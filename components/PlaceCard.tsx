@@ -39,7 +39,7 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place, variant, isFavorite, onTog
           </div>
           <h3 className="text-xl font-extrabold leading-tight">{place.name}</h3>
           <div className="flex items-center gap-3 text-[10px] font-bold text-white/70">
-            <span className="flex items-center gap-1 text-sky-300">⭐ {place.rating ?? '—'}</span>
+            <span className="flex items-center gap-1 text-sky-300"><svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg> {place.rating ?? '—'}</span>
             <span>•</span>
             <span>{place.distance}</span>
           </div>
@@ -63,7 +63,7 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place, variant, isFavorite, onTog
         <h3 className="font-bold text-[15px] text-slate-800 truncate">{place.name}</h3>
         <p className="text-slate-400 text-xs font-medium truncate">{place.description}</p>
         <div className="flex items-center gap-2 mt-1.5">
-          <span className="text-amber-500 text-xs font-bold">⭐ {place.rating ?? '—'}</span>
+          <span className="text-amber-500 text-xs font-bold flex items-center gap-0.5"><svg className="w-3 h-3 text-amber-400" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg> {place.rating ?? '—'}</span>
           <span className="text-slate-300 text-xs">{place.priceLevel || ''}</span>
         </div>
         <div className="flex flex-wrap gap-1 mt-1.5">
@@ -77,7 +77,7 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place, variant, isFavorite, onTog
             className="w-10 h-10 rounded-xl flex items-center justify-center text-purple-500 bg-purple-50 active:bg-purple-100"
             aria-label="Add to circle"
           >
-            👥
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" /></svg>
           </button>
         )}
         <button
@@ -85,7 +85,7 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place, variant, isFavorite, onTog
           className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${isFavorite ? 'text-sky-500 bg-sky-50' : 'text-slate-300 bg-slate-50'}`}
           aria-label={isFavorite ? 'Remove from saved' : 'Save place'}
         >
-          {isFavorite ? '💙' : '🤍'}
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>
         </button>
       </div>
     </div>

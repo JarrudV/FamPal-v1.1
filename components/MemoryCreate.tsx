@@ -312,7 +312,7 @@ const MemoryCreate: React.FC<MemoryCreateProps> = ({
     if (memory.caption) {
       text += `${memory.caption}\n\n`;
     }
-    text += `📍 ${memory.placeName}\n`;
+    text += `${memory.placeName}\n`;
     text += mapsUrl;
     return text;
   };
@@ -350,7 +350,7 @@ const MemoryCreate: React.FC<MemoryCreateProps> = ({
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-xl font-extrabold text-sky-900 flex items-center gap-2">
-          <span className="opacity-50 text-base">📸</span> {title}
+          <svg className="w-4 h-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" /><circle cx="12" cy="13" r="4" /></svg> {title}
         </h3>
         {showToggle && (
           <button

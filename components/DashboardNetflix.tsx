@@ -27,19 +27,39 @@ interface DashboardNetflixProps {
 interface RowData {
   id: ExploreIntent;
   label: string;
-  icon: string;
+  icon: React.ReactNode;
   places: Place[];
   loading: boolean;
   error?: string;
 }
 
-const ROW_CONFIGS: { id: ExploreIntent; label: string; icon: string }[] = [
-  { id: 'play_kids', label: 'Play & Kids', icon: '🛝' },
-  { id: 'eat_drink', label: 'Eat & Drink', icon: '🍽️' },
-  { id: 'outdoors', label: 'Outdoors', icon: '🌿' },
-  { id: 'things_to_do', label: 'Things to Do', icon: '🎟️' },
-  { id: 'sport_active', label: 'Sport & Active', icon: '⚽' },
-  { id: 'indoor', label: 'Indoor', icon: '🏛️' },
+const RowIcon: React.FC<{ type: string }> = ({ type }) => {
+  const cls = "w-5 h-5";
+  switch (type) {
+    case 'play_kids':
+      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M8 14s1.5 2 4 2 4-2 4-2" /><line x1="9" y1="9" x2="9.01" y2="9" /><line x1="15" y1="9" x2="15.01" y2="9" /></svg>;
+    case 'eat_drink':
+      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 010 8h-1" /><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z" /><line x1="6" y1="1" x2="6" y2="4" /><line x1="10" y1="1" x2="10" y2="4" /><line x1="14" y1="1" x2="14" y2="4" /></svg>;
+    case 'outdoors':
+      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-4a2 2 0 00-2-2H5" /><path d="M21 12l-9-9-9 9" /><path d="M12 3C8 3 4 5 2 8" /><circle cx="12" cy="12" r="3" /><path d="M12 22c4 0 8-2 10-5" /></svg>;
+    case 'things_to_do':
+      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>;
+    case 'sport_active':
+      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2l-6 6-6-6" /><path d="M6 22l6-6 6 6" /><circle cx="12" cy="12" r="4" /></svg>;
+    case 'indoor':
+      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>;
+    default:
+      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /></svg>;
+  }
+};
+
+const ROW_CONFIGS: { id: ExploreIntent; label: string; icon: React.ReactNode }[] = [
+  { id: 'play_kids', label: 'Play & Kids', icon: <RowIcon type="play_kids" /> },
+  { id: 'eat_drink', label: 'Eat & Drink', icon: <RowIcon type="eat_drink" /> },
+  { id: 'outdoors', label: 'Outdoors', icon: <RowIcon type="outdoors" /> },
+  { id: 'things_to_do', label: 'Things to Do', icon: <RowIcon type="things_to_do" /> },
+  { id: 'sport_active', label: 'Sport & Active', icon: <RowIcon type="sport_active" /> },
+  { id: 'indoor', label: 'Indoor', icon: <RowIcon type="indoor" /> },
 ];
 
 const SkeletonCard: React.FC = () => (
@@ -89,7 +109,7 @@ const NetflixPlaceCard: React.FC<{
         className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center text-sm shadow-sm"
         aria-label={isFavorite ? 'Remove from saved' : 'Save place'}
       >
-        {isFavorite ? '💙' : '🤍'}
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" style={{ color: isFavorite ? '#0ea5e9' : '#94a3b8' }}><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>
       </button>
       {place.distance && (
         <span className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/50 backdrop-blur-sm text-white text-[10px] font-bold rounded-full">
@@ -100,7 +120,7 @@ const NetflixPlaceCard: React.FC<{
     <div className="p-2.5">
       <h3 className="font-bold text-[13px] text-slate-800 leading-tight line-clamp-2">{place.name}</h3>
       <div className="flex items-center gap-1.5 mt-1">
-        <span className="text-amber-500 text-[11px] font-bold">⭐ {place.rating ?? '—'}</span>
+        <span className="text-amber-500 text-[11px] font-bold flex items-center gap-0.5"><svg className="w-3 h-3 text-amber-400" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg> {place.rating ?? '—'}</span>
         {place.priceLevel && <span className="text-slate-300 text-[11px]">{place.priceLevel}</span>}
       </div>
       {place.tags?.length > 0 && (
@@ -133,7 +153,7 @@ const HeroCard: React.FC<{
       className="absolute top-3 right-3 w-10 h-10 rounded-full bg-white/25 backdrop-blur-md flex items-center justify-center border border-white/20"
       aria-label={isFavorite ? 'Remove from saved' : 'Save place'}
     >
-      <span className="text-lg">{isFavorite ? '💙' : '🤍'}</span>
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" style={{ color: isFavorite ? '#0ea5e9' : '#ffffff' }}><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>
     </button>
     <div className="absolute bottom-0 left-0 right-0 p-4">
       <div className="flex gap-2 mb-1">
@@ -143,7 +163,7 @@ const HeroCard: React.FC<{
       </div>
       <h3 className="text-lg font-extrabold text-white leading-tight">{place.name}</h3>
       <div className="flex items-center gap-3 mt-1 text-[11px] text-white/80 font-medium">
-        <span className="text-amber-300 font-bold">⭐ {place.rating ?? '—'}</span>
+        <span className="text-amber-300 font-bold flex items-center gap-0.5"><svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg> {place.rating ?? '—'}</span>
         {place.distance && <><span>·</span><span>{place.distance}</span></>}
       </div>
     </div>
@@ -432,7 +452,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
       {activeTab === 'explore' && (
         <div className="px-5">
           <div className="mb-4 mt-1">
-            <h2 className="text-xl font-extrabold text-slate-800">{greetingText} 👋</h2>
+            <h2 className="text-xl font-extrabold text-slate-800">{greetingText}</h2>
             <p className="text-sm text-slate-500 mt-0.5">{contextMessage}</p>
           </div>
 
@@ -462,7 +482,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
                 onClick={refreshGpsLocation}
                 className="text-[11px] font-semibold text-sky-500 active:text-sky-700"
               >
-                📍 Update location
+                <svg className="w-3.5 h-3.5 inline -mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" /></svg> Update location
               </button>
               <span className="text-[10px] text-slate-300">200 km</span>
             </div>
@@ -471,7 +491,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
           <div className="bg-gradient-to-r from-sky-50 to-purple-50 rounded-2xl p-3 mb-4 border border-sky-100">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-lg">🧭</span>
+                <svg className="w-5 h-5 text-sky-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" /></svg>
                 <div>
                   <span className="font-bold text-slate-700 text-sm">Discovery Mode</span>
                   <p className="text-[10px] text-slate-400 mt-0.5">Browse by category</p>
@@ -516,7 +536,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
               <div key={row.id} className="mb-6">
                 <div className="flex items-center justify-between mb-3 px-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">{row.icon}</span>
+                    <span className="text-slate-500">{row.icon}</span>
                     <h3 className="text-base font-extrabold text-slate-800">{row.label}</h3>
                     <span className="text-[11px] text-slate-400 font-medium">{row.places.length}</span>
                   </div>
@@ -551,7 +571,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
 
           {!isLoading && filledRows.length === 0 && (
             <div className="py-16 text-center">
-              <span className="text-4xl block mb-3">🗺️</span>
+              <svg className="w-10 h-10 text-slate-300 mx-auto mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" /><line x1="8" y1="2" x2="8" y2="18" /><line x1="16" y1="6" x2="16" y2="22" /></svg>
               <p className="font-bold text-slate-600">No places found</p>
               <p className="text-sm text-slate-400 mt-1">Try expanding your search radius</p>
             </div>
@@ -590,7 +610,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
             </div>
           ) : (
             <div className="py-16 text-center">
-              <span className="text-4xl block mb-3">💙</span>
+              <svg className="w-10 h-10 text-slate-300 mx-auto mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>
               <p className="font-bold text-slate-600">No saved places yet</p>
               <p className="text-sm text-slate-400 mt-1">Tap the heart on any place to save it</p>
             </div>
@@ -601,9 +621,17 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
       {activeTab !== 'explore' && activeTab !== 'favorites' && (
         <div className="px-5 mt-2">
           <div className="py-16 text-center">
-            <span className="text-4xl block mb-3">
-              {activeTab === 'adventures' ? '🧭' : activeTab === 'memories' ? '📸' : activeTab === 'partner' ? '💑' : '👥'}
-            </span>
+            <div className="flex justify-center mb-3">
+              {activeTab === 'adventures' ? (
+                <svg className="w-10 h-10 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10" /><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" /></svg>
+              ) : activeTab === 'memories' ? (
+                <svg className="w-10 h-10 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" /><circle cx="12" cy="13" r="4" /></svg>
+              ) : activeTab === 'partner' ? (
+                <svg className="w-10 h-10 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>
+              ) : (
+                <svg className="w-10 h-10 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" /></svg>
+              )}
+            </div>
             <p className="font-bold text-slate-600 capitalize">{activeTab}</p>
             <p className="text-sm text-slate-400 mt-1">Switch to the classic dashboard for full {activeTab} features</p>
           </div>

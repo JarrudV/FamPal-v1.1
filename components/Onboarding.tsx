@@ -252,7 +252,7 @@ const StepWelcome: React.FC<{
   <div className="flex-1 flex flex-col px-6 pt-4 pb-2">
     <div className="flex flex-col items-center text-center mb-8">
       <div className="w-28 h-28 rounded-full bg-gradient-to-br from-sky-400 to-indigo-600 flex items-center justify-center mb-6 shadow-xl shadow-sky-200/50">
-        <span className="text-5xl">👋</span>
+        <svg className="w-12 h-12 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
       </div>
       <h1 className="text-3xl font-black text-slate-900 mb-2">
         Welcome{userName ? `, ${userName.split(' ')[0]}` : ''}!
@@ -287,15 +287,15 @@ const StepWelcome: React.FC<{
   </div>
 );
 
-const FeatureCard: React.FC<{ icon: string; title: string; description: string; gradient: string; delay: number }> = ({
+const FeatureCard: React.FC<{ icon: React.ReactNode; title: string; description: string; gradient: string; delay: number }> = ({
   icon, title, description, gradient, delay,
 }) => (
   <div
     className="flex items-start gap-4 p-4 rounded-2xl bg-white border border-slate-100 shadow-sm"
     style={{ animationDelay: `${delay}ms` }}
   >
-    <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center flex-shrink-0 shadow-md`}>
-      <span className="text-xl">{icon}</span>
+    <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center flex-shrink-0 shadow-md text-white`}>
+      {icon}
     </div>
     <div className="flex-1 min-w-0">
       <h3 className="text-sm font-bold text-slate-800">{title}</h3>
@@ -308,7 +308,7 @@ const StepFeatures: React.FC = () => (
   <div className="flex-1 flex flex-col px-6 pt-4 pb-2">
     <div className="flex flex-col items-center text-center mb-6">
       <div className="w-28 h-28 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-600 flex items-center justify-center mb-6 shadow-xl shadow-emerald-200/50">
-        <span className="text-5xl">🗺️</span>
+        <svg className="w-12 h-12 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" /><line x1="8" y1="2" x2="8" y2="18" /><line x1="16" y1="6" x2="16" y2="22" /></svg>
       </div>
       <h1 className="text-2xl font-black text-slate-900 mb-2">
         Here's what you can do
@@ -320,28 +320,28 @@ const StepFeatures: React.FC = () => (
 
     <div className="space-y-3 flex-1">
       <FeatureCard
-        icon="📍"
+        icon={<svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" /></svg>}
         title="Discover Places"
         description="Find family-friendly restaurants, parks, trails and more nearby."
         gradient="from-sky-400 to-blue-500"
         delay={0}
       />
       <FeatureCard
-        icon="❤️"
+        icon={<svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>}
         title="Save & Track"
         description="Bookmark favourites and log your family adventures."
         gradient="from-rose-400 to-pink-500"
         delay={100}
       />
       <FeatureCard
-        icon="👥"
+        icon={<svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" /></svg>}
         title="Circles & Sharing"
         description="Create groups with friends and family to share recommendations."
         gradient="from-amber-400 to-orange-500"
         delay={200}
       />
       <FeatureCard
-        icon="✨"
+        icon={<svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>}
         title="AI Suggestions"
         description="Get personalised activity ideas powered by AI."
         gradient="from-violet-400 to-purple-500"
@@ -370,7 +370,7 @@ const StepFamily: React.FC<{
   <div className="flex-1 flex flex-col px-6 pt-4 pb-2 overflow-y-auto">
     <div className="flex flex-col items-center text-center mb-6">
       <div className="w-28 h-28 rounded-full bg-gradient-to-br from-pink-400 to-red-500 flex items-center justify-center mb-6 shadow-xl shadow-pink-200/50">
-        <span className="text-5xl">👨‍👩‍👧‍👦</span>
+        <svg className="w-12 h-12 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" /></svg>
       </div>
       <h1 className="text-2xl font-black text-slate-900 mb-2">
         Your Family
@@ -442,7 +442,7 @@ const StepFamily: React.FC<{
       <div className="bg-slate-50 rounded-3xl p-5 space-y-3">
         <div className="flex items-center gap-3 mb-1">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center">
-            <span className="text-lg">💑</span>
+            <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>
           </div>
           <div>
             <h3 className="text-sm font-bold text-slate-700">Partner Link</h3>
@@ -492,7 +492,7 @@ const StepPreferences: React.FC<{
   <div className="flex-1 flex flex-col px-6 pt-4 pb-2 overflow-y-auto">
     <div className="flex flex-col items-center text-center mb-6">
       <div className="w-28 h-28 rounded-full bg-gradient-to-br from-violet-400 to-indigo-600 flex items-center justify-center mb-6 shadow-xl shadow-violet-200/50">
-        <span className="text-5xl">⚙️</span>
+        <svg className="w-12 h-12 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" /></svg>
       </div>
       <h1 className="text-2xl font-black text-slate-900 mb-2">
         Your Preferences

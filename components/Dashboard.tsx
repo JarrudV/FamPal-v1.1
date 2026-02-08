@@ -1698,7 +1698,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                 onClick={refreshGpsLocation}
                 className="w-full mt-4 py-3 bg-slate-100 active:bg-slate-200 rounded-xl text-sm font-semibold text-slate-600 transition-colors flex items-center justify-center gap-2 min-h-[48px]"
               >
-                <span>📍</span>
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" /></svg>
                 <span>Use Current Location</span>
               </button>
               {locationError && (
@@ -1728,7 +1728,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                       : 'bg-sky-50 text-sky-600 active:bg-sky-100'
                   }`}
                 >
-                  👨‍👩‍👧‍👦 Family
+                  Family
                 </button>
                 {hasLinkedPartner && (
                   <button
@@ -1739,7 +1739,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                         : 'bg-rose-50 text-rose-600 active:bg-rose-100'
                     }`}
                   >
-                    💑 Partner
+                    <svg className="w-4 h-4 inline -mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg> Partner
                   </button>
                 )}
                 <button
@@ -1750,7 +1750,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                       : 'bg-purple-50 text-purple-600 active:bg-purple-100'
                   }`}
                 >
-                  🧑 Just Me
+                  Just Me
                 </button>
               </div>
               {prefFilterMode !== 'all' && (
@@ -1772,12 +1772,12 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                 <div className="mt-3 flex flex-wrap gap-2">
                   {combinedPreferences.allergies.map(allergy => (
                     <span key={allergy} className="inline-flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-medium">
-                      <span>⚠️</span> {allergy}
+                      <svg className="w-3.5 h-3.5 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg> {allergy}
                     </span>
                   ))}
                   {combinedPreferences.accessibility.map(access => (
                     <span key={access} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
-                      <span>♿</span> {access}
+                      <svg className="w-3.5 h-3.5 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9 12h6M9 12l2 5M15 12l-2 5M12 7v2" /></svg> {access}
                     </span>
                   ))}
                 </div>
@@ -1788,7 +1788,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                 <div className="mt-2 flex flex-wrap gap-2">
                   {combinedPreferences.foodPreferences.map(pref => (
                     <span key={pref} className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 rounded-full text-xs font-medium">
-                      🥗 {pref}
+                      <svg className="w-3.5 h-3.5 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 010 8h-1" /><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z" /><line x1="6" y1="1" x2="6" y2="4" /><line x1="10" y1="1" x2="10" y2="4" /><line x1="14" y1="1" x2="14" y2="4" /></svg> {pref}
                     </span>
                   ))}
                 </div>
@@ -1806,7 +1806,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
               <div className="bg-gradient-to-r from-sky-50 to-purple-50 rounded-2xl p-4 border border-sky-100">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">🧭</span>
+                    <svg className="w-5 h-5 text-sky-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" /></svg>
                     <div>
                       <span className="font-bold text-slate-700 text-sm">Discovery Mode</span>
                       <p className="text-[10px] text-slate-400 mt-0.5">Browse by category</p>
@@ -1828,7 +1828,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
               <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">✨</span>
+                    <svg className="w-5 h-5 text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
                     <div>
                       <span className="font-bold text-slate-700 text-sm">Fresh Finds Only</span>
                       <p className="text-[10px] text-slate-400 mt-0.5">
@@ -1855,14 +1855,14 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
             {!loading && userLocation && (
               <div className="mt-4 text-center">
                 <p className="text-sm text-slate-500 italic">
-                  {prefFilterMode === 'family' && "🎉 Finding fun for the whole crew!"}
-                  {prefFilterMode === 'partner' && "💕 Date ideas incoming..."}
-                  {prefFilterMode === 'solo' && "🧘 Me-time discoveries await!"}
+                  {prefFilterMode === 'family' && "Finding fun for the whole crew!"}
+                  {prefFilterMode === 'partner' && "Date ideas incoming..."}
+                  {prefFilterMode === 'solo' && "Me-time discoveries await!"}
                   {prefFilterMode === 'all' && [
-                    "✨ Every day is an adventure waiting to happen!",
-                    "🌟 The best memories are made exploring together.",
-                    "🎈 Ready for your next family adventure?",
-                    "🗺️ New places, new memories, new stories!",
+                    "Every day is an adventure waiting to happen!",
+                    "The best memories are made exploring together.",
+                    "Ready for your next family adventure?",
+                    "New places, new memories, new stories!",
                   ][Math.floor(Date.now() / 60000) % 4]}
                 </p>
               </div>
@@ -1888,7 +1888,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                 ))}
                 {hideSavedPlaces && intentAndRequirementFilteredPlaces.filter(p => !state.favorites.includes(p.id)).length === 0 && intentAndRequirementFilteredPlaces.length > 0 && (
                   <div className="py-12 text-center bg-white rounded-2xl border border-slate-100">
-                    <span className="text-4xl mb-3 block">🎊</span>
+                    <span className="mb-3 block"><svg className="w-10 h-10 mx-auto text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg></span>
                     <p className="text-slate-600 font-semibold">You've saved them all!</p>
                     <p className="text-slate-400 text-sm mt-1">Try a different category or expand your search radius.</p>
                   </div>
@@ -1904,7 +1904,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                 {pagingComplete && !loadingMore && intentAndRequirementFilteredPlaces.length > 0 && (
                   <div className="pt-6 pb-8 text-center">
                     <div className="inline-flex items-center gap-2 px-6 py-3 bg-slate-100 rounded-2xl">
-                      <span className="text-lg">🎉</span>
+                      <svg className="w-5 h-5 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
                       <span className="text-sm font-semibold text-slate-500">You've seen all the places nearby!</span>
                     </div>
                     <p className="text-xs text-slate-400 mt-2">Try changing your search radius or category</p>
@@ -1993,14 +1993,14 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                   <p className="text-xs uppercase tracking-widest opacity-80 font-bold">Adventures Completed</p>
                   <p className="text-4xl font-black mt-1">{(state.visitedPlaces || []).length}</p>
                 </div>
-                <div className="text-5xl">🏆</div>
+                <div><svg className="w-12 h-12 text-white/90" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 010-5H6" /><path d="M18 9h1.5a2.5 2.5 0 000-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20 17 22" /><path d="M18 2H6v7a6 6 0 0012 0V2z" /></svg></div>
               </div>
             </div>
 
             {isGuest ? (
               <div className="py-16 text-center bg-white rounded-[40px] border border-slate-100">
                 <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mb-4 mx-auto">
-                  <span className="text-2xl">🗺️</span>
+                  <svg className="w-8 h-8 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" /><line x1="8" y1="2" x2="8" y2="18" /><line x1="16" y1="6" x2="16" y2="22" /></svg>
                 </div>
                 <h3 className="text-base font-semibold text-slate-700 mb-2">Track Your Adventures</h3>
                 <p className="text-sm text-slate-500 max-w-xs mx-auto">
@@ -2045,7 +2045,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
                             <h3 className="font-bold text-slate-800 truncate">{visit.placeName}</h3>
-                            {visit.isFavorite && <span className="text-sky-500 shrink-0">💙</span>}
+                            {visit.isFavorite && <svg className="w-4 h-4 text-sky-500 shrink-0" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>}
                           </div>
                           <p className="text-xs text-slate-400 mt-1">
                             Visited {new Date(visit.visitedAt).toLocaleDateString()}
@@ -2067,7 +2067,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
             ) : (
               <div className="py-16 text-center bg-white rounded-[40px] border border-slate-100">
                 <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 mx-auto">
-                  <span className="text-2xl">🗺️</span>
+                  <svg className="w-8 h-8 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" /><line x1="8" y1="2" x2="8" y2="18" /><line x1="16" y1="6" x2="16" y2="22" /></svg>
                 </div>
                 <h3 className="text-base font-semibold text-slate-700 mb-2">No adventures yet</h3>
                 <p className="text-sm text-slate-500 max-w-xs mx-auto">
@@ -2140,7 +2140,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                     <div key={memory.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
                       <div className="flex items-center gap-3 p-4 pb-3">
                         <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-sky-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                          {state.user?.displayName?.charAt(0)?.toUpperCase() || '👤'}
+                          {state.user?.displayName?.charAt(0)?.toUpperCase() || 'U'}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-slate-800 text-sm truncate">
@@ -2213,7 +2213,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                                     if (parent && !parent.querySelector('.photo-fallback')) {
                                       const fallback = document.createElement('div');
                                       fallback.className = 'photo-fallback absolute inset-0 flex items-center justify-center bg-slate-100';
-                                      fallback.innerHTML = '<span class="text-3xl">📷</span>';
+                                      fallback.innerHTML = '<svg class="w-8 h-8 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>';
                                       parent.appendChild(fallback);
                                     }
                                   }
@@ -2292,7 +2292,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
               <div className="space-y-4">
                 <div className="bg-gradient-to-br from-rose-50 to-pink-50 rounded-3xl p-6 border border-rose-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-white text-2xl flex items-center justify-center shadow-sm">💑</div>
+                    <div className="w-12 h-12 rounded-2xl bg-white text-2xl flex items-center justify-center shadow-sm"><svg className="w-6 h-6 text-rose-400" viewBox="0 0 24 24" fill="currentColor"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg></div>
                     <div>
                       <h3 className="font-black text-lg text-slate-800">Partner Space</h3>
                       <p className="text-xs text-slate-500">Share favorites, memories, and quick notes together.</p>
@@ -2429,7 +2429,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                 {!isPaid && (state.favorites.length > 3 || state.memories.length > 3) && (
                   <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl p-4 border border-amber-100">
                     <div className="flex items-center gap-3">
-                      <span className="text-2xl">✨</span>
+                      <svg className="w-8 h-8 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
                       <div>
                         <p className="font-bold text-sm text-amber-800">Upgrade to Pro</p>
                         <p className="text-xs text-amber-600">Unlimited shared favorites, memories & notes</p>
@@ -2451,7 +2451,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                           className="w-full text-left bg-white rounded-2xl p-4 border border-slate-100 flex items-center justify-between hover:bg-slate-50"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-rose-100 rounded-xl flex items-center justify-center text-lg">💑</div>
+                            <div className="w-10 h-10 bg-rose-100 rounded-xl flex items-center justify-center text-lg"><svg className="w-5 h-5 text-rose-400" viewBox="0 0 24 24" fill="currentColor"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg></div>
                             <div>
                               <p className="font-bold text-sm text-slate-800">{circle.name}</p>
                               <p className="text-xs text-slate-500">Shared with {partnerLabel}</p>

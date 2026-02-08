@@ -1071,7 +1071,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
       userRatingsTotal: p.userRatingCount,
       openingHours: p.regularOpeningHours?.weekdayDescriptions,
       isOpen: p.regularOpeningHours?.openNow,
-      photos: (p.photos || []).slice(0, 5).map((photo: any) => 
+      photos: (p.photos || []).slice(0, 10).map((photo: any) => 
         `https://places.googleapis.com/v1/${photo.name}/media?maxHeightPx=400&maxWidthPx=600&key=${PLACES_API_KEY}`
       ),
       reviews: (p.reviews || []).slice(0, 5).map((r: any) => ({

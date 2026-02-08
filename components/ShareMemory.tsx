@@ -34,7 +34,7 @@ function getShareText(memory: Memory): string {
     text += memory.caption + '\n\n';
   }
   
-  text += `📍 ${memory.placeName}\n`;
+  text += `${memory.placeName}\n`;
   text += mapsUrl;
   
   return text;
@@ -135,7 +135,7 @@ export function ShareMemoryModal({ memory, circles = [], onShareToCircle, onShar
             onClick={handleSocialShare}
             className="w-full flex items-center gap-3 bg-gradient-to-r from-sky-500 to-blue-500 text-white px-4 py-4 rounded-2xl font-bold shadow-lg"
           >
-            <span className="text-xl">📤</span>
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg>
             <span>Share to Social</span>
           </button>
           
@@ -148,7 +148,11 @@ export function ShareMemoryModal({ memory, circles = [], onShareToCircle, onShar
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
-              <span>{copied ? '✓' : '📋'}</span>
+              {copied ? (
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+              ) : (
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
+              )}
               <span>{copied ? 'Copied!' : 'Copy Text'}</span>
             </button>
             
@@ -156,7 +160,7 @@ export function ShareMemoryModal({ memory, circles = [], onShareToCircle, onShar
               onClick={handleCopyLink}
               className="flex-1 flex items-center justify-center gap-2 bg-slate-100 text-slate-700 px-4 py-3 rounded-xl font-semibold text-sm hover:bg-slate-200"
             >
-              <span>🔗</span>
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" /></svg>
               <span>Copy Link</span>
             </button>
           </div>
@@ -176,7 +180,7 @@ export function ShareMemoryModal({ memory, circles = [], onShareToCircle, onShar
                 }}
                 className="flex items-center gap-2 bg-pink-50 text-pink-700 px-4 py-3 rounded-xl text-sm font-semibold hover:bg-pink-100 w-full"
               >
-                <span>💕</span>
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>
                 <span>Share with {partnerName || 'Partner'}</span>
               </button>
             </>
@@ -196,7 +200,7 @@ export function ShareMemoryModal({ memory, circles = [], onShareToCircle, onShar
                     }}
                     className="flex items-center gap-2 bg-purple-50 text-purple-700 px-3 py-2 rounded-xl text-sm font-medium hover:bg-purple-100"
                   >
-                    <span>👥</span>
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" /></svg>
                     <span>{circle.name}</span>
                   </button>
                 ))}
@@ -236,7 +240,7 @@ export function ShareButton({ memory, size = 'md', onClick }: ShareButtonProps) 
       className={`${sizeClasses} bg-sky-50 text-sky-600 rounded-full flex items-center justify-center hover:bg-sky-100 transition-colors`}
       title="Share memory"
     >
-      📤
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg>
     </button>
   );
 }
@@ -269,7 +273,13 @@ export function QuickShareButton({ memory }: { memory: Memory }) {
       }`}
       title="Quick share"
     >
-      {status === 'success' ? '✓' : status === 'error' ? '✗' : '📤'}
+      {status === 'success' ? (
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+      ) : status === 'error' ? (
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+      ) : (
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg>
+      )}
     </button>
   );
 }

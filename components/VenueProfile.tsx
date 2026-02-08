@@ -113,6 +113,9 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   const [aiCached, setAiCached] = useState(false);
   const [showNavOptions, setShowNavOptions] = useState(false);
   
+  const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
+  const [photoViewerIndex, setPhotoViewerIndex] = useState(0);
+
   // Swipe gesture handling
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
@@ -286,7 +289,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" /></svg>
         </button>
         <button onClick={onToggleFavorite} className="absolute top-4 right-4 w-10 h-10 bg-white/20 backdrop-blur-xl rounded-xl flex items-center justify-center border border-white/20 safe-area-top">
-          <span className="text-lg">{isFavorite ? '💙' : '🤍'}</span>
+          <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>
         </button>
         <div className="absolute bottom-6 left-5 right-5">
            <div className="flex gap-1.5 mb-2 flex-wrap">
@@ -314,7 +317,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              <span>{isFavorite ? '💙' : '🤍'}</span>
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>
               <span>{isFavorite ? 'Saved' : 'Save Place'}</span>
             </button>
             <button 
@@ -325,7 +328,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              <span>{isVisited ? '✅' : '📍'}</span>
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill={isVisited ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
               <span>{isVisited ? 'Visited' : 'Mark Visited'}</span>
             </button>
           </div>
@@ -355,7 +358,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
               }}
               className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white py-3 rounded-2xl font-bold text-sm shadow-lg"
             >
-              <span>💕</span>
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>
               <span>Add to Partner Plans</span>
             </button>
           )}
@@ -379,7 +382,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                   }}
                   className="flex items-center gap-2 bg-purple-50 text-purple-700 px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap hover:bg-purple-100"
                 >
-                  <span>👥</span>
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" /></svg>
                   <span>Add to {circle.name}</span>
                 </button>
               ))}
@@ -431,10 +434,10 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
             />
 
             <section className="grid grid-cols-2 gap-4">
-              <InfoTile label="Pricing" value={place.priceLevel || '—'} icon="💰" />
-              <InfoTile label="Age Group" value={place.ageAppropriate || 'All ages'} icon="👶" />
-              <InfoTile label="Distance" value={place.distance || '—'} icon="📍" />
-              <InfoTile label="Rating" value={`⭐ ${place.rating ?? '—'}`} icon="📈" />
+              <InfoTile label="Pricing" value={place.priceLevel || '—'} icon={<svg className="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" /></svg>} />
+              <InfoTile label="Age Group" value={place.ageAppropriate || 'All ages'} icon={<svg className="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /></svg>} />
+              <InfoTile label="Distance" value={place.distance || '—'} icon={<svg className="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" /></svg>} />
+              <InfoTile label="Rating" value={place.rating ? `${place.rating} / 5` : '—'} icon={<svg className="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>} />
             </section>
 
             <section className="space-y-4">
@@ -444,7 +447,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                     disabled
                     className="w-full h-16 bg-gradient-to-r from-slate-300 to-slate-400 text-white rounded-3xl font-extrabold shadow-lg flex items-center justify-center gap-3 opacity-60 cursor-not-allowed"
                   >
-                    <span className="text-xl">✨</span>
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
                     Ask AI About This Place
                   </button>
                   <div className="mt-3 bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center">
@@ -458,7 +461,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                     onClick={() => setShowAiPanel(!showAiPanel)}
                     className="w-full h-16 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-3xl font-extrabold shadow-xl shadow-purple-100 flex items-center justify-center gap-3 active:scale-95 transition-all"
                   >
-                    <span className="text-xl">✨</span>
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
                     Ask AI About This Place
                     {aiInfo.limit !== -1 && (
                       <span className="text-xs bg-white/20 px-2 py-1 rounded-lg">
@@ -548,7 +551,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
               <div className="grid grid-cols-1 gap-3">
                 {(place.phone || placeDetails?.phone) && (
                   <a href={`tel:${place.phone || placeDetails?.phone}`} className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-100 hover:bg-sky-50 transition-colors">
-                    <span className="text-2xl">📞</span>
+                    <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center"><svg className="w-5 h-5 text-sky-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z" /></svg></div>
                     <div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phone</p>
                       <p className="text-sm font-bold text-sky-600">{place.phone || placeDetails?.phone}</p>
@@ -559,7 +562,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                   const siteUrl = place.website || placeDetails?.website || '';
                   return (
                     <a href={siteUrl.startsWith('http') ? siteUrl : `https://${siteUrl}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-100 hover:bg-sky-50 transition-colors">
-                      <span className="text-2xl">🌐</span>
+                      <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center"><svg className="w-5 h-5 text-sky-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" /></svg></div>
                       <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Website</p>
                         <p className="text-sm font-bold text-sky-600 truncate max-w-[200px]">{siteUrl.replace(/^https?:\/\//, '')}</p>
@@ -578,7 +581,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                     onClick={() => setShowNavOptions(true)} 
                     className="w-full h-16 bg-[#0EA5E9] text-white rounded-3xl font-extrabold mt-4 shadow-xl shadow-sky-100 flex items-center justify-center gap-2 active:scale-95 transition-all"
                   >
-                    Navigate 🚀
+                    <svg className="w-5 h-5 inline -mt-0.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11" /></svg>Navigate
                   </button>
                 ) : (
                   <div className="mt-4 space-y-3">
@@ -632,7 +635,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                 <div className="grid grid-cols-2 gap-3 mt-4">
                   <button 
                     onClick={() => {
-                      const text = `Check out ${place.name}! 📍 ${place.address}\n⭐ ${place.rating} rating\n${place.description}\n\n${place.mapsUrl}`;
+                      const text = `Check out ${place.name}! ${place.address}\n${place.rating} rating\n${place.description}\n\n${place.mapsUrl}`;
                       const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
                       window.open(whatsappUrl, '_blank');
                     }}
@@ -663,12 +666,34 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
               </div>
             </section>
 
+            {/* Photo Gallery */}
+            {placeDetails?.photos && placeDetails.photos.length > 1 && (
+              <section className="space-y-4">
+                <h3 className="text-xl font-extrabold text-[#1E293B] flex items-center gap-2">
+                  <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+                  Photos
+                  <span className="text-sm font-bold text-slate-400">({placeDetails.photos.length})</span>
+                </h3>
+                <div className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6 snap-x snap-mandatory scrollbar-hide">
+                  {placeDetails.photos.map((photoUrl, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => { setPhotoViewerIndex(idx); setPhotoViewerOpen(true); }}
+                      className="flex-shrink-0 w-36 h-28 rounded-2xl overflow-hidden shadow-sm border border-slate-100 snap-start active:scale-95 transition-transform"
+                    >
+                      <img src={photoUrl} alt={`${place.name} photo ${idx + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* Google Reviews Section */}
             {placeDetails?.reviews && placeDetails.reviews.length > 0 && (
               <section className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-extrabold text-[#1E293B] flex items-center gap-2">
-                    <span>⭐</span> Reviews
+                    <svg className="w-5 h-5 text-amber-400" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg> Reviews
                     <span className="text-sm font-bold text-slate-400">
                       ({placeDetails.userRatingsTotal || placeDetails.reviews.length} on Google)
                     </span>
@@ -723,7 +748,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
             {venueMemories.length > 0 && (
               <section className="space-y-4">
                 <h3 className="text-xl font-extrabold text-[#1E293B] flex items-center gap-2">
-                  <span>📸</span> Your Memories
+                  <svg className="w-5 h-5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" /><circle cx="12" cy="13" r="4" /></svg> Your Memories
                 </h3>
                 <div className="space-y-3">
                   {venueMemories.map(memory => {
@@ -762,7 +787,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
           <div className="animate-slide-up space-y-8">
             {!isFavorite && !isVisited ? (
               <div className="py-16 text-center space-y-4 bg-sky-50 rounded-[40px] p-8 border border-sky-100">
-                <div className="w-16 h-16 bg-white rounded-3xl mx-auto flex items-center justify-center text-3xl shadow-sm">📘</div>
+                <div className="w-16 h-16 bg-white rounded-3xl mx-auto flex items-center justify-center shadow-sm"><svg className="w-8 h-8 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" /></svg></div>
                 <h3 className="font-black text-sky-900 text-xl">Unlock the Notebook</h3>
                 <p className="text-xs text-sky-700/70 font-bold leading-relaxed">Save or mark this place as visited to keep notes, photos, and memories.</p>
                 <div className="flex gap-3 justify-center">
@@ -774,7 +799,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
               <>
                 <div className="space-y-4">
                   <h3 className="text-xl font-extrabold text-sky-900 flex items-center gap-2">
-                    <span className="opacity-50 text-base">✏️</span> Private Notes
+                    <svg className="w-4 h-4 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg> Private Notes
                   </h3>
                   <textarea 
                     className="w-full p-6 bg-white rounded-3xl border-none text-sm font-bold text-slate-600 shadow-sm focus:ring-2 focus:ring-sky-500 outline-none placeholder:text-slate-300"
@@ -787,7 +812,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
 
                 <div className="space-y-4">
                   <h3 className="text-xl font-extrabold text-sky-900 flex items-center gap-2">
-                    <span className="opacity-50 text-base">🏷️</span> Activities & Features
+                    <svg className="w-4 h-4 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg> Activities & Features
                   </h3>
                   <p className="text-xs text-slate-500">Tag what's available at this spot for quick reference</p>
                   
@@ -952,6 +977,49 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
           </div>
         </div>
       )}
+
+      {photoViewerOpen && placeDetails?.photos && (
+        <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col" onClick={() => setPhotoViewerOpen(false)}>
+          <div className="flex items-center justify-between px-4 pt-4 pb-2 safe-area-top">
+            <span className="text-white/70 text-sm font-bold">{photoViewerIndex + 1} / {placeDetails.photos.length}</span>
+            <button onClick={() => setPhotoViewerOpen(false)} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+          <div className="flex-1 flex items-center justify-center px-4" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={placeDetails.photos[photoViewerIndex]}
+              alt={`${place.name} photo ${photoViewerIndex + 1}`}
+              className="max-w-full max-h-[70vh] object-contain rounded-lg"
+            />
+          </div>
+          <div className="flex items-center justify-center gap-4 pb-6 safe-area-bottom">
+            <button
+              onClick={(e) => { e.stopPropagation(); setPhotoViewerIndex(Math.max(0, photoViewerIndex - 1)); }}
+              disabled={photoViewerIndex === 0}
+              className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center disabled:opacity-30"
+            >
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+            </button>
+            <div className="flex gap-1.5">
+              {placeDetails.photos.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={(e) => { e.stopPropagation(); setPhotoViewerIndex(idx); }}
+                  className={`w-2 h-2 rounded-full transition-all ${idx === photoViewerIndex ? 'bg-white scale-125' : 'bg-white/30'}`}
+                />
+              ))}
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); setPhotoViewerIndex(Math.min(placeDetails.photos.length - 1, photoViewerIndex + 1)); }}
+              disabled={photoViewerIndex === placeDetails.photos.length - 1}
+              className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center disabled:opacity-30"
+            >
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -970,7 +1038,7 @@ const TabBtn = ({ active, onClick, label }: any) => (
 const InfoTile = ({ label, value, icon }: any) => (
   <div className="bg-white p-5 rounded-[32px] shadow-sm border border-slate-50">
     <div className="flex items-center gap-2 mb-1">
-      <span className="text-xs opacity-60">{icon}</span>
+      {icon}
       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
     </div>
     <p className="text-sm font-black text-[#1E293B]">{value}</p>

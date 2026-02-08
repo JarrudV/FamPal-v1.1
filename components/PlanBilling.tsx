@@ -96,7 +96,7 @@ export default function PlanBilling({ state, onClose, onUpdateState }: PlanBilli
         <div className="sticky top-0 bg-white p-4 border-b border-slate-100 flex items-center justify-between">
           <h2 className="font-bold text-lg text-slate-800">Plan & Billing</h2>
           <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
-            <span className="text-slate-500">✕</span>
+            <svg className="w-4 h-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
           </button>
         </div>
 
@@ -104,7 +104,13 @@ export default function PlanBilling({ state, onClose, onUpdateState }: PlanBilli
           <div className="bg-gradient-to-br from-sky-50 to-indigo-50 rounded-2xl p-5 border border-sky-100">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-2xl shadow-sm">
-                {isLifetime ? '👑' : isFamily ? '👨?👩?👧?👦' : isPro ? '⭐' : '🌱'}
+                {isLifetime ? (
+                  <svg className="w-6 h-6 text-amber-500" viewBox="0 0 24 24" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm0 0v2a2 2 0 002 2h10a2 2 0 002-2v-2" /></svg>
+                ) : isPro ? (
+                  <svg className="w-6 h-6 text-amber-500" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+                ) : (
+                  <svg className="w-6 h-6 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+                )}
               </div>
               <div>
                 <h3 className="font-bold text-slate-800">{getPlanDisplayName(currentTier)} Plan</h3>
@@ -141,16 +147,16 @@ export default function PlanBilling({ state, onClose, onUpdateState }: PlanBilli
                     POPULAR
                   </div>
                   <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-xl">⭐</div>
+                    <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center"><svg className="w-5 h-5 text-amber-500" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg></div>
                     <div className="flex-1">
                       <h4 className="font-bold text-slate-800">Pro</h4>
                       <p className="text-2xl font-bold text-amber-600 mt-1">{PLAN_PRICES.pro.label}</p>
                       <ul className="mt-3 space-y-2 text-sm text-slate-600">
-                        <li className="flex items-center gap-2">✓ Unlimited saved places</li>
-                        <li className="flex items-center gap-2">✓ Unlimited notebook entries</li>
-                        <li className="flex items-center gap-2">✓ 100 AI questions/month</li>
-                        <li className="flex items-center gap-2">✓ Unlimited memories</li>
-                        <li className="flex items-center gap-2">✓ Unlimited circles</li>
+                        <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg> Unlimited saved places</li>
+                        <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg> Unlimited notebook entries</li>
+                        <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg> 100 AI questions/month</li>
+                        <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg> Unlimited memories</li>
+                        <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg> Unlimited circles</li>
                       </ul>
                       <button
                         onClick={() => handleUpgrade('pro')}
@@ -188,15 +194,15 @@ export default function PlanBilling({ state, onClose, onUpdateState }: PlanBilli
 
                 <div className="bg-white border border-slate-200 rounded-2xl p-5">
                   <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center text-xl">👑</div>
+                    <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center"><svg className="w-5 h-5 text-purple-500" viewBox="0 0 24 24" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm0 0v2a2 2 0 002 2h10a2 2 0 002-2v-2" /></svg></div>
                     <div className="flex-1">
                       <h4 className="font-bold text-slate-800">Lifetime</h4>
                       <p className="text-2xl font-bold text-purple-600 mt-1">{PLAN_PRICES.lifetime.label}</p>
                       <ul className="mt-3 space-y-2 text-sm text-slate-600">
-                        <li className="flex items-center gap-2">✓ Everything in Pro</li>
-                        <li className="flex items-center gap-2">✓ 200 AI questions/month</li>
-                        <li className="flex items-center gap-2">✓ Pay once, yours forever</li>
-                        <li className="flex items-center gap-2">✓ Future features included</li>
+                        <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg> Everything in Pro</li>
+                        <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg> 200 AI questions/month</li>
+                        <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg> Pay once, yours forever</li>
+                        <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg> Future features included</li>
                       </ul>
                       <button
                         onClick={() => handleUpgrade('lifetime')}
@@ -250,7 +256,7 @@ export default function PlanBilling({ state, onClose, onUpdateState }: PlanBilli
           {isLifetime && (
             <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-4 text-center">
               <p className="text-sm text-purple-700 font-medium">
-                🎉 You have lifetime access! Thank you for your support.
+                You have lifetime access! Thank you for your support.
               </p>
             </div>
           )}
