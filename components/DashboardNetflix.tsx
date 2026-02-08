@@ -20,6 +20,8 @@ interface DashboardNetflixProps {
   onClearInitialCircle?: () => void;
   initialTab?: string;
   onTabChange?: (tab: string) => void;
+  discoveryMode?: boolean;
+  onToggleDiscoveryMode?: () => void;
 }
 
 interface RowData {
@@ -148,7 +150,7 @@ const HeroCard: React.FC<{
   </div>
 );
 
-const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onSignOut, setView, onUpdateState, initialCircleId, onClearInitialCircle, initialTab, onTabChange }) => {
+const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onSignOut, setView, onUpdateState, initialCircleId, onClearInitialCircle, initialTab, onTabChange, discoveryMode, onToggleDiscoveryMode }) => {
   const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
   const userPrefs = state.userPreferences || {};
   const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner'>(
@@ -463,6 +465,29 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
                 📍 Update location
               </button>
               <span className="text-[10px] text-slate-300">200 km</span>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-r from-sky-50 to-purple-50 rounded-2xl p-3 mb-4 border border-sky-100">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🧭</span>
+                <div>
+                  <span className="font-bold text-slate-700 text-sm">Discovery Mode</span>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Browse by category</p>
+                </div>
+              </div>
+              <button
+                onClick={() => onToggleDiscoveryMode?.()}
+                className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                  discoveryMode ? 'bg-sky-500' : 'bg-slate-300'
+                }`}
+                aria-label="Toggle Discovery Mode"
+              >
+                <span data-toggle-knob className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                  discoveryMode ? 'translate-x-5' : 'translate-x-0'
+                }`} />
+              </button>
             </div>
           </div>
 

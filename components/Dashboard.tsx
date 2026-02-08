@@ -52,6 +52,8 @@ interface DashboardProps {
   onClearInitialCircle?: () => void;
   initialTab?: 'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner';
   onTabChange?: (tab: string) => void;
+  discoveryMode?: boolean;
+  onToggleDiscoveryMode?: () => void;
 }
 
 interface PartnerNote {
@@ -90,7 +92,7 @@ function getTimeAgo(date: Date): string {
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setView, onUpdateState, initialCircleId, onClearInitialCircle, initialTab, onTabChange }) => {
+const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setView, onUpdateState, initialCircleId, onClearInitialCircle, initialTab, onTabChange, discoveryMode, onToggleDiscoveryMode }) => {
   const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
   const shouldLogDev = import.meta.env.DEV;
   const userPrefs = state.userPreferences || {};
@@ -1799,29 +1801,54 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
               </div>
             )}
             
-            {/* Discovery Mode Toggle & Encouragement */}
-            <div className="bg-gradient-to-r from-sky-50 to-purple-50 rounded-2xl p-4 mt-4 border border-sky-100">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">🧭</span>
-                  <span className="font-bold text-slate-700 text-sm">Discovery Mode</span>
+            {/* Discovery Mode & Fresh Finds */}
+            <div className="mt-4 space-y-3">
+              <div className="bg-gradient-to-r from-sky-50 to-purple-50 rounded-2xl p-4 border border-sky-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🧭</span>
+                    <div>
+                      <span className="font-bold text-slate-700 text-sm">Discovery Mode</span>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Browse by category</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onToggleDiscoveryMode?.()}
+                    className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                      discoveryMode ? 'bg-sky-500' : 'bg-slate-300'
+                    }`}
+                    aria-label="Toggle Discovery Mode"
+                  >
+                    <span data-toggle-knob className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                      discoveryMode ? 'translate-x-5' : 'translate-x-0'
+                    }`} />
+                  </button>
                 </div>
-                <button
-                  onClick={() => setHideSavedPlaces(!hideSavedPlaces)}
-                  className={`relative w-12 h-6 rounded-full transition-colors ${
-                    hideSavedPlaces ? 'bg-sky-500' : 'bg-slate-200'
-                  }`}
-                >
-                  <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                    hideSavedPlaces ? 'translate-x-7' : 'translate-x-1'
-                  }`} />
-                </button>
               </div>
-              <p className="text-xs text-slate-500">
-                {hideSavedPlaces 
-                  ? "Showing fresh finds only! Your saved spots are hidden so you can discover something new." 
-                  : "Turn on to hide places you've already saved and find new adventures!"}
-              </p>
+              <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">✨</span>
+                    <div>
+                      <span className="font-bold text-slate-700 text-sm">Fresh Finds Only</span>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        {hideSavedPlaces ? 'Saved spots hidden' : 'Hide places you already saved'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setHideSavedPlaces(!hideSavedPlaces)}
+                    className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                      hideSavedPlaces ? 'bg-sky-500' : 'bg-slate-300'
+                    }`}
+                    aria-label="Toggle Fresh Finds"
+                  >
+                    <span data-toggle-knob className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                      hideSavedPlaces ? 'translate-x-5' : 'translate-x-0'
+                    }`} />
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* Fun encouragement messages */}

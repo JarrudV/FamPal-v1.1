@@ -13,6 +13,8 @@ interface ProfileProps {
   setView: (view: string) => void;
   onUpdateState: (key: keyof AppState, value: any) => void;
   onResetOnboarding?: () => void;
+  darkMode?: boolean;
+  onToggleDarkMode?: () => void;
 }
 
 const generateInviteCode = () => {
@@ -24,7 +26,7 @@ const generateInviteCode = () => {
   return code;
 };
 
-const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, onUpdateState, onResetOnboarding }) => {
+const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, onUpdateState, onResetOnboarding, darkMode, onToggleDarkMode }) => {
   const [childName, setChildName] = useState('');
   const [childAge, setChildAge] = useState('');
   const [spouseEmail, setSpouseEmail] = useState('');
@@ -1043,12 +1045,35 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
             className="w-full flex items-center justify-between p-6 text-slate-500 font-semibold text-sm hover:bg-sky-50 hover:text-sky-600 transition-colors"
           >
             <div className="flex items-center gap-3">
-              <span className="text-lg">🎬</span>
-              <span>Browse Layout</span>
+              <span className="text-lg">🧭</span>
+              <span>Discovery Mode</span>
             </div>
-            <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full font-bold">
-              {localStorage.getItem('fampals_netflix_layout') === 'true' ? 'Browse' : 'Classic'}
+            <span className={`text-xs px-2 py-1 rounded-full font-bold ${
+              localStorage.getItem('fampals_netflix_layout') === 'true'
+                ? 'text-sky-600 bg-sky-50'
+                : 'text-slate-400 bg-slate-100'
+            }`}>
+              {localStorage.getItem('fampals_netflix_layout') === 'true' ? 'On' : 'Off'}
             </span>
+          </button>
+        </div>
+
+        <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+          <button
+            onClick={onToggleDarkMode}
+            className="w-full flex items-center justify-between p-6 text-slate-500 font-semibold text-sm hover:bg-sky-50 hover:text-sky-600 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-lg">{darkMode ? '☀️' : '🌙'}</span>
+              <span>Dark Mode</span>
+            </div>
+            <div className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+              darkMode ? 'bg-sky-500' : 'bg-slate-300'
+            }`}>
+              <span data-toggle-knob className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                darkMode ? 'translate-x-5' : 'translate-x-0'
+              }`} />
+            </div>
           </button>
         </div>
 

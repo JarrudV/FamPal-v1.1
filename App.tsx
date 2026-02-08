@@ -82,6 +82,17 @@ const App: React.FC = () => {
   const [useNetflixLayout, setUseNetflixLayout] = useState(() => {
     try { return localStorage.getItem('fampals_netflix_layout') === 'true'; } catch { return false; }
   });
+  const [darkMode, setDarkMode] = useState(() => {
+    try { return localStorage.getItem('fampals_dark_mode') === 'true'; } catch { return false; }
+  });
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
   const [savedPlacesLoaded, setSavedPlacesLoaded] = useState(false);
   const legacyFavoritesRef = useRef<string[]>([]);
   const savedPlacesMigratedAtRef = useRef<Timestamp | null>(null);
@@ -595,6 +606,12 @@ const App: React.FC = () => {
       );
     }
 
+    const toggleDiscoveryMode = () => {
+      const next = !useNetflixLayout;
+      setUseNetflixLayout(next);
+      try { localStorage.setItem('fampals_netflix_layout', next ? 'true' : 'false'); } catch {}
+    };
+
     const dashboardProps = {
       state,
       isGuest,
@@ -605,6 +622,8 @@ const App: React.FC = () => {
       onClearInitialCircle: () => setPendingJoinCircleId(null),
       initialTab: dashboardTab,
       onTabChange: (tab: string) => setDashboardTab(tab as typeof dashboardTab),
+      discoveryMode: useNetflixLayout,
+      onToggleDiscoveryMode: toggleDiscoveryMode,
     };
     const DashboardComponent = useNetflixLayout ? DashboardNetflix : Dashboard;
 
@@ -628,7 +647,7 @@ const App: React.FC = () => {
           />
         );
       case 'profile':
-        return <Profile state={state} isGuest={isGuest} onSignOut={handleSignOut} setView={setView} onUpdateState={handleUpdateState} onResetOnboarding={() => setNeedsOnboarding(true)} />;
+        return <Profile state={state} isGuest={isGuest} onSignOut={handleSignOut} setView={setView} onUpdateState={handleUpdateState} onResetOnboarding={() => setNeedsOnboarding(true)} darkMode={darkMode} onToggleDarkMode={() => { const next = !darkMode; setDarkMode(next); try { localStorage.setItem('fampals_dark_mode', next ? 'true' : 'false'); } catch {} }} />;
       default:
         return <Login onLogin={handleSignIn} onGuestLogin={handleGuestLogin} error={error} />;
     }
