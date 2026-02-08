@@ -27,7 +27,10 @@ if (!PLACES_API_KEY) {
 
 const PLACES_CACHE_KEY = 'fampals_google_places_cache';
 const DETAILS_CACHE_KEY = 'fampals_place_details_cache';
+const INTENT_CACHE_KEY = 'fampals_intent_places_cache';
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+const INTENT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const SHOULD_LOG_INTENT = import.meta.env.DEV;
 
 interface CacheEntry<T> {
   data: T;
@@ -75,6 +78,17 @@ export interface IntentProgressUpdate {
   query: string;
   page: number;
   isBackgroundLoading: boolean;
+  fromCache?: boolean;
+}
+
+interface IntentCachePayload {
+  places: Place[];
+  debug: IntentSearchDebug;
+}
+
+function intentLog(...args: unknown[]) {
+  if (!SHOULD_LOG_INTENT) return;
+  console.log(...args);
 }
 
 export interface PlaceDetails {
@@ -232,6 +246,19 @@ function getCached<T>(storageKey: string, cacheKey: string): T | null {
   return null;
 }
 
+function getIntentCached(cacheKey: string): IntentCachePayload | null {
+  const cache = getCache<IntentCachePayload>(INTENT_CACHE_KEY);
+  const entry = cache[cacheKey];
+  if (entry && Date.now() - entry.timestamp < INTENT_CACHE_TTL) {
+    return entry.data;
+  }
+  return null;
+}
+
+function setIntentCached(cacheKey: string, payload: IntentCachePayload) {
+  setCache(INTENT_CACHE_KEY, cacheKey, payload);
+}
+
 function mapGoogleTypeToCategory(types: string[]): ActivityType {
   if (types.some(t => ['restaurant', 'cafe', 'bakery', 'food', 'meal_takeaway'].includes(t))) return 'restaurant';
   if (types.some(t => ['park', 'campground', 'state_park'].includes(t))) return 'outdoor';
@@ -321,6 +348,54 @@ function shouldExcludePlace(types: string[] | undefined, name: string | undefine
 
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) {
+    await sleep(ms);
+    return;
+  }
+  await new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      window.clearTimeout(timeout);
+      signal.removeEventListener('abort', onAbort);
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener('abort', onAbort);
+  });
+}
+
+function createRequestLimiter(limit: number) {
+  let active = 0;
+  const queue: Array<() => void> = [];
+
+  const next = () => {
+    if (active >= limit || queue.length === 0) return;
+    active += 1;
+    const run = queue.shift();
+    run?.();
+  };
+
+  return async function runWithLimit<T>(task: () => Promise<T>): Promise<T> {
+    await new Promise<void>((resolve) => {
+      queue.push(resolve);
+      next();
+    });
+    try {
+      return await task();
+    } finally {
+      active = Math.max(0, active - 1);
+      next();
+    }
+  };
 }
 
 export function dedupePlacesById(places: Place[]): Place[] {
@@ -448,7 +523,8 @@ async function fetchLegacyPlaces(
   fallbackType: ActivityType,
   lat: number,
   lng: number,
-  retry: boolean
+  retry: boolean,
+  signal?: AbortSignal
 ): Promise<PlacesSearchResponse> {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -457,10 +533,10 @@ async function fetchLegacyPlaces(
   });
   const url = `${resolveApiUrl(endpoint)}?${query.toString()}`;
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { signal });
     if (response.status === 409 && retry && params.pageToken) {
-      await sleep(2000);
-      return fetchLegacyPlaces(endpoint, params, fallbackType, lat, lng, false);
+      await sleepWithAbort(2000, signal);
+      return fetchLegacyPlaces(endpoint, params, fallbackType, lat, lng, false, signal);
     }
     if (!response.ok) {
       const errText = await response.text();
@@ -491,11 +567,12 @@ export async function searchNearbyPlacesPaged(
   lng: number,
   type: ActivityType = 'all',
   radiusKm: number = 10,
-  pageToken?: string
+  pageToken?: string,
+  options?: { signal?: AbortSignal }
 ): Promise<PlacesSearchResponse> {
   if (!lat || !lng) return { places: [], nextPageToken: null, hasMore: false };
   if (PLACES_API_KEY) {
-    return searchNearbyPlacesTextApi(lat, lng, type, radiusKm, undefined, pageToken);
+    return searchNearbyPlacesTextApi(lat, lng, type, radiusKm, undefined, pageToken, { signal: options?.signal });
   }
   if (API_BASE) {
     const response = await fetchLegacyPlaces(
@@ -511,7 +588,8 @@ export async function searchNearbyPlacesPaged(
       type,
       lat,
       lng,
-      true
+      true,
+      options?.signal
     );
     return response;
   }
@@ -523,11 +601,12 @@ export async function textSearchPlacesPaged(
   lat: number,
   lng: number,
   radiusKm: number = 10,
-  pageToken?: string
+  pageToken?: string,
+  options?: { signal?: AbortSignal }
 ): Promise<PlacesSearchResponse> {
   if (!query.trim()) return { places: [], nextPageToken: null, hasMore: false };
   if (!API_BASE && PLACES_API_KEY) {
-    return searchNearbyPlacesTextApi(lat, lng, 'all', radiusKm, query.trim(), pageToken, { useCache: false });
+    return searchNearbyPlacesTextApi(lat, lng, 'all', radiusKm, query.trim(), pageToken, { useCache: false, signal: options?.signal });
   }
   const response = await fetchLegacyPlaces(
     '/api/places/text',
@@ -542,7 +621,8 @@ export async function textSearchPlacesPaged(
     'all',
     lat,
     lng,
-    true
+    true,
+    options?.signal
   );
   if (response.error && !pageToken && PLACES_API_KEY) {
     const places = await textSearchPlaces(query, lat, lng, radiusKm);
@@ -558,13 +638,25 @@ export async function searchExploreIntent(
   radiusKm: number,
   options?: {
     searchQuery?: string;
+    searchKey?: string;
+    cacheContext?: string;
     onProgress?: (update: IntentProgressUpdate) => void;
     isCancelled?: () => boolean;
+    signal?: AbortSignal;
   }
 ): Promise<IntentSearchResponse> {
+  const startedAt = performance.now();
+  let firstRenderAt: number | null = null;
+  let reached25At: number | null = null;
   const definition = getExploreIntentDefinition(intent);
   const searchQuery = options?.searchQuery?.trim() || '';
   const queries = uniqueQueries(searchQuery ? [searchQuery, ...definition.queries.slice(0, 2)] : definition.queries);
+  const coreQueries = queries.slice(0, Math.min(3, queries.length));
+  const optionalQueries = queries.slice(coreQueries.length);
+  const searchKey =
+    options?.searchKey ||
+    `intent:${intent}:${lat.toFixed(3)}:${lng.toFixed(3)}:${radiusKm}:${searchQuery.toLowerCase()}:${options?.cacheContext || ''}`;
+  const runWithLimit = createRequestLimiter(3);
   const debug: IntentSearchDebug = {
     intent,
     subtitle: definition.subtitle,
@@ -575,66 +667,119 @@ export async function searchExploreIntent(
   };
 
   let merged: Place[] = [];
-  console.log(`[FamPals] Explore intent selected: ${intent}`);
-  console.log(`[FamPals] Intent queries executed: ${queries.join(', ')}`);
+  const queryState = new Map<string, { nextPageToken?: string; hasMore: boolean; pagesFetched: number; fetchedResults: number; beforeUnique: number }>();
 
-  for (let queryIndex = 0; queryIndex < queries.length; queryIndex += 1) {
-    const query = queries[queryIndex];
-    if (options?.isCancelled?.()) break;
-    let nextPageToken: string | undefined = undefined;
-    let hasMore = true;
-    let page = 1;
-    let fetchedResults = 0;
-    const beforeQueryUnique = merged.length;
-    debug.queriesRun.push(query);
-
-    while (page <= 3 && hasMore) {
-      if (page > 1) {
-        await sleep(2000);
-      }
-      if (options?.isCancelled?.()) break;
-
-      const response = await textSearchPlacesPaged(query, lat, lng, radiusKm, nextPageToken);
-
-      fetchedResults += response.places.length;
-      merged = dedupePlacesById([...merged, ...response.places]);
-      const filtered = filterPlacesForIntent(merged, definition);
-
-      debug.totalBeforeFilter = merged.length;
-      debug.totalAfterFilter = filtered.length;
-      debug.perQueryCounts[query] = {
-        pagesFetched: page,
-        fetchedResults,
-        uniqueAdded: merged.length - beforeQueryUnique,
-      };
-
-      console.log(`[FamPals] Query "${query}" page ${page}: ${response.places.length} results, hasMore: ${response.hasMore}`);
-      console.log(`[FamPals] Merge count after "${query}" page ${page}: ${merged.length} before filter, ${filtered.length} after filter`);
-
-      const hasRemainingQueries = queryIndex < queries.length - 1;
-      const isBackgroundLoading = hasRemainingQueries || (response.hasMore && !!response.nextPageToken && page < 3);
-
-      options?.onProgress?.({
-        places: filtered,
-        debug,
-        query,
-        page,
-        isBackgroundLoading,
-      });
-
-      hasMore = response.hasMore;
-      nextPageToken = response.nextPageToken || undefined;
-      if (!nextPageToken) {
-        hasMore = false;
-      }
-      page += 1;
+  const cached = getIntentCached(searchKey);
+  if (cached && !options?.isCancelled?.()) {
+    merged = dedupePlacesById(cached.places);
+    Object.assign(debug, cached.debug);
+    firstRenderAt = performance.now();
+    if (merged.length >= 25) {
+      reached25At = firstRenderAt;
     }
+    options?.onProgress?.({
+      places: merged,
+      debug,
+      query: 'cache',
+      page: 0,
+      isBackgroundLoading: true,
+      fromCache: true,
+    });
+  }
+
+  intentLog(`[FamPals] Explore intent selected: ${intent}`);
+  intentLog(`[FamPals] Intent queries executed: core=${coreQueries.join(', ')} optional=${optionalQueries.join(', ')}`);
+
+  const applyMerge = (query: string, page: number, response: PlacesSearchResponse) => {
+    const state = queryState.get(query);
+    if (!state) return;
+    state.pagesFetched = Math.max(state.pagesFetched, page);
+    state.fetchedResults += response.places.length;
+    state.nextPageToken = response.nextPageToken || undefined;
+    state.hasMore = response.hasMore && !!state.nextPageToken;
+    merged = dedupePlacesById([...merged, ...response.places]);
+    const filtered = filterPlacesForIntent(merged, definition);
+    if (firstRenderAt === null && filtered.length > 0) {
+      firstRenderAt = performance.now();
+    }
+    if (reached25At === null && filtered.length >= 25) {
+      reached25At = performance.now();
+    }
+    debug.totalBeforeFilter = merged.length;
+    debug.totalAfterFilter = filtered.length;
+    debug.perQueryCounts[query] = {
+      pagesFetched: state.pagesFetched,
+      fetchedResults: state.fetchedResults,
+      uniqueAdded: merged.length - state.beforeUnique,
+    };
+    intentLog(`[FamPals] Query "${query}" page ${page}: ${response.places.length} results, hasMore: ${response.hasMore}`);
+    intentLog(`[FamPals] Merge count after "${query}" page ${page}: ${merged.length} before filter, ${filtered.length} after filter`);
+    options?.onProgress?.({
+      places: filtered,
+      debug,
+      query,
+      page,
+      isBackgroundLoading: true,
+    });
+  };
+
+  const fetchPage = async (query: string, page: number, pageToken?: string) => {
+    if (options?.isCancelled?.() || options?.signal?.aborted) return null;
+    return runWithLimit(async () =>
+      textSearchPlacesPaged(query, lat, lng, radiusKm, pageToken, { signal: options?.signal })
+    );
+  };
+
+  for (const query of coreQueries) {
+    queryState.set(query, { nextPageToken: undefined, hasMore: true, pagesFetched: 0, fetchedResults: 0, beforeUnique: merged.length });
+    debug.queriesRun.push(query);
+  }
+
+  const coreFirstPageTasks = coreQueries.map(async (query) => {
+    const response = await fetchPage(query, 1);
+    if (!response) return;
+    applyMerge(query, 1, response);
+  });
+  await Promise.allSettled(coreFirstPageTasks);
+
+  if (!options?.isCancelled?.() && merged.length < 25 && optionalQueries.length > 0) {
+    for (const query of optionalQueries) {
+      queryState.set(query, { nextPageToken: undefined, hasMore: true, pagesFetched: 0, fetchedResults: 0, beforeUnique: merged.length });
+      debug.queriesRun.push(query);
+    }
+    const optionalFirstPageTasks = optionalQueries.map(async (query) => {
+      const response = await fetchPage(query, 1);
+      if (!response) return;
+      applyMerge(query, 1, response);
+    });
+    await Promise.allSettled(optionalFirstPageTasks);
+  }
+
+  const activeQueries = [...debug.queriesRun];
+  for (const page of [2, 3]) {
+    const tasks = activeQueries.map(async (query) => {
+      const state = queryState.get(query);
+      if (!state || !state.hasMore || !state.nextPageToken) return;
+      if (options?.isCancelled?.() || options?.signal?.aborted) return;
+      await sleepWithAbort(2000, options?.signal);
+      const response = await fetchPage(query, page, state.nextPageToken);
+      if (!response) return;
+      applyMerge(query, page, response);
+    });
+    await Promise.allSettled(tasks);
   }
 
   const finalPlaces = filterPlacesForIntent(merged, definition);
   debug.totalBeforeFilter = merged.length;
   debug.totalAfterFilter = finalPlaces.length;
-  console.log(`[FamPals] Intent "${intent}" filter counts: before=${debug.totalBeforeFilter}, after=${debug.totalAfterFilter}`);
+  if (!options?.isCancelled?.()) {
+    setIntentCached(searchKey, { places: finalPlaces, debug });
+  }
+  const completedAt = performance.now();
+  const timeToFirstRender = firstRenderAt ? Math.round(firstRenderAt - startedAt) : -1;
+  const timeTo25Results = reached25At ? Math.round(reached25At - startedAt) : -1;
+  intentLog(`[FamPals] Intent "${intent}" filter counts: before=${debug.totalBeforeFilter}, after=${debug.totalAfterFilter}`);
+  intentLog(`[FamPals] Timing metrics: timeToFirstRenderMs=${timeToFirstRender}, timeTo25ResultsMs=${timeTo25Results}, timeToCompleteMs=${Math.round(completedAt - startedAt)}`);
 
   return {
     places: finalPlaces,
@@ -660,7 +805,7 @@ export async function searchNearbyPlacesTextApi(
   radiusKm: number = 10,
   searchQuery?: string,
   pageToken?: string,
-  options?: { useCache?: boolean }
+  options?: { useCache?: boolean; signal?: AbortSignal }
 ): Promise<PlacesSearchResponse> {
   if (!PLACES_API_KEY) {
     console.warn("Google Places API key missing");
@@ -714,7 +859,8 @@ export async function searchNearbyPlacesTextApi(
           'X-Goog-Api-Key': PLACES_API_KEY,
           'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.types,places.priceLevel,places.location,places.photos,places.primaryTypeDisplayName,places.regularOpeningHours,nextPageToken'
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
+        signal: options?.signal,
       }
     );
 

@@ -5,11 +5,10 @@ All notable changes to this project are tracked here.
 ## [1.3.0] - 2026-02-08
 
 ### Added
-- Explore pagination with Google `next_page_token` support, progressive background loading, dedupe, and stale-request protection.
-- Intent mapping system with multi-query merge strategy and richer intent-specific filtering.
-- Accessibility and family-facilities contribution/reporting flow with aggregated place hints.
-- Server environment bridge for Places API key aliases and environment file loading by runtime environment.
-- Staging deployment guidance, staging config files, and release workflow docs.
+- Intent-first Explore with Netflix-style layered refinement lenses and optional strict toggles.
+- Explore performance improvements: core/optional query strategy, parallel page-1 loading, background pagination, abortable requests, and 5-minute intent cache.
+- Faster first paint with incremental result streaming and background loading continuation.
+- Accessibility and family-facilities confirmed/suggested model preserved in ranking and filtering.
 - Version display on Profile page sourced from `package.json`.
 
 ### Changed
@@ -25,4 +24,3 @@ All notable changes to this project are tracked here.
 
 ### Added
 - Partner space enhancements, sharing improvements, and profile sync updates.
-

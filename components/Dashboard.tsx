@@ -12,6 +12,15 @@ import { UpgradePrompt, LimitIndicator } from './UpgradePrompt';
 import { searchExploreIntent, getExploreIntentSubtitle, getPlaceDetails } from '../placesService';
 import { getLimits, canSavePlace, isPaidTier, getNextResetDate } from '../lib/entitlements';
 import { updateLocation, updateRadius, updateCategory, updateActiveCircle } from '../lib/profileSync';
+import {
+  createDefaultExploreFilters,
+  ExploreFilters,
+  ExploreLensKey,
+  getLensDefinitions,
+  getFilterButtonLabel,
+  getSelectedChipItems,
+  applyExploreLensRanking,
+} from '../lib/exploreFilters';
 import { ShareMemoryModal } from './ShareMemory';
 import { db, doc, getDoc, collection, onSnapshot, setDoc, auth, serverTimestamp, increment, storage, ref, uploadBytesResumable, getDownloadURL } from '../lib/firebase';
 import { upsertSavedPlace, deleteSavedPlace } from '../lib/userData';
@@ -81,183 +90,6 @@ function getTimeAgo(date: Date): string {
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-type RequirementFilter =
-  | 'kid_friendly'
-  | 'stroller_friendly'
-  | 'jungle_gym'
-  | 'wheelchair_friendly'
-  | 'outdoor'
-  | 'indoor';
-
-type PrimaryCategory =
-  | 'restaurant'
-  | 'cafe'
-  | 'wine_farm'
-  | 'brewery'
-  | 'playground'
-  | 'indoor_play'
-  | 'activity_centre'
-  | 'park'
-  | 'zoo_aquarium'
-  | 'museum'
-  | 'beach'
-  | 'hike_trail'
-  | 'nature_reserve'
-  | 'theatre_cinema'
-  | 'market'
-  | 'shopping'
-  | 'sports_venue'
-  | 'golf'
-  | 'gym_fitness';
-
-const REQUIREMENT_LABELS: Record<RequirementFilter, string> = {
-  kid_friendly: 'Kid friendly',
-  stroller_friendly: 'Stroller friendly',
-  jungle_gym: 'Jungle gym',
-  wheelchair_friendly: 'Wheelchair friendly',
-  outdoor: 'Outdoor',
-  indoor: 'Indoor',
-};
-
-function normalizeTag(value: string): string {
-  return value.toLowerCase().replace(/\s+/g, '_');
-}
-
-function hasConfirmedFamilyFeature(place: Place, feature: string): boolean {
-  return (place.familyFacilities || []).some(
-    (item) => item.feature === feature && item.value === true && item.confidence !== 'unknown'
-  );
-}
-
-function hasConfirmedAccessibilityFeature(place: Place, feature: string): boolean {
-  return (place.accessibility || []).some(
-    (item) => item.feature === feature && item.value === true && item.confidence !== 'unknown'
-  );
-}
-
-function placeTypeSet(place: Place): Set<string> {
-  const types = (place.tags || []).map(normalizeTag);
-  return new Set(types);
-}
-
-function inferPrimaryCategories(place: Place): Set<PrimaryCategory> {
-  const typeSet = placeTypeSet(place);
-  const categories = new Set<PrimaryCategory>();
-
-  if (typeSet.has('restaurant')) categories.add('restaurant');
-  if (typeSet.has('cafe')) categories.add('cafe');
-  if (typeSet.has('winery') || typeSet.has('wine_bar')) categories.add('wine_farm');
-  if (typeSet.has('brewery')) categories.add('brewery');
-
-  if (typeSet.has('playground')) categories.add('playground');
-  if (typeSet.has('indoor_playground')) categories.add('indoor_play');
-  if (typeSet.has('amusement_park') || typeSet.has('sports_complex') || typeSet.has('bowling_alley')) categories.add('activity_centre');
-  if (typeSet.has('park')) categories.add('park');
-  if (typeSet.has('zoo') || typeSet.has('aquarium')) categories.add('zoo_aquarium');
-  if (typeSet.has('museum')) categories.add('museum');
-
-  if (typeSet.has('beach')) categories.add('beach');
-  if (typeSet.has('hiking_area') || typeSet.has('hiking_trail')) categories.add('hike_trail');
-  if (typeSet.has('national_park') || typeSet.has('state_park') || typeSet.has('nature_reserve')) categories.add('nature_reserve');
-
-  if (typeSet.has('movie_theater') || typeSet.has('performing_arts_theater')) categories.add('theatre_cinema');
-  if (typeSet.has('market')) categories.add('market');
-  if (typeSet.has('shopping_mall') || typeSet.has('store')) categories.add('shopping');
-
-  if (typeSet.has('stadium') || typeSet.has('sports_complex') || typeSet.has('swimming_pool')) categories.add('sports_venue');
-  if (typeSet.has('golf_course')) categories.add('golf');
-  if (typeSet.has('gym') || typeSet.has('fitness_center')) categories.add('gym_fitness');
-
-  if (categories.size === 0) {
-    if (place.type === 'restaurant') categories.add('restaurant');
-    if (place.type === 'wine') categories.add('wine_farm');
-    if (place.type === 'kids') categories.add('playground');
-    if (place.type === 'outdoor') categories.add('park');
-    if (place.type === 'hike') categories.add('hike_trail');
-    if (place.type === 'indoor') categories.add('museum');
-    if (place.type === 'active') categories.add('sports_venue');
-    if (place.type === 'golf') categories.add('golf');
-  }
-
-  return categories;
-}
-
-function hasSuggestedPublicSignal(place: Place, expected: string[]): boolean {
-  const typeSet = placeTypeSet(place);
-  const googleHints = ((place as any).googleHints || []) as Array<{ feature?: string }>;
-  const familyHints = ((place as any).familyHints || []) as Array<{ feature?: string }>;
-  const hintSet = new Set(
-    [...googleHints, ...familyHints]
-      .map((hint) => (hint?.feature || '').toLowerCase())
-      .filter(Boolean)
-  );
-  return expected.some((key) => typeSet.has(key) || hintSet.has(key));
-}
-
-function matchesFamilyConfirmedOrSuggested(place: Place, keys: string[]): boolean {
-  const normalized = new Set<string>();
-  keys.forEach((key) => {
-    normalized.add(key);
-    if (key === 'play_area') normalized.add('playground');
-    if (key === 'kids_activities') normalized.add('child_friendly_space');
-  });
-  const confirmed = [...normalized].some((key) => hasConfirmedFamilyFeature(place, key));
-  const suggested = hasSuggestedPublicSignal(place, [...normalized]);
-  return confirmed || suggested;
-}
-
-function matchesAccessibilityConfirmedOrSuggested(place: Place, keys: string[]): boolean {
-  const confirmed = keys.some((key) => hasConfirmedAccessibilityFeature(place, key));
-  const suggested = hasSuggestedPublicSignal(place, keys);
-  return confirmed || suggested;
-}
-
-function matchesRequirement(place: Place, requirement: RequirementFilter): boolean {
-  const categories = inferPrimaryCategories(place);
-  switch (requirement) {
-    case 'kid_friendly': {
-      return (
-        ['playground', 'indoor_play', 'park', 'zoo_aquarium', 'activity_centre'].some((key) =>
-          categories.has(key as PrimaryCategory)
-        ) ||
-        matchesFamilyConfirmedOrSuggested(place, ['play_area', 'playground', 'kids_menu', 'kids_activities'])
-      );
-    }
-    case 'stroller_friendly': {
-      return matchesFamilyConfirmedOrSuggested(place, ['stroller_friendly']);
-    }
-    case 'jungle_gym': {
-      return matchesFamilyConfirmedOrSuggested(place, ['play_area', 'playground']);
-    }
-    case 'wheelchair_friendly': {
-      return matchesAccessibilityConfirmedOrSuggested(place, [
-        'step_free_entry',
-        'accessible_toilet',
-        'accessible_parking',
-      ]);
-    }
-    case 'outdoor':
-      return ['park', 'beach', 'hike_trail', 'nature_reserve'].some((key) =>
-        categories.has(key as PrimaryCategory)
-      );
-    case 'indoor':
-      return ['indoor_play', 'museum', 'theatre_cinema', 'market', 'shopping'].some((key) =>
-        categories.has(key as PrimaryCategory)
-      );
-    default:
-      return true;
-  }
-}
-
-function getMustHavesButtonLabel(selected: RequirementFilter[]): string {
-  if (selected.length === 0) return 'Must haves';
-  if (selected.length === 1) return `Must haves: ${REQUIREMENT_LABELS[selected[0]]}`;
-  if (selected.length === 2) {
-    return `Must haves: ${REQUIREMENT_LABELS[selected[0]]}, ${REQUIREMENT_LABELS[selected[1]]}`;
-  }
-  return `Must haves: ${REQUIREMENT_LABELS[selected[0]]} +${selected.length - 1}`;
-}
-
 const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setView, onUpdateState, initialCircleId, onClearInitialCircle, initialTab, onTabChange }) => {
   const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
   const userPrefs = state.userPreferences || {};
@@ -291,7 +123,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   const [creatingPartnerCircle, setCreatingPartnerCircle] = useState(false);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<ExploreIntent>(userPrefs.lastCategory || 'all');
-  const [selectedRequirements, setSelectedRequirements] = useState<RequirementFilter[]>([]);
+  const [exploreFilters, setExploreFilters] = useState<ExploreFilters>(() => createDefaultExploreFilters());
   const [showMustHavesSheet, setShowMustHavesSheet] = useState(false);
   const [places, setPlaces] = useState<Place[]>([]);
   const [placeAccessibilityById, setPlaceAccessibilityById] = useState<Record<string, AccessibilityFeatureValue[]>>({});
@@ -434,6 +266,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   const fallbackImage = 'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=400&h=300&fit=crop';
   const placesSearchKeyRef = useRef<string>('');
   const placesRequestIdRef = useRef<number>(0);
+  const placesAbortControllerRef = useRef<AbortController | null>(null);
+  const cacheSeededRef = useRef<boolean>(false);
   const familyPoolResetRef = useRef<string | null>(null);
   const partnerLinkRequiresPro = import.meta.env.VITE_PARTNER_LINK_REQUIRES_PRO === 'true';
   const canLinkPartner = !partnerLinkRequiresPro || isPaid;
@@ -801,16 +635,20 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   // Fetch places when location, filter, radius, or search changes - uses Google Places API (fast, no AI cost)
   useEffect(() => {
     const requestId = ++placesRequestIdRef.current;
+    placesAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    placesAbortControllerRef.current = controller;
     if (activeTab !== 'explore' || !userLocation) {
       return;
     }
 
     const fetchPlaces = async () => {
-      const searchKey = `${userLocation.lat.toFixed(3)}:${userLocation.lng.toFixed(3)}:${selectedFilter}:${radiusKm}:${searchQuery.trim().toLowerCase()}`;
+      const searchKey = `${userLocation.lat.toFixed(3)}:${userLocation.lng.toFixed(3)}:${selectedFilter}:${radiusKm}:${searchQuery.trim().toLowerCase()}:${prefFilterMode}:${hideSavedPlaces ? 'discover' : 'all'}`;
       placesSearchKeyRef.current = searchKey;
       setLoading(true);
       setLoadingMore(false);
       setPagingComplete(false);
+      cacheSeededRef.current = false;
       try {
         const result = await searchExploreIntent(
           selectedFilter,
@@ -819,20 +657,34 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
           radiusKm,
           {
             searchQuery: searchQuery.trim() || undefined,
+            searchKey,
+            cacheContext: `${prefFilterMode}:${hideSavedPlaces ? 'discover' : 'all'}`,
+            signal: controller.signal,
             isCancelled: () =>
               placesSearchKeyRef.current !== searchKey || placesRequestIdRef.current !== requestId,
             onProgress: (update) => {
               if (placesSearchKeyRef.current !== searchKey || placesRequestIdRef.current !== requestId) return;
-              setPlaces(update.places);
+              if (update.fromCache) {
+                cacheSeededRef.current = true;
+                setPlaces(update.places);
+              } else {
+                setPlaces((prev) => (cacheSeededRef.current ? applyFlickerGuard(prev, update.places) : update.places));
+              }
               setLoadingMore(update.isBackgroundLoading);
             },
           }
         );
         if (placesSearchKeyRef.current !== searchKey || placesRequestIdRef.current !== requestId) return;
-        setPlaces(result.places);
-        console.log('[FamPals] Intent debug summary:', result.debug);
+        setPlaces((prev) => (cacheSeededRef.current ? applyFlickerGuard(prev, result.places) : result.places));
+        cacheSeededRef.current = false;
+        if (import.meta.env.DEV) {
+          console.log('[FamPals] Intent debug summary:', result.debug);
+        }
         setPagingComplete(true);
       } catch (error) {
+        if ((error as any)?.name === 'AbortError') {
+          return;
+        }
         console.error('Error fetching places:', error);
       } finally {
         if (placesSearchKeyRef.current === searchKey && placesRequestIdRef.current === requestId) {
@@ -843,7 +695,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     };
 
     fetchPlaces();
-  }, [selectedFilter, activeTab, userLocation, radiusKm, searchQuery]);
+    return () => {
+      controller.abort();
+    };
+  }, [selectedFilter, activeTab, userLocation, radiusKm, searchQuery, applyFlickerGuard]);
 
   useEffect(() => {
     if (isGuest) return;
@@ -984,11 +839,54 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     persistCategory(category);
   };
 
-  const toggleRequirement = (requirement: RequirementFilter) => {
-    setSelectedRequirements((prev) =>
-      prev.includes(requirement) ? prev.filter((item) => item !== requirement) : [...prev, requirement]
-    );
-  };
+  const lensDefinitions = useMemo(
+    () => getLensDefinitions(selectedFilter, prefFilterMode),
+    [selectedFilter, prefFilterMode]
+  );
+
+  const toggleLensChip = useCallback((lensKey: ExploreLensKey, chipId: string) => {
+    setExploreFilters((prev) => {
+      const current = prev[lensKey];
+      const next = current.includes(chipId)
+        ? current.filter((value) => value !== chipId)
+        : [...current, chipId];
+      return { ...prev, [lensKey]: next };
+    });
+  }, []);
+
+  const toggleLensStrict = useCallback((lensKey: ExploreLensKey) => {
+    setExploreFilters((prev) => ({
+      ...prev,
+      strict: {
+        ...prev.strict,
+        [lensKey]: !prev.strict[lensKey],
+      },
+    }));
+  }, []);
+
+  const clearExploreFilters = useCallback(() => {
+    setExploreFilters(createDefaultExploreFilters());
+  }, []);
+
+  const applyFlickerGuard = useCallback((previous: Place[], incoming: Place[]): Place[] => {
+    if (previous.length === 0 || incoming.length === 0) return incoming;
+    const previousIds = new Set(previous.map((place) => place.id));
+    const incomingIds = new Set(incoming.map((place) => place.id));
+    let changed = 0;
+    previousIds.forEach((id) => {
+      if (!incomingIds.has(id)) changed += 1;
+    });
+    incomingIds.forEach((id) => {
+      if (!previousIds.has(id)) changed += 1;
+    });
+    const baseline = Math.max(previousIds.size, 1);
+    const deltaRatio = changed / baseline;
+    if (deltaRatio > 0.05) return incoming;
+
+    const appended = incoming.filter((place) => !previousIds.has(place.id));
+    if (appended.length === 0) return previous;
+    return [...previous, ...appended];
+  }, []);
 
   const mapSavedPlaceToPlace = (saved: SavedPlace): Place => {
     const place: Place = {
@@ -1490,18 +1388,33 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     () => rankPlacesWithAccessibilityNeeds(placesWithAccessibility, accessibilityNeeds),
     [placesWithAccessibility, accessibilityNeeds]
   );
-  const intentAndRequirementFilteredPlaces = useMemo(
-    () =>
-      rankedPlaces.filter((place) => {
-        if (selectedRequirements.length === 0) return true;
-        return selectedRequirements.every((requirement) => matchesRequirement(place, requirement));
-      }),
-    [rankedPlaces, selectedRequirements]
+  const lensRankedResult = useMemo(
+    () => applyExploreLensRanking(rankedPlaces, exploreFilters, lensDefinitions),
+    [rankedPlaces, exploreFilters, lensDefinitions]
+  );
+  const intentAndRequirementFilteredPlaces = lensRankedResult.places;
+  const selectedLensChipItems = useMemo(
+    () => getSelectedChipItems(exploreFilters, lensDefinitions),
+    [exploreFilters, lensDefinitions]
   );
   const mustHavesButtonLabel = useMemo(
-    () => getMustHavesButtonLabel(selectedRequirements),
-    [selectedRequirements]
+    () => getFilterButtonLabel(exploreFilters, lensDefinitions),
+    [exploreFilters, lensDefinitions]
   );
+  useEffect(() => {
+    console.log('[FamPals] Explore lens filters changed:', exploreFilters);
+    console.log(`[FamPals] Lens scoring counts: before=${lensRankedResult.beforeCount}, afterStrict=${lensRankedResult.afterStrictCount}`);
+    console.log(
+      '[FamPals] Top 5 lens scores:',
+      lensRankedResult.scored.slice(0, 5).map((entry) => ({
+        id: entry.place.id,
+        name: entry.place.name,
+        score: entry.score,
+        matched: entry.matchedChips,
+      }))
+    );
+  }, [exploreFilters, lensRankedResult]);
+
   const selectedPlaceWithAccessibility = selectedPlace
     ? {
       ...selectedPlace,
@@ -1709,28 +1622,38 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
               </div>
             )}
             <div className="bg-white rounded-2xl p-4 mt-2 border border-slate-100 shadow-sm">
-              <button
-                type="button"
-                onClick={() => setShowMustHavesSheet(true)}
-                className="w-full h-11 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold flex items-center justify-center px-3 text-center whitespace-nowrap overflow-hidden text-ellipsis"
-              >
-                <span className="transition-opacity duration-150">{mustHavesButtonLabel}</span>
-              </button>
-              {selectedRequirements.length > 0 && (
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowMustHavesSheet(true)}
+                  className="h-11 px-4 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold"
+                >
+                  Refine
+                </button>
+                <p className="flex-1 text-xs font-semibold text-slate-500 truncate">{mustHavesButtonLabel}</p>
+                {selectedLensChipItems.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearExploreFilters}
+                    className="h-8 px-3 rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600"
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
+              {selectedLensChipItems.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {selectedRequirements.slice(0, 2).map((requirement) => (
-                    <span
-                      key={requirement}
-                      className="px-2 py-1 rounded-full text-[10px] font-semibold bg-sky-50 text-sky-700 border border-sky-100"
+                  {selectedLensChipItems.map((chip) => (
+                    <button
+                      key={`${chip.lensKey}:${chip.chipId}`}
+                      type="button"
+                      onClick={() => toggleLensChip(chip.lensKey, chip.chipId)}
+                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-semibold bg-sky-50 text-sky-700 border border-sky-100"
                     >
-                      {REQUIREMENT_LABELS[requirement]}
-                    </span>
+                      <span>{chip.label}</span>
+                      <span className="text-sky-500">x</span>
+                    </button>
                   ))}
-                  {selectedRequirements.length > 2 && (
-                    <span className="px-2 py-1 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600">
-                      +{selectedRequirements.length - 2}
-                    </span>
-                  )}
                 </div>
               )}
               {/* Future hook: cuisine intents (e.g., sushi) can be layered here using google place types + keyword matching on place name/types. */}
@@ -1930,8 +1853,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                 )}
                 {loadingMore && (
                   <div className="pt-4 pb-2 flex justify-center">
-                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-sky-50 rounded-xl border border-sky-100">
+                    <div className="inline-flex flex-col items-center gap-1 px-4 py-2 bg-sky-50 rounded-xl border border-sky-100">
                       <span className="text-sm font-semibold text-sky-600">Loading more places...</span>
+                      <span className="text-[11px] text-sky-500">Loading more results in the background</span>
                     </div>
                   </div>
                 )}
@@ -2571,11 +2495,11 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         isOpen={showMustHavesSheet}
         onClose={() => setShowMustHavesSheet(false)}
         title="Must haves"
-        selected={selectedRequirements}
-        labels={REQUIREMENT_LABELS}
-        options={Object.keys(REQUIREMENT_LABELS) as RequirementFilter[]}
-        onToggle={toggleRequirement}
-        onClear={() => setSelectedRequirements([])}
+        filters={exploreFilters}
+        lensDefinitions={lensDefinitions}
+        onToggleChip={toggleLensChip}
+        onToggleStrict={toggleLensStrict}
+        onClear={clearExploreFilters}
       />
 
       {selectedPlaceWithAccessibility && (
