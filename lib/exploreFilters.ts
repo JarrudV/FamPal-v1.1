@@ -92,9 +92,9 @@ const LENS_DEFINITIONS: Record<ExploreLensKey, LensDefinition> = {
     chips: [
       { id: 'restaurant', label: 'Restaurant', matches: (caps) => caps.venueTypes.has('restaurant'), conflicts: (caps) => !caps.servesFood },
       { id: 'cafe', label: 'Cafe', matches: (caps) => caps.venueTypes.has('cafe'), conflicts: (caps) => !caps.servesFood },
-      { id: 'bar_pub', label: 'Bar or Pub', matches: (caps) => caps.venueTypes.has('bar_pub') },
-      { id: 'market', label: 'Market', matches: (caps) => caps.venueTypes.has('market') },
-      { id: 'wine_farm', label: 'Wine farm', matches: (caps) => caps.venueTypes.has('wine_farm') },
+      { id: 'bar_pub', label: 'Bar or Pub', matches: (caps) => caps.venueTypes.has('bar_pub'), conflicts: (caps) => !caps.venueTypes.has('bar_pub') },
+      { id: 'market', label: 'Market', matches: (caps) => caps.venueTypes.has('market'), conflicts: (caps) => !caps.venueTypes.has('market') },
+      { id: 'wine_farm', label: 'Wine farm', matches: (caps) => caps.venueTypes.has('wine_farm'), conflicts: (caps) => !caps.venueTypes.has('wine_farm') },
       { id: 'food_truck', label: 'Food truck', matches: (caps) => caps.venueTypes.has('food_truck') || caps.foodKeywords.has('food truck') },
     ],
   },
@@ -215,7 +215,7 @@ export function createDefaultExploreFilters(): ExploreFilters {
     indoorOutdoor: [],
     strict: {
       foodTypes: false,
-      venueTypes: false,
+      venueTypes: true,
       kidPrefs: false,
       accessibility: false,
       indoorOutdoor: false,
@@ -283,7 +283,7 @@ export function derivePlaceCapabilities(place: Place): PlaceCapabilities {
   const nameAndDesc = `${place.name || ''} ${place.description || ''}`.toLowerCase();
   if (typeSet.has('market') || keywordMatches(nameAndDesc, ['market'])) venueTypes.add('market');
 
-  const isWineFarm = typeSet.has('winery') || typeSet.has('vineyard') || keywordMatches(nameAndDesc, ['wine farm', 'wine estate', 'wine tasting']);
+  const isWineFarm = typeSet.has('winery') || typeSet.has('vineyard') || keywordMatches(nameAndDesc, ['wine farm', 'wine estate', 'wine cellar', 'cellar door']);
   if (isWineFarm) venueTypes.add('wine_farm');
 
   const isCoffeeFocused = keywordMatches(nameAndDesc, ['coffee']) && !isWineFarm;
