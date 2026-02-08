@@ -195,7 +195,7 @@ const categoryToTextQuery: Record<ActivityType, string> = {
   indoor: 'indoor activities museums entertainment',
   active: 'sports activities playgrounds adventure parks',
   hike: 'hiking trails nature walks',
-  wine: 'wine farms wineries wine tasting',
+  wine: 'wine farm wine estate winery vineyard',
   golf: 'golf courses',
   kids: 'child friendly activities playgrounds kids entertainment',
 };
@@ -220,7 +220,7 @@ const categoryToPlaceTypes: Record<ActivityType, string[]> = {
   indoor: ['museum', 'aquarium', 'bowling_alley', 'movie_theater', 'library'],
   active: ['gym', 'sports_complex', 'swimming_pool', 'playground', 'amusement_park'],
   hike: ['national_park', 'state_park', 'park'],
-  wine: ['winery', 'bar', 'restaurant'],
+  wine: ['winery'],
   golf: ['golf_course'],
   kids: ['playground', 'amusement_park', 'zoo', 'aquarium', 'park', 'museum', 'library', 'bowling_alley'],
 };
@@ -328,7 +328,7 @@ function mapGoogleTypeToCategory(types: string[]): ActivityType {
   if (types.some(t => ['museum', 'aquarium', 'bowling_alley', 'movie_theater', 'library'].includes(t))) return 'indoor';
   if (types.some(t => ['gym', 'sports_complex', 'swimming_pool', 'playground'].includes(t))) return 'active';
   if (types.some(t => ['national_park', 'state_park'].includes(t))) return 'hike';
-  if (types.some(t => ['winery', 'bar', 'wine_bar'].includes(t))) return 'wine';
+  if (types.some(t => ['winery'].includes(t))) return 'wine';
   if (types.some(t => ['golf_course'].includes(t))) return 'golf';
   if (types.some(t => ['playground', 'amusement_park', 'zoo', 'aquarium'].includes(t))) return 'kids';
   return 'all';

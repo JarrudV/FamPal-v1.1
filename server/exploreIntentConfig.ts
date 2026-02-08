@@ -88,7 +88,7 @@ export const EXPLORE_INTENT_DEFINITIONS: Record<ExploreIntentId, ExploreIntentDe
       'restaurant', 'cafe', 'coffee shop', 'bar', 'bakery', 'takeaway', 'pizza', 'sushi',
       'bistro', 'grill', 'diner', 'eatery', 'kitchen', 'steakhouse', 'seafood',
       'farm stall', 'farm shop', 'food market', 'deli', 'patisserie', 'gelato', 'ice cream',
-      'wine farm', 'wine estate', 'winery', 'wine tasting', 'brewery', 'taproom',
+      'wine farm', 'wine estate', 'winery', 'cellar', 'vineyard', 'brewery', 'taproom',
       'brunch', 'breakfast', 'lunch', 'dinner', 'buffet',
     ],
     keywordExclude: [...COMMON_KEYWORD_EXCLUDE],
