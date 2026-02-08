@@ -1,4 +1,5 @@
-import { Place, ActivityType } from "./types";
+import { Place, ActivityType, ExploreIntent, AccessibilityFeature, FamilyFacility } from "./types";
+import { getExploreIntentDefinition, type ExploreIntentDefinition } from './server/exploreIntentConfig';
 
 const PLACES_API_KEY = import.meta.env.VITE_GOOGLE_PLACES_API_KEY || "";
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
@@ -26,7 +27,10 @@ if (!PLACES_API_KEY) {
 
 const PLACES_CACHE_KEY = 'fampals_google_places_cache';
 const DETAILS_CACHE_KEY = 'fampals_place_details_cache';
+const INTENT_CACHE_KEY = 'fampals_intent_places_cache';
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+const INTENT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const SHOULD_LOG_INTENT = import.meta.env.DEV;
 
 interface CacheEntry<T> {
   data: T;
@@ -44,7 +48,47 @@ interface DetailsCacheData {
 export interface PlacesSearchResponse {
   places: Place[];
   nextPageToken: string | null;
+  hasMore: boolean;
   error?: string;
+}
+
+export interface IntentQueryDebugCount {
+  pagesFetched: number;
+  fetchedResults: number;
+  uniqueAdded: number;
+}
+
+export interface IntentSearchDebug {
+  intent: ExploreIntent;
+  subtitle: string;
+  queriesRun: string[];
+  perQueryCounts: Record<string, IntentQueryDebugCount>;
+  totalBeforeFilter: number;
+  totalAfterFilter: number;
+}
+
+export interface IntentSearchResponse {
+  places: Place[];
+  debug: IntentSearchDebug;
+}
+
+export interface IntentProgressUpdate {
+  places: Place[];
+  debug: IntentSearchDebug;
+  query: string;
+  page: number;
+  isBackgroundLoading: boolean;
+  fromCache?: boolean;
+}
+
+interface IntentCachePayload {
+  places: Place[];
+  debug: IntentSearchDebug;
+}
+
+function intentLog(...args: unknown[]) {
+  if (!SHOULD_LOG_INTENT) return;
+  console.log(...args);
 }
 
 export interface PlaceDetails {
@@ -64,6 +108,13 @@ export interface PlaceDetails {
   lat: number;
   lng: number;
   mapsUrl: string;
+  accessibilityOptions?: Record<string, unknown>;
+  googleHints?: { feature: AccessibilityFeature; source: 'google_places' }[];
+  goodForChildren?: boolean;
+  menuForChildren?: boolean;
+  restroom?: boolean;
+  parkingOptions?: Record<string, unknown>;
+  familyHints?: { feature: FamilyFacility; source: 'google_places' }[];
 }
 
 export interface PlaceReview {
@@ -195,6 +246,19 @@ function getCached<T>(storageKey: string, cacheKey: string): T | null {
   return null;
 }
 
+function getIntentCached(cacheKey: string): IntentCachePayload | null {
+  const cache = getCache<IntentCachePayload>(INTENT_CACHE_KEY);
+  const entry = cache[cacheKey];
+  if (entry && Date.now() - entry.timestamp < INTENT_CACHE_TTL) {
+    return entry.data;
+  }
+  return null;
+}
+
+function setIntentCached(cacheKey: string, payload: IntentCachePayload) {
+  setCache(INTENT_CACHE_KEY, cacheKey, payload);
+}
+
 function mapGoogleTypeToCategory(types: string[]): ActivityType {
   if (types.some(t => ['restaurant', 'cafe', 'bakery', 'food', 'meal_takeaway'].includes(t))) return 'restaurant';
   if (types.some(t => ['park', 'campground', 'state_park'].includes(t))) return 'outdoor';
@@ -286,6 +350,139 @@ function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+async function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) {
+    await sleep(ms);
+    return;
+  }
+  await new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      window.clearTimeout(timeout);
+      signal.removeEventListener('abort', onAbort);
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener('abort', onAbort);
+  });
+}
+
+function createRequestLimiter(limit: number) {
+  let active = 0;
+  const queue: Array<() => void> = [];
+
+  const next = () => {
+    if (active >= limit || queue.length === 0) return;
+    active += 1;
+    const run = queue.shift();
+    run?.();
+  };
+
+  return async function runWithLimit<T>(task: () => Promise<T>): Promise<T> {
+    await new Promise<void>((resolve) => {
+      queue.push(resolve);
+      next();
+    });
+    try {
+      return await task();
+    } finally {
+      active = Math.max(0, active - 1);
+      next();
+    }
+  };
+}
+
+export function dedupePlacesById(places: Place[]): Place[] {
+  const seen = new Set<string>();
+  const unique: Place[] = [];
+  for (const place of places) {
+    if (!place?.id || seen.has(place.id)) continue;
+    seen.add(place.id);
+    unique.push(place);
+  }
+  return unique;
+}
+
+const GENERIC_PLACE_TYPES = new Set(['point_of_interest', 'establishment', 'premise', 'food']);
+
+function normalizeToken(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, '_').trim();
+}
+
+function placeTypeTokens(place: Place): string[] {
+  return (place.tags || []).map(normalizeToken);
+}
+
+function textContainsAny(text: string, keywords: string[]): boolean {
+  const haystack = text.toLowerCase();
+  return keywords.some((keyword) => haystack.includes(keyword.toLowerCase()));
+}
+
+function shouldKeepByIntent(place: Place, definition: ExploreIntentDefinition): boolean {
+  const types = placeTypeTokens(place);
+  const typeSet = new Set(types);
+  const rawText = `${place.name || ''} ${place.description || ''} ${place.address || ''} ${(place.tags || []).join(' ')}`.toLowerCase();
+  const includeTypes = definition.includeTypes.map(normalizeToken);
+  const excludeTypes = definition.excludeTypes.map(normalizeToken);
+  const hasGenericOnly = types.length === 0 || types.every((type) => GENERIC_PLACE_TYPES.has(type));
+  const hasIncludeType = includeTypes.length > 0 && includeTypes.some((type) => typeSet.has(type));
+  const hasKeywordInclude = definition.keywordInclude.length > 0 && textContainsAny(rawText, definition.keywordInclude);
+  const hasKeywordExclude = definition.keywordExclude.length > 0 && textContainsAny(rawText, definition.keywordExclude);
+
+  if (hasKeywordExclude) return false;
+
+  const matchedExcludeType = excludeTypes.find((type) => typeSet.has(type));
+  if (matchedExcludeType) {
+    // Eat & Drink may still include farm stalls when keyword matched.
+    const farmStallOverride = matchedExcludeType === 'farm' && textContainsAny(rawText, ['farm stall', 'farm shop']);
+    if (!farmStallOverride) {
+      return false;
+    }
+  }
+
+  if (includeTypes.length === 0) {
+    return !hasKeywordExclude;
+  }
+
+  if (hasIncludeType || hasKeywordInclude) {
+    return true;
+  }
+
+  // Fallback: when types are generic/missing, keyword include is optional.
+  if (hasGenericOnly && definition.keywordInclude.length === 0) {
+    return true;
+  }
+
+  return false;
+}
+
+function filterPlacesForIntent(places: Place[], definition: ExploreIntentDefinition): Place[] {
+  return places.filter((place) => shouldKeepByIntent(place, definition));
+}
+
+function uniqueQueries(queries: string[]): string[] {
+  const seen = new Set<string>();
+  const output: string[] = [];
+  for (const query of queries) {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    output.push(query.trim());
+  }
+  return output;
+}
+
+export function getExploreIntentSubtitle(intent: ExploreIntent): string {
+  const definition = getExploreIntentDefinition(intent);
+  return definition.subtitle;
+}
+
 function mapLegacyPlaceToPlace(
   raw: any,
   index: number,
@@ -310,7 +507,7 @@ function mapLegacyPlaceToPlace(
     description: 'Family-friendly venue',
     address: raw?.vicinity || raw?.formatted_address || '',
     rating: raw?.rating || 4.0,
-    tags: rawTypes.slice(0, 3).map((t: string) => t.replace(/_/g, ' ')),
+    tags: rawTypes.slice(0, 8).map((t: string) => t.replace(/_/g, ' ')),
     mapsUrl: `https://www.google.com/maps/place/?q=place_id:${placeId}`,
     type: placeType,
     priceLevel: priceLevelToString(raw?.price_level),
@@ -326,7 +523,8 @@ async function fetchLegacyPlaces(
   fallbackType: ActivityType,
   lat: number,
   lng: number,
-  retry: boolean
+  retry: boolean,
+  signal?: AbortSignal
 ): Promise<PlacesSearchResponse> {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -335,15 +533,15 @@ async function fetchLegacyPlaces(
   });
   const url = `${resolveApiUrl(endpoint)}?${query.toString()}`;
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { signal });
     if (response.status === 409 && retry && params.pageToken) {
-      await sleep(1500);
-      return fetchLegacyPlaces(endpoint, params, fallbackType, lat, lng, false);
+      await sleepWithAbort(2000, signal);
+      return fetchLegacyPlaces(endpoint, params, fallbackType, lat, lng, false, signal);
     }
     if (!response.ok) {
       const errText = await response.text();
       console.warn('[FamPals] Places backend error:', errText);
-      return { places: [], nextPageToken: null, error: errText || `HTTP ${response.status}` };
+      return { places: [], nextPageToken: null, hasMore: false, error: errText || `HTTP ${response.status}` };
     }
     const data = await response.json();
     const results = Array.isArray(data.results) ? data.results : [];
@@ -355,10 +553,12 @@ async function fetchLegacyPlaces(
     const places = filtered.map((raw: any, index: number) =>
       mapLegacyPlaceToPlace(raw, index, lat, lng, fallbackType)
     );
-    return { places, nextPageToken: data.nextPageToken || null };
+    const nextPageToken = data.nextPageToken || null;
+    const hasMore = typeof data.hasMore === 'boolean' ? data.hasMore : !!nextPageToken;
+    return { places, nextPageToken, hasMore };
   } catch (error) {
     console.warn('[FamPals] Places backend fetch failed:', error);
-    return { places: [], nextPageToken: null, error: 'fetch_failed' };
+    return { places: [], nextPageToken: null, hasMore: false, error: 'fetch_failed' };
   }
 }
 
@@ -367,11 +567,12 @@ export async function searchNearbyPlacesPaged(
   lng: number,
   type: ActivityType = 'all',
   radiusKm: number = 10,
-  pageToken?: string
+  pageToken?: string,
+  options?: { signal?: AbortSignal }
 ): Promise<PlacesSearchResponse> {
-  if (!lat || !lng) return { places: [], nextPageToken: null };
+  if (!lat || !lng) return { places: [], nextPageToken: null, hasMore: false };
   if (PLACES_API_KEY) {
-    return searchNearbyPlacesTextApi(lat, lng, type, radiusKm, undefined, pageToken);
+    return searchNearbyPlacesTextApi(lat, lng, type, radiusKm, undefined, pageToken, { signal: options?.signal });
   }
   if (API_BASE) {
     const response = await fetchLegacyPlaces(
@@ -387,11 +588,12 @@ export async function searchNearbyPlacesPaged(
       type,
       lat,
       lng,
-      true
+      true,
+      options?.signal
     );
     return response;
   }
-  return { places: [], nextPageToken: null };
+  return { places: [], nextPageToken: null, hasMore: false };
 }
 
 export async function textSearchPlacesPaged(
@@ -399,12 +601,12 @@ export async function textSearchPlacesPaged(
   lat: number,
   lng: number,
   radiusKm: number = 10,
-  pageToken?: string
+  pageToken?: string,
+  options?: { signal?: AbortSignal }
 ): Promise<PlacesSearchResponse> {
-  if (!query.trim()) return { places: [], nextPageToken: null };
+  if (!query.trim()) return { places: [], nextPageToken: null, hasMore: false };
   if (!API_BASE && PLACES_API_KEY) {
-    const places = await textSearchPlaces(query, lat, lng, radiusKm);
-    return { places, nextPageToken: null };
+    return searchNearbyPlacesTextApi(lat, lng, 'all', radiusKm, query.trim(), pageToken, { useCache: false, signal: options?.signal });
   }
   const response = await fetchLegacyPlaces(
     '/api/places/text',
@@ -419,13 +621,170 @@ export async function textSearchPlacesPaged(
     'all',
     lat,
     lng,
-    true
+    true,
+    options?.signal
   );
   if (response.error && !pageToken && PLACES_API_KEY) {
     const places = await textSearchPlaces(query, lat, lng, radiusKm);
-    return { places, nextPageToken: null };
+    return { places, nextPageToken: null, hasMore: false };
   }
   return response;
+}
+
+export async function searchExploreIntent(
+  intent: ExploreIntent,
+  lat: number,
+  lng: number,
+  radiusKm: number,
+  options?: {
+    searchQuery?: string;
+    searchKey?: string;
+    cacheContext?: string;
+    onProgress?: (update: IntentProgressUpdate) => void;
+    isCancelled?: () => boolean;
+    signal?: AbortSignal;
+  }
+): Promise<IntentSearchResponse> {
+  const startedAt = performance.now();
+  let firstRenderAt: number | null = null;
+  let reached25At: number | null = null;
+  const definition = getExploreIntentDefinition(intent);
+  const searchQuery = options?.searchQuery?.trim() || '';
+  const queries = uniqueQueries(searchQuery ? [searchQuery, ...definition.queries.slice(0, 2)] : definition.queries);
+  const coreQueries = queries.slice(0, Math.min(3, queries.length));
+  const optionalQueries = queries.slice(coreQueries.length);
+  const searchKey =
+    options?.searchKey ||
+    `intent:${intent}:${lat.toFixed(3)}:${lng.toFixed(3)}:${radiusKm}:${searchQuery.toLowerCase()}:${options?.cacheContext || ''}`;
+  const runWithLimit = createRequestLimiter(3);
+  const debug: IntentSearchDebug = {
+    intent,
+    subtitle: definition.subtitle,
+    queriesRun: [],
+    perQueryCounts: {},
+    totalBeforeFilter: 0,
+    totalAfterFilter: 0,
+  };
+
+  let merged: Place[] = [];
+  const queryState = new Map<string, { nextPageToken?: string; hasMore: boolean; pagesFetched: number; fetchedResults: number; beforeUnique: number }>();
+
+  const cached = getIntentCached(searchKey);
+  if (cached && !options?.isCancelled?.()) {
+    merged = dedupePlacesById(cached.places);
+    Object.assign(debug, cached.debug);
+    firstRenderAt = performance.now();
+    if (merged.length >= 25) {
+      reached25At = firstRenderAt;
+    }
+    options?.onProgress?.({
+      places: merged,
+      debug,
+      query: 'cache',
+      page: 0,
+      isBackgroundLoading: true,
+      fromCache: true,
+    });
+  }
+
+  intentLog(`[FamPals] Explore intent selected: ${intent}`);
+  intentLog(`[FamPals] Intent queries executed: core=${coreQueries.join(', ')} optional=${optionalQueries.join(', ')}`);
+
+  const applyMerge = (query: string, page: number, response: PlacesSearchResponse) => {
+    const state = queryState.get(query);
+    if (!state) return;
+    state.pagesFetched = Math.max(state.pagesFetched, page);
+    state.fetchedResults += response.places.length;
+    state.nextPageToken = response.nextPageToken || undefined;
+    state.hasMore = response.hasMore && !!state.nextPageToken;
+    merged = dedupePlacesById([...merged, ...response.places]);
+    const filtered = filterPlacesForIntent(merged, definition);
+    if (firstRenderAt === null && filtered.length > 0) {
+      firstRenderAt = performance.now();
+    }
+    if (reached25At === null && filtered.length >= 25) {
+      reached25At = performance.now();
+    }
+    debug.totalBeforeFilter = merged.length;
+    debug.totalAfterFilter = filtered.length;
+    debug.perQueryCounts[query] = {
+      pagesFetched: state.pagesFetched,
+      fetchedResults: state.fetchedResults,
+      uniqueAdded: merged.length - state.beforeUnique,
+    };
+    intentLog(`[FamPals] Query "${query}" page ${page}: ${response.places.length} results, hasMore: ${response.hasMore}`);
+    intentLog(`[FamPals] Merge count after "${query}" page ${page}: ${merged.length} before filter, ${filtered.length} after filter`);
+    options?.onProgress?.({
+      places: filtered,
+      debug,
+      query,
+      page,
+      isBackgroundLoading: true,
+    });
+  };
+
+  const fetchPage = async (query: string, page: number, pageToken?: string) => {
+    if (options?.isCancelled?.() || options?.signal?.aborted) return null;
+    return runWithLimit(async () =>
+      textSearchPlacesPaged(query, lat, lng, radiusKm, pageToken, { signal: options?.signal })
+    );
+  };
+
+  for (const query of coreQueries) {
+    queryState.set(query, { nextPageToken: undefined, hasMore: true, pagesFetched: 0, fetchedResults: 0, beforeUnique: merged.length });
+    debug.queriesRun.push(query);
+  }
+
+  const coreFirstPageTasks = coreQueries.map(async (query) => {
+    const response = await fetchPage(query, 1);
+    if (!response) return;
+    applyMerge(query, 1, response);
+  });
+  await Promise.allSettled(coreFirstPageTasks);
+
+  if (!options?.isCancelled?.() && merged.length < 25 && optionalQueries.length > 0) {
+    for (const query of optionalQueries) {
+      queryState.set(query, { nextPageToken: undefined, hasMore: true, pagesFetched: 0, fetchedResults: 0, beforeUnique: merged.length });
+      debug.queriesRun.push(query);
+    }
+    const optionalFirstPageTasks = optionalQueries.map(async (query) => {
+      const response = await fetchPage(query, 1);
+      if (!response) return;
+      applyMerge(query, 1, response);
+    });
+    await Promise.allSettled(optionalFirstPageTasks);
+  }
+
+  const activeQueries = [...debug.queriesRun];
+  for (const page of [2, 3]) {
+    const tasks = activeQueries.map(async (query) => {
+      const state = queryState.get(query);
+      if (!state || !state.hasMore || !state.nextPageToken) return;
+      if (options?.isCancelled?.() || options?.signal?.aborted) return;
+      await sleepWithAbort(2000, options?.signal);
+      const response = await fetchPage(query, page, state.nextPageToken);
+      if (!response) return;
+      applyMerge(query, page, response);
+    });
+    await Promise.allSettled(tasks);
+  }
+
+  const finalPlaces = filterPlacesForIntent(merged, definition);
+  debug.totalBeforeFilter = merged.length;
+  debug.totalAfterFilter = finalPlaces.length;
+  if (!options?.isCancelled?.()) {
+    setIntentCached(searchKey, { places: finalPlaces, debug });
+  }
+  const completedAt = performance.now();
+  const timeToFirstRender = firstRenderAt ? Math.round(firstRenderAt - startedAt) : -1;
+  const timeTo25Results = reached25At ? Math.round(reached25At - startedAt) : -1;
+  intentLog(`[FamPals] Intent "${intent}" filter counts: before=${debug.totalBeforeFilter}, after=${debug.totalAfterFilter}`);
+  intentLog(`[FamPals] Timing metrics: timeToFirstRenderMs=${timeToFirstRender}, timeTo25ResultsMs=${timeTo25Results}, timeToCompleteMs=${Math.round(completedAt - startedAt)}`);
+
+  return {
+    places: finalPlaces,
+    debug,
+  };
 }
 
 export async function searchNearbyPlaces(
@@ -445,19 +804,26 @@ export async function searchNearbyPlacesTextApi(
   type: ActivityType = 'all',
   radiusKm: number = 10,
   searchQuery?: string,
-  pageToken?: string
+  pageToken?: string,
+  options?: { useCache?: boolean; signal?: AbortSignal }
 ): Promise<PlacesSearchResponse> {
   if (!PLACES_API_KEY) {
     console.warn("Google Places API key missing");
-    return { places: [], nextPageToken: null };
+    return { places: [], nextPageToken: null, hasMore: false };
   }
 
+  const useCache = options?.useCache !== false;
   const cacheKey = `text-cat:${lat.toFixed(3)}:${lng.toFixed(3)}:${type}:${radiusKm}:${searchQuery || ''}:${pageToken || ''}`;
 
-  const cached = getCached<PlacesSearchResponse>(PLACES_CACHE_KEY, cacheKey);
-  if (cached) {
-    console.log('[FamPals] Loaded places from cache (instant)');
-    return cached;
+  if (useCache) {
+    const cached = getCached<PlacesSearchResponse>(PLACES_CACHE_KEY, cacheKey);
+    if (cached) {
+      console.log('[FamPals] Loaded places from cache (instant)');
+      return {
+        ...cached,
+        hasMore: typeof cached.hasMore === 'boolean' ? cached.hasMore : !!cached.nextPageToken,
+      };
+    }
   }
 
   try {
@@ -493,21 +859,22 @@ export async function searchNearbyPlacesTextApi(
           'X-Goog-Api-Key': PLACES_API_KEY,
           'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.types,places.priceLevel,places.location,places.photos,places.primaryTypeDisplayName,places.regularOpeningHours,nextPageToken'
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
+        signal: options?.signal,
       }
     );
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Places Text Search API error:', errorText);
-      return { places: [], nextPageToken: null };
+      return { places: [], nextPageToken: null, hasMore: false };
     }
 
     const data = await response.json();
 
     if (!data.places || !Array.isArray(data.places)) {
       console.log('[FamPals] No places found for this search');
-      return { places: [], nextPageToken: null };
+      return { places: [], nextPageToken: null, hasMore: false };
     }
 
     const rawPlaces: any[] = data.places.filter((p: any) => {
@@ -527,7 +894,7 @@ export async function searchNearbyPlacesTextApi(
         description: p.primaryTypeDisplayName?.text || 'Family-friendly venue',
         address: p.formattedAddress || '',
         rating: p.rating || 4.0,
-        tags: (p.types || []).slice(0, 3).map((t: string) => t.replace(/_/g, ' ')),
+        tags: (p.types || []).slice(0, 8).map((t: string) => t.replace(/_/g, ' ')),
         mapsUrl: `https://www.google.com/maps/place/?q=place_id:${p.id}`,
         type: placeType,
         priceLevel: priceLevelToString(p.priceLevel),
@@ -553,18 +920,22 @@ export async function searchNearbyPlacesTextApi(
       return distKm <= radiusKm;
     });
 
+    const nextPageToken = data.nextPageToken || null;
     const result: PlacesSearchResponse = {
       places: filteredPlaces,
-      nextPageToken: data.nextPageToken || null
+      nextPageToken,
+      hasMore: !!nextPageToken
     };
 
-    setCache(PLACES_CACHE_KEY, cacheKey, result);
+    if (useCache) {
+      setCache(PLACES_CACHE_KEY, cacheKey, result);
+    }
     console.log(`[FamPals] Text Search: ${places.length} total, ${filteredPlaces.length} within ${radiusKm}km, hasMore: ${!!data.nextPageToken}`);
 
     return result;
   } catch (error) {
     console.error('Error fetching places via Text Search:', error);
-    return { places: [], nextPageToken: null };
+    return { places: [], nextPageToken: null, hasMore: false };
   }
 }
 
@@ -635,7 +1006,7 @@ export async function textSearchPlaces(
         description: p.primaryTypeDisplayName?.text || 'Family-friendly venue',
         address: p.formattedAddress || '',
         rating: p.rating || 4.0,
-        tags: (p.types || []).slice(0, 3).map((t: string) => t.replace(/_/g, ' ')),
+        tags: (p.types || []).slice(0, 8).map((t: string) => t.replace(/_/g, ' ')),
         mapsUrl: `https://www.google.com/maps/place/?q=place_id:${p.id}`,
         type: placeType,
         priceLevel: priceLevelToString(p.priceLevel),
@@ -674,7 +1045,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
       {
         headers: {
           'X-Goog-Api-Key': PLACES_API_KEY,
-          'X-Goog-FieldMask': 'id,displayName,formattedAddress,nationalPhoneNumber,internationalPhoneNumber,websiteUri,rating,userRatingCount,regularOpeningHours,photos,reviews,priceLevel,types,location,googleMapsUri'
+          'X-Goog-FieldMask': 'id,displayName,formattedAddress,nationalPhoneNumber,internationalPhoneNumber,websiteUri,rating,userRatingCount,regularOpeningHours,photos,reviews,priceLevel,types,location,googleMapsUri,accessibilityOptions,goodForChildren,menuForChildren,restroom,parkingOptions'
         }
       }
     );
@@ -710,7 +1081,12 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
       types: p.types,
       lat: p.location?.latitude || 0,
       lng: p.location?.longitude || 0,
-      mapsUrl: p.googleMapsUri || `https://www.google.com/maps/place/?q=place_id:${p.id}`
+      mapsUrl: p.googleMapsUri || `https://www.google.com/maps/place/?q=place_id:${p.id}`,
+      accessibilityOptions: p.accessibilityOptions || undefined,
+      goodForChildren: p.goodForChildren === true,
+      menuForChildren: p.menuForChildren === true,
+      restroom: p.restroom === true,
+      parkingOptions: p.parkingOptions || undefined,
     };
 
     setCache(DETAILS_CACHE_KEY, placeId, details);

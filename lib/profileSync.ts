@@ -1,6 +1,6 @@
 import { doc, setDoc, getDoc, updateDoc, deleteField } from 'firebase/firestore';
 import { db, auth } from './firebase';
-import { AppState, UserPreferences, SavedLocation, ActivityType, getDefaultEntitlement } from '../types';
+import { AppState, UserPreferences, SavedLocation, ExploreIntent, getDefaultEntitlement } from '../types';
 
 const GUEST_PREFERENCES_KEY = 'fampals_guest_preferences';
 const DEBOUNCE_MS = 1500;
@@ -65,7 +65,7 @@ export async function saveUserProfile(userId: string, data: Partial<AppState>): 
 
 export function updatePreferenceDebounced(
   key: keyof UserPreferences, 
-  value: SavedLocation | number | ActivityType | string | undefined,
+  value: SavedLocation | number | ExploreIntent | string | undefined,
   isGuest: boolean,
   currentPrefs: UserPreferences
 ): UserPreferences {
@@ -79,7 +79,7 @@ export function updatePreferenceDebounced(
       newPrefs.lastRadius = value as number | undefined;
       break;
     case 'lastCategory':
-      newPrefs.lastCategory = value as ActivityType | undefined;
+      newPrefs.lastCategory = value as ExploreIntent | undefined;
       break;
     case 'activeCircleId':
       newPrefs.activeCircleId = value as string | undefined;
@@ -161,7 +161,7 @@ export function updateRadius(
 }
 
 export function updateCategory(
-  category: ActivityType,
+  category: ExploreIntent,
   isGuest: boolean,
   currentPrefs: UserPreferences
 ): UserPreferences {

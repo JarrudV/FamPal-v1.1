@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AppState, Child, PartnerLink, Preferences, FOOD_PREFERENCES, ALLERGY_OPTIONS, ACCESSIBILITY_OPTIONS, ACTIVITY_PREFERENCES, PLAN_LIMITS } from '../types';
+import { AppState, Child, PartnerLink, Preferences, UserAccessibilityNeeds, FOOD_PREFERENCES, ALLERGY_OPTIONS, ACCESSIBILITY_OPTIONS, ACTIVITY_PREFERENCES, PLAN_LIMITS } from '../types';
 import PlanBilling from './PlanBilling';
 import { getLimits, getPlanDisplayName, canUseAI, isPaidTier } from '../lib/entitlements';
 import { storage, auth, db, collection, query, where, getDocs, getDoc, doc, setDoc, ref, uploadBytes, getDownloadURL, writeBatch, deleteField, serverTimestamp } from '../lib/firebase';
@@ -50,12 +50,20 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
   }, [state.profileInfo, state.user?.displayName]);
 
   const userPrefs = state.preferences || { foodPreferences: [], allergies: [], accessibility: [], activityPreferences: [] };
+  const accessibilityNeeds: UserAccessibilityNeeds = state.accessibilityNeeds || {
+    usesWheelchair: false,
+    needsStepFree: false,
+    needsAccessibleToilet: false,
+    prefersPavedPaths: false,
+    usesPushchair: false,
+  };
   const limits = getLimits(state.entitlement);
   const isPaid = isPaidTier(state.entitlement);
   const partnerLinkRequiresPro = import.meta.env.VITE_PARTNER_LINK_REQUIRES_PRO === 'true';
   const canLinkPartner = !partnerLinkRequiresPro || isPaidTier(state.entitlement);
   const aiInfo = canUseAI(state.entitlement, state.familyPool);
   const planTier = state.entitlement?.plan_tier || 'free';
+  const appVersion = __APP_VERSION__;
 
   const FREE_PREF_LIMIT = limits.preferencesPerCategory;
   
@@ -90,6 +98,13 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
       return { ...c, preferences: { ...prefs, [category]: updated } };
     });
     onUpdateState('children', children);
+  };
+
+  const toggleAccessibilityNeed = (key: keyof UserAccessibilityNeeds) => {
+    onUpdateState('accessibilityNeeds', {
+      ...accessibilityNeeds,
+      [key]: !accessibilityNeeds[key],
+    });
   };
 
   const handleAddChild = () => {
@@ -712,6 +727,31 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
                   )}
                   <div className="space-y-5 pt-4 border-t border-slate-100">
                   <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Mobility Needs for Ranking</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { key: 'usesWheelchair', label: 'Uses wheelchair' },
+                        { key: 'needsStepFree', label: 'Needs step free entry' },
+                        { key: 'needsAccessibleToilet', label: 'Needs accessible toilet' },
+                        { key: 'prefersPavedPaths', label: 'Prefers paved paths' },
+                        { key: 'usesPushchair', label: 'Uses pushchair' },
+                      ].map((need) => (
+                        <button
+                          key={need.key}
+                          onClick={() => toggleAccessibilityNeed(need.key as keyof UserAccessibilityNeeds)}
+                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${
+                            accessibilityNeeds[need.key as keyof UserAccessibilityNeeds]
+                              ? 'bg-sky-500 text-white'
+                              : 'bg-slate-100 text-slate-500'
+                          }`}
+                        >
+                          {need.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Food Preferences</p>
                       {!isPaid && <span className="text-[9px] font-bold text-slate-400">{userPrefs.foodPreferences.length}/{FREE_PREF_LIMIT}</span>}
@@ -1008,7 +1048,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
               onClick={handleVersionTap}
               className="text-xs text-slate-300 hover:text-slate-400 transition-colors"
             >
-              FamPals v2.3
+              Version {appVersion}
             </button>
           </div>
         )}

@@ -1,5 +1,15 @@
 
 import type { Timestamp } from 'firebase/firestore';
+import type { AccessibilityFeatureValue, FamilyFacilityValue, UserAccessibilityNeeds } from './src/types/place';
+export type {
+  AccessibilityFeature,
+  AccessibilityConfidence,
+  AccessibilityFeatureValue,
+  FamilyFacility,
+  FamilyFacilityConfidence,
+  FamilyFacilityValue,
+  UserAccessibilityNeeds,
+} from './src/types/place';
 
 export interface Place {
   id: string;
@@ -17,9 +27,21 @@ export interface Place {
   distance?: string;
   ageAppropriate?: string;
   fullSummary?: string;
+  accessibility?: AccessibilityFeatureValue[];
+  accessibilitySummary?: string;
+  familyFacilities?: FamilyFacilityValue[];
+  familyFacilitiesSummary?: string;
 }
 
 export type ActivityType = 'restaurant' | 'outdoor' | 'indoor' | 'active' | 'hike' | 'wine' | 'golf' | 'kids' | 'all';
+export type ExploreIntent =
+  | 'all'
+  | 'eat_drink'
+  | 'play_kids'
+  | 'outdoors'
+  | 'things_to_do'
+  | 'sport_active'
+  | 'indoor';
 
 export interface VisitedPlace {
   placeId: string;
@@ -97,7 +119,7 @@ export const ACTIVITY_OPTIONS = {
     'Coffee spot', 'Breakfast', 'Lunch', 'Dinner', 'Wine tasting', 'Beer tasting', 'Craft gin tasting'
   ],
   'Logistics & Vibes': [
-    'Free entry', 'Paid entry', 'Booking required', 'Dog friendly', 'Wheelchair accessible', 'Quiet', 'Busy/noisy'
+    'Free entry', 'Paid entry', 'Booking required', 'Dog friendly', 'Step-free entrance', 'Quiet', 'Busy/noisy'
   ]
 } as const;
 
@@ -307,7 +329,7 @@ export interface SavedLocation {
 export interface UserPreferences {
   lastLocation?: SavedLocation;
   lastRadius?: number;
-  lastCategory?: ActivityType;
+  lastCategory?: ExploreIntent;
   activeCircleId?: string;
 }
 
@@ -331,6 +353,7 @@ export interface AppState {
   memories: Memory[];
   children: Child[];
   preferences?: Preferences;
+  accessibilityNeeds?: UserAccessibilityNeeds;
   userPreferences?: UserPreferences;
   spouseName?: string;
   linkedEmail?: string;

@@ -8,6 +8,12 @@
 # Vite
 .env.local
 .env.*.local
+.env
+.env.staging
+.env.production
+env
+env.staging
+env.production
 
 # Logs
 npm-debug.log*

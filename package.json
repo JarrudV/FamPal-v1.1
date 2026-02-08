@@ -1,13 +1,15 @@
 {
   "name": "fampals-parents-local-guide",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.3.0",
   "type": "module",
   "scripts": {
     "dev": "concurrently \"vite\" \"npx tsx server/index.ts\"",
     "dev:frontend": "vite",
     "dev:server": "npx tsx server/index.ts",
     "build": "vite build && npx tsc --project tsconfig.server.json",
+    "build:staging": "vite build --mode staging && npx tsc --project tsconfig.server.json",
+    "build:production": "vite build --mode production && npx tsc --project tsconfig.server.json",
     "preview": "vite preview",
     "start": "node dist-server/index.js"
   },
@@ -19,6 +21,7 @@
     "concurrently": "^9.2.1",
     "cors": "^2.8.6",
     "crypto": "^1.0.1",
+    "dotenv": "^17.2.4",
     "express": "^5.2.1",
     "firebase": "^12.8.0",
     "firebase-admin": "^12.7.0",
