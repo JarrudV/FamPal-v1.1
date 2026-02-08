@@ -404,7 +404,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
         onLocationChange={handleLocationChange}
       />
 
-      <div className="px-4 pt-3 pb-2">
+      <div className="px-5 pt-3 pb-2">
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
           {[
             { key: 'explore' as const, label: 'Explore' },
@@ -430,7 +430,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
       </div>
 
       {activeTab === 'explore' && (
-        <div className="px-4">
+        <div className="px-5">
           <div className="mb-4 mt-1">
             <h2 className="text-xl font-extrabold text-slate-800">{greetingText} 👋</h2>
             <p className="text-sm text-slate-500 mt-0.5">{contextMessage}</p>
@@ -532,7 +532,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
                 ) : row.places.length === 0 ? (
                   <div className="py-6 text-center text-sm text-slate-400">No spots found nearby</div>
                 ) : (
-                  <div className="flex gap-3 overflow-x-auto no-scrollbar scroll-smooth pb-1 -mx-4 px-4 snap-x snap-mandatory">
+                  <div className="flex gap-3 overflow-x-auto no-scrollbar scroll-smooth pb-1 -mx-5 px-5 snap-x snap-mandatory">
                     {row.places.map((place) => (
                       <div key={place.id} className="snap-start">
                         <NetflixPlaceCard
@@ -560,7 +560,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
       )}
 
       {activeTab === 'favorites' && (
-        <div className="px-4 mt-2">
+        <div className="px-5 mt-2">
           <h2 className="text-lg font-extrabold text-slate-800 mb-3">Saved Places</h2>
           {state.savedPlaces && state.savedPlaces.length > 0 ? (
             <div className="space-y-3">
@@ -599,7 +599,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
       )}
 
       {activeTab !== 'explore' && activeTab !== 'favorites' && (
-        <div className="px-4 mt-2">
+        <div className="px-5 mt-2">
           <div className="py-16 text-center">
             <span className="text-4xl block mb-3">
               {activeTab === 'adventures' ? '🧭' : activeTab === 'memories' ? '📸' : activeTab === 'partner' ? '💑' : '👥'}

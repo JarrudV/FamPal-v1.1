@@ -655,16 +655,32 @@ const App: React.FC = () => {
 
   const showBottomNav = !loading && onboardingChecked && (view === 'dashboard' || view === 'profile') && !needsOnboarding;
 
-  const NavButton = ({ icon, label, active, onClick }: { icon: string; label: string; active: boolean; onClick: () => void }) => (
+  const NavIcon = ({ type, active }: { type: string; active: boolean }) => {
+    const cls = `w-[22px] h-[22px] transition-colors ${active ? 'text-sky-500' : 'text-slate-400'}`;
+    switch (type) {
+      case 'home':
+        return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>;
+      case 'saved':
+        return <svg className={cls} viewBox="0 0 24 24" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>;
+      case 'circles':
+        return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" /></svg>;
+      case 'profile':
+        return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>;
+      default:
+        return null;
+    }
+  };
+
+  const NavButton = ({ type, label, active, onClick }: { type: string; label: string; active: boolean; onClick: () => void }) => (
     <button 
       onClick={onClick}
       aria-label={label}
-      className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl transition-all min-w-[60px] min-h-[52px] ${
-        active ? 'text-sky-500 bg-sky-50' : 'text-slate-400 hover:text-slate-600'
+      className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all min-w-[56px] no-min-size ${
+        active ? 'text-sky-500' : 'text-slate-400'
       }`}
     >
-      <span className="text-xl">{icon}</span>
-      <span className="text-[11px] font-semibold capitalize">{label}</span>
+      <NavIcon type={type} active={active} />
+      <span className={`text-[10px] font-semibold ${active ? 'text-sky-500' : 'text-slate-400'}`}>{label}</span>
     </button>
   );
 
@@ -674,12 +690,12 @@ const App: React.FC = () => {
         <div>
           {renderView()}
           {showBottomNav && (
-            <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-lg border-t border-slate-200/60 px-4 py-3 safe-area-inset-bottom z-50">
+            <nav className="fixed bottom-0 left-0 right-0 bottom-nav-blur border-t border-slate-200/60 px-2 pt-2 pb-1 safe-area-inset-bottom z-50">
               <div className="flex justify-around max-w-md mx-auto">
-                <NavButton icon="🏠" label="Home" active={view === 'dashboard' && dashboardTab === 'explore'} onClick={() => { setDashboardTab('explore'); setView('dashboard'); }} />
-                <NavButton icon="💙" label="Saved" active={view === 'dashboard' && dashboardTab === 'favorites'} onClick={() => { setDashboardTab('favorites'); setView('dashboard'); }} />
-                <NavButton icon="👥" label="Circles" active={view === 'dashboard' && dashboardTab === 'circles'} onClick={() => { setDashboardTab('circles'); setView('dashboard'); }} />
-                <NavButton icon="👤" label="Profile" active={view === 'profile'} onClick={() => setView('profile')} />
+                <NavButton type="home" label="Home" active={view === 'dashboard' && dashboardTab === 'explore'} onClick={() => { setDashboardTab('explore'); setView('dashboard'); }} />
+                <NavButton type="saved" label="Saved" active={view === 'dashboard' && dashboardTab === 'favorites'} onClick={() => { setDashboardTab('favorites'); setView('dashboard'); }} />
+                <NavButton type="circles" label="Circles" active={view === 'dashboard' && dashboardTab === 'circles'} onClick={() => { setDashboardTab('circles'); setView('dashboard'); }} />
+                <NavButton type="profile" label="Profile" active={view === 'profile'} onClick={() => setView('profile')} />
               </div>
             </nav>
           )}
