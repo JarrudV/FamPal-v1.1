@@ -1,11 +1,18 @@
 
 import React, { useState, useEffect } from 'react';
-import { Place, FavoriteData, ACTIVITY_OPTIONS, Memory, Entitlement, PartnerLink, GroupPlace } from '../types';
+import { Place, FavoriteData, ACTIVITY_OPTIONS, Memory, Entitlement, PartnerLink, GroupPlace, AccessibilityFeatureValue, FamilyFacilityValue } from '../types';
 import { askAboutPlace, generateFamilySummary } from '../geminiService';
 import { getPlaceDetails, PlaceDetails, PlaceReview } from '../placesService';
 import { canUseAI } from '../lib/entitlements';
 import MemoryCreate from './MemoryCreate';
 import { CircleDoc } from '../lib/circles';
+import PlaceAccessibilitySection from '../src/components/PlaceAccessibilitySection';
+import AccessibilityContributionModal from '../src/components/AccessibilityContributionModal';
+import { getAccessibilityHintsFromGoogle } from '../src/utils/accessibilityHints';
+import PlaceFamilyFacilitiesSection from '../src/components/PlaceFamilyFacilitiesSection';
+import FamilyFacilitiesContributionModal from '../src/components/FamilyFacilitiesContributionModal';
+import { getFamilyFacilitiesHintsFromGoogle } from '../src/utils/familyFacilitiesHints';
+import { getPublicHints } from '../src/utils/publicHints';
 
 function getNavigationUrls(place: Place, placeDetails?: PlaceDetails | null) {
   const lat = (place as any).lat || placeDetails?.lat;
@@ -60,6 +67,10 @@ interface VenueProfileProps {
   onAddToCircle?: (circleId: string, place: GroupPlace) => void;
   onAddMemory?: (memory: Omit<Memory, 'id'>) => void;
   onTagMemoryToCircle?: (circleId: string, memory: Omit<Memory, 'id'>) => void;
+  onSubmitAccessibilityContribution?: (payload: { features: AccessibilityFeatureValue[]; comment?: string }) => void | Promise<void>;
+  isSubmittingAccessibilityContribution?: boolean;
+  onSubmitFamilyFacilitiesContribution?: (payload: { features: FamilyFacilityValue[]; comment?: string }) => void | Promise<void>;
+  isSubmittingFamilyFacilitiesContribution?: boolean;
 }
 
 const VenueProfile: React.FC<VenueProfileProps> = ({ 
@@ -85,7 +96,11 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   onIncrementAiRequests,
   onAddToCircle,
   onAddMemory,
-  onTagMemoryToCircle
+  onTagMemoryToCircle,
+  onSubmitAccessibilityContribution,
+  isSubmittingAccessibilityContribution = false,
+  onSubmitFamilyFacilitiesContribution,
+  isSubmittingFamilyFacilitiesContribution = false
 }) => {
   const aiInfo = canUseAI(entitlement, familyPool);
   const venueMemories = memories.filter(m => m.placeId === place.id);
@@ -124,6 +139,14 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   // Fetch place details from Google Places for reviews and extra info
   const [placeDetails, setPlaceDetails] = useState<PlaceDetails | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
+  const [showAccessibilityModal, setShowAccessibilityModal] = useState(false);
+  const [showFamilyFacilitiesModal, setShowFamilyFacilitiesModal] = useState(false);
+  const [accessibilityModalScrollTarget, setAccessibilityModalScrollTarget] = useState<'suggested' | 'manual'>('manual');
+  const [accessibilityHighlightedSuggested, setAccessibilityHighlightedSuggested] = useState<AccessibilityFeatureValue['feature'][]>([]);
+  const [familyModalScrollTarget, setFamilyModalScrollTarget] = useState<'suggested' | 'manual'>('manual');
+  const [familyHighlightedSuggested, setFamilyHighlightedSuggested] = useState<FamilyFacilityValue['feature'][]>([]);
+  const [accessibilityToast, setAccessibilityToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [familyToast, setFamilyToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   
   useEffect(() => {
     if (place.id) {
@@ -133,6 +156,15 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
         .finally(() => setLoadingDetails(false));
     }
   }, [place]);
+
+  useEffect(() => {
+    setAccessibilityToast(null);
+    setFamilyToast(null);
+    setAccessibilityModalScrollTarget('manual');
+    setAccessibilityHighlightedSuggested([]);
+    setFamilyModalScrollTarget('manual');
+    setFamilyHighlightedSuggested([]);
+  }, [place.id]);
 
   const quickQuestions = [
     "Is this good for toddlers?",
@@ -193,6 +225,52 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
     setSummarySaved(true);
     setTimeout(() => setSummarySaved(false), 2000);
   };
+
+  const handleSubmitAccessibility = async (payload: { features: AccessibilityFeatureValue[]; comment?: string }) => {
+    if (!onSubmitAccessibilityContribution) return;
+    if (payload.features.length === 0) return;
+    try {
+      await onSubmitAccessibilityContribution(payload);
+      setAccessibilityToast({ type: 'success', message: 'Thanks! Your update helps other families.' });
+      setShowAccessibilityModal(false);
+      setTimeout(() => setAccessibilityToast(null), 2200);
+    } catch (err) {
+      setAccessibilityToast({ type: 'error', message: "Couldn't save. Please try again." });
+      setTimeout(() => setAccessibilityToast(null), 2200);
+    }
+  };
+
+  const handleSubmitFamilyFacilities = async (payload: { features: FamilyFacilityValue[]; comment?: string }) => {
+    if (!onSubmitFamilyFacilitiesContribution) return;
+    if (payload.features.length === 0) return;
+    try {
+      await onSubmitFamilyFacilitiesContribution(payload);
+      setFamilyToast({ type: 'success', message: 'Thanks! Your update helps other families.' });
+      setShowFamilyFacilitiesModal(false);
+      setTimeout(() => setFamilyToast(null), 2200);
+    } catch (err) {
+      setFamilyToast({ type: 'error', message: "Couldn't save. Please try again." });
+      setTimeout(() => setFamilyToast(null), 2200);
+    }
+  };
+
+  const confirmedAccessibility = (place.accessibility || []).filter(
+    (item) => item.value === true && (item.confidence === 'reported' || item.confidence === 'verified')
+  );
+  const suggestedGoogleHints = getAccessibilityHintsFromGoogle(placeDetails).filter(
+    (feature) => !confirmedAccessibility.some((confirmed) => confirmed.feature === feature)
+  );
+  const confirmedFamilyFacilities = (place.familyFacilities || []).filter(
+    (item) => item.value === true && (item.confidence === 'reported' || item.confidence === 'verified')
+  );
+  const suggestedFamilyHints = getFamilyFacilitiesHintsFromGoogle(placeDetails).filter(
+    (feature) => !confirmedFamilyFacilities.some((confirmed) => confirmed.feature === feature)
+  );
+  const publicHints = getPublicHints(placeDetails);
+  const confirmedStrollerFromFamily = confirmedFamilyFacilities.some((item) => item.feature === 'stroller_friendly');
+  const confirmedStrollerFromAccessibility = confirmedAccessibility.some((item) => item.feature === 'step_free_entry');
+  const strollerFriendlyConfirmed = confirmedStrollerFromFamily || confirmedStrollerFromAccessibility;
+  const strollerFriendlySuggested = !strollerFriendlyConfirmed && publicHints.strollerFriendlySuggested;
 
   return (
     <div 
@@ -317,9 +395,40 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
               <h3 className="text-xl font-extrabold text-[#1E293B]">Expert Review</h3>
               <p className="text-slate-500 leading-relaxed text-sm font-medium">
                 {place.fullSummary || place.description}
-                Our local parents verified this spot for high cleanliness standards, quiet areas for naps, and stroller accessibility.
               </p>
+              {strollerFriendlyConfirmed && (
+                <p className="text-xs font-medium text-slate-500">
+                  Reported by the FamPal community: stroller friendly access.
+                </p>
+              )}
+              {strollerFriendlySuggested && (
+                <p className="text-xs font-medium text-slate-500">
+                  Suggested by public sources (not yet confirmed): stroller friendly access.
+                </p>
+              )}
             </section>
+
+            <PlaceAccessibilitySection
+              accessibility={place.accessibility}
+              accessibilitySummary={place.accessibilitySummary}
+              suggestedFeatures={suggestedGoogleHints}
+              onAddAccessibilityInfo={(options) => {
+                setAccessibilityModalScrollTarget(options?.focusSection || 'manual');
+                setAccessibilityHighlightedSuggested(options?.highlightedSuggestedFeatures || []);
+                setShowAccessibilityModal(true);
+              }}
+            />
+
+            <PlaceFamilyFacilitiesSection
+              familyFacilities={place.familyFacilities}
+              familyFacilitiesSummary={place.familyFacilitiesSummary}
+              suggestedFeatures={suggestedFamilyHints}
+              onAddFamilyInfo={(options) => {
+                setFamilyModalScrollTarget(options?.focusSection || 'manual');
+                setFamilyHighlightedSuggested(options?.highlightedSuggestedFeatures || []);
+                setShowFamilyFacilitiesModal(true);
+              }}
+            />
 
             <section className="grid grid-cols-2 gap-4">
               <InfoTile label="Pricing" value={place.priceLevel || '—'} icon="💰" />
@@ -791,6 +900,58 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
       </div>
       
       {/* Floating Home Button removed from here — rendered globally in App.tsx */}
+      <AccessibilityContributionModal
+        isOpen={showAccessibilityModal}
+        onClose={() => {
+          setShowAccessibilityModal(false);
+          setAccessibilityModalScrollTarget('manual');
+          setAccessibilityHighlightedSuggested([]);
+        }}
+        confirmedFeatures={confirmedAccessibility}
+        suggestedFeatures={suggestedGoogleHints}
+        initialScrollTarget={accessibilityModalScrollTarget}
+        highlightedSuggestedFeatures={accessibilityHighlightedSuggested}
+        onSubmit={handleSubmitAccessibility}
+      />
+      <FamilyFacilitiesContributionModal
+        isOpen={showFamilyFacilitiesModal}
+        onClose={() => {
+          setShowFamilyFacilitiesModal(false);
+          setFamilyModalScrollTarget('manual');
+          setFamilyHighlightedSuggested([]);
+        }}
+        confirmedFeatures={confirmedFamilyFacilities}
+        suggestedFeatures={suggestedFamilyHints}
+        initialScrollTarget={familyModalScrollTarget}
+        highlightedSuggestedFeatures={familyHighlightedSuggested}
+        onSubmit={handleSubmitFamilyFacilities}
+      />
+      {accessibilityToast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50">
+          <div
+            className={`px-4 py-2 text-xs font-semibold rounded-full shadow-lg ${
+              accessibilityToast.type === 'success'
+                ? 'bg-emerald-600 text-white shadow-emerald-700/30'
+                : 'bg-rose-600 text-white shadow-rose-700/30'
+            }`}
+          >
+            {accessibilityToast.message}
+          </div>
+        </div>
+      )}
+      {familyToast && (
+        <div className="fixed bottom-14 left-1/2 -translate-x-1/2 z-50">
+          <div
+            className={`px-4 py-2 text-xs font-semibold rounded-full shadow-lg ${
+              familyToast.type === 'success'
+                ? 'bg-emerald-600 text-white shadow-emerald-700/30'
+                : 'bg-rose-600 text-white shadow-rose-700/30'
+            }`}
+          >
+            {familyToast.message}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

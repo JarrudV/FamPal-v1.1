@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { AppState, Place, Memory, UserReview, ActivityType, GroupPlace, VisitedPlace, PLAN_LIMITS, UserPreferences, SavedLocation, SavedPlace } from '../types';
+import { AppState, Place, Memory, UserReview, ExploreIntent, GroupPlace, VisitedPlace, PLAN_LIMITS, UserPreferences, SavedLocation, SavedPlace, AccessibilityFeatureValue, FamilyFacilityValue, UserAccessibilityNeeds } from '../types';
 import Header from './Header';
 import PlaceCard from './PlaceCard';
 import Filters from './Filters';
@@ -7,13 +7,18 @@ import VenueProfile from './VenueProfile';
 import GroupsList from './GroupsList';
 import GroupDetail from './GroupDetail';
 import PlanBilling from './PlanBilling';
+import MustHavesSheet from './MustHavesSheet';
 import { UpgradePrompt, LimitIndicator } from './UpgradePrompt';
-import { searchNearbyPlacesPaged, textSearchPlacesPaged, getPlaceDetails } from '../placesService';
+import { searchExploreIntent, getExploreIntentSubtitle, getPlaceDetails } from '../placesService';
 import { getLimits, canSavePlace, isPaidTier, getNextResetDate } from '../lib/entitlements';
 import { updateLocation, updateRadius, updateCategory, updateActiveCircle } from '../lib/profileSync';
 import { ShareMemoryModal } from './ShareMemory';
 import { db, doc, getDoc, collection, onSnapshot, setDoc, auth, serverTimestamp, increment, storage, ref, uploadBytesResumable, getDownloadURL } from '../lib/firebase';
 import { upsertSavedPlace, deleteSavedPlace } from '../lib/userData';
+import { loadPlaceAccessibilityByIds, rankPlacesWithAccessibilityNeeds, submitAccessibilityReport } from '../lib/placeAccessibility';
+import { generateAccessibilitySummary } from '../src/utils/accessibility';
+import { loadPlaceFamilyFacilitiesByIds, submitFamilyFacilitiesReport } from '../lib/placeFamilyFacilities';
+import { generateFamilyFacilitiesSummary } from '../src/utils/familyFacilities';
 import MemoryCreate from './MemoryCreate';
 import {
   CircleDoc,
@@ -76,7 +81,185 @@ function getTimeAgo(date: Date): string {
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+type RequirementFilter =
+  | 'kid_friendly'
+  | 'stroller_friendly'
+  | 'jungle_gym'
+  | 'wheelchair_friendly'
+  | 'outdoor'
+  | 'indoor';
+
+type PrimaryCategory =
+  | 'restaurant'
+  | 'cafe'
+  | 'wine_farm'
+  | 'brewery'
+  | 'playground'
+  | 'indoor_play'
+  | 'activity_centre'
+  | 'park'
+  | 'zoo_aquarium'
+  | 'museum'
+  | 'beach'
+  | 'hike_trail'
+  | 'nature_reserve'
+  | 'theatre_cinema'
+  | 'market'
+  | 'shopping'
+  | 'sports_venue'
+  | 'golf'
+  | 'gym_fitness';
+
+const REQUIREMENT_LABELS: Record<RequirementFilter, string> = {
+  kid_friendly: 'Kid friendly',
+  stroller_friendly: 'Stroller friendly',
+  jungle_gym: 'Jungle gym',
+  wheelchair_friendly: 'Wheelchair friendly',
+  outdoor: 'Outdoor',
+  indoor: 'Indoor',
+};
+
+function normalizeTag(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, '_');
+}
+
+function hasConfirmedFamilyFeature(place: Place, feature: string): boolean {
+  return (place.familyFacilities || []).some(
+    (item) => item.feature === feature && item.value === true && item.confidence !== 'unknown'
+  );
+}
+
+function hasConfirmedAccessibilityFeature(place: Place, feature: string): boolean {
+  return (place.accessibility || []).some(
+    (item) => item.feature === feature && item.value === true && item.confidence !== 'unknown'
+  );
+}
+
+function placeTypeSet(place: Place): Set<string> {
+  const types = (place.tags || []).map(normalizeTag);
+  return new Set(types);
+}
+
+function inferPrimaryCategories(place: Place): Set<PrimaryCategory> {
+  const typeSet = placeTypeSet(place);
+  const categories = new Set<PrimaryCategory>();
+
+  if (typeSet.has('restaurant')) categories.add('restaurant');
+  if (typeSet.has('cafe')) categories.add('cafe');
+  if (typeSet.has('winery') || typeSet.has('wine_bar')) categories.add('wine_farm');
+  if (typeSet.has('brewery')) categories.add('brewery');
+
+  if (typeSet.has('playground')) categories.add('playground');
+  if (typeSet.has('indoor_playground')) categories.add('indoor_play');
+  if (typeSet.has('amusement_park') || typeSet.has('sports_complex') || typeSet.has('bowling_alley')) categories.add('activity_centre');
+  if (typeSet.has('park')) categories.add('park');
+  if (typeSet.has('zoo') || typeSet.has('aquarium')) categories.add('zoo_aquarium');
+  if (typeSet.has('museum')) categories.add('museum');
+
+  if (typeSet.has('beach')) categories.add('beach');
+  if (typeSet.has('hiking_area') || typeSet.has('hiking_trail')) categories.add('hike_trail');
+  if (typeSet.has('national_park') || typeSet.has('state_park') || typeSet.has('nature_reserve')) categories.add('nature_reserve');
+
+  if (typeSet.has('movie_theater') || typeSet.has('performing_arts_theater')) categories.add('theatre_cinema');
+  if (typeSet.has('market')) categories.add('market');
+  if (typeSet.has('shopping_mall') || typeSet.has('store')) categories.add('shopping');
+
+  if (typeSet.has('stadium') || typeSet.has('sports_complex') || typeSet.has('swimming_pool')) categories.add('sports_venue');
+  if (typeSet.has('golf_course')) categories.add('golf');
+  if (typeSet.has('gym') || typeSet.has('fitness_center')) categories.add('gym_fitness');
+
+  if (categories.size === 0) {
+    if (place.type === 'restaurant') categories.add('restaurant');
+    if (place.type === 'wine') categories.add('wine_farm');
+    if (place.type === 'kids') categories.add('playground');
+    if (place.type === 'outdoor') categories.add('park');
+    if (place.type === 'hike') categories.add('hike_trail');
+    if (place.type === 'indoor') categories.add('museum');
+    if (place.type === 'active') categories.add('sports_venue');
+    if (place.type === 'golf') categories.add('golf');
+  }
+
+  return categories;
+}
+
+function hasSuggestedPublicSignal(place: Place, expected: string[]): boolean {
+  const typeSet = placeTypeSet(place);
+  const googleHints = ((place as any).googleHints || []) as Array<{ feature?: string }>;
+  const familyHints = ((place as any).familyHints || []) as Array<{ feature?: string }>;
+  const hintSet = new Set(
+    [...googleHints, ...familyHints]
+      .map((hint) => (hint?.feature || '').toLowerCase())
+      .filter(Boolean)
+  );
+  return expected.some((key) => typeSet.has(key) || hintSet.has(key));
+}
+
+function matchesFamilyConfirmedOrSuggested(place: Place, keys: string[]): boolean {
+  const normalized = new Set<string>();
+  keys.forEach((key) => {
+    normalized.add(key);
+    if (key === 'play_area') normalized.add('playground');
+    if (key === 'kids_activities') normalized.add('child_friendly_space');
+  });
+  const confirmed = [...normalized].some((key) => hasConfirmedFamilyFeature(place, key));
+  const suggested = hasSuggestedPublicSignal(place, [...normalized]);
+  return confirmed || suggested;
+}
+
+function matchesAccessibilityConfirmedOrSuggested(place: Place, keys: string[]): boolean {
+  const confirmed = keys.some((key) => hasConfirmedAccessibilityFeature(place, key));
+  const suggested = hasSuggestedPublicSignal(place, keys);
+  return confirmed || suggested;
+}
+
+function matchesRequirement(place: Place, requirement: RequirementFilter): boolean {
+  const categories = inferPrimaryCategories(place);
+  switch (requirement) {
+    case 'kid_friendly': {
+      return (
+        ['playground', 'indoor_play', 'park', 'zoo_aquarium', 'activity_centre'].some((key) =>
+          categories.has(key as PrimaryCategory)
+        ) ||
+        matchesFamilyConfirmedOrSuggested(place, ['play_area', 'playground', 'kids_menu', 'kids_activities'])
+      );
+    }
+    case 'stroller_friendly': {
+      return matchesFamilyConfirmedOrSuggested(place, ['stroller_friendly']);
+    }
+    case 'jungle_gym': {
+      return matchesFamilyConfirmedOrSuggested(place, ['play_area', 'playground']);
+    }
+    case 'wheelchair_friendly': {
+      return matchesAccessibilityConfirmedOrSuggested(place, [
+        'step_free_entry',
+        'accessible_toilet',
+        'accessible_parking',
+      ]);
+    }
+    case 'outdoor':
+      return ['park', 'beach', 'hike_trail', 'nature_reserve'].some((key) =>
+        categories.has(key as PrimaryCategory)
+      );
+    case 'indoor':
+      return ['indoor_play', 'museum', 'theatre_cinema', 'market', 'shopping'].some((key) =>
+        categories.has(key as PrimaryCategory)
+      );
+    default:
+      return true;
+  }
+}
+
+function getMustHavesButtonLabel(selected: RequirementFilter[]): string {
+  if (selected.length === 0) return 'Must haves';
+  if (selected.length === 1) return `Must haves: ${REQUIREMENT_LABELS[selected[0]]}`;
+  if (selected.length === 2) {
+    return `Must haves: ${REQUIREMENT_LABELS[selected[0]]}, ${REQUIREMENT_LABELS[selected[1]]}`;
+  }
+  return `Must haves: ${REQUIREMENT_LABELS[selected[0]]} +${selected.length - 1}`;
+}
+
 const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setView, onUpdateState, initialCircleId, onClearInitialCircle, initialTab, onTabChange }) => {
+  const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
   const userPrefs = state.userPreferences || {};
   const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner'>(initialTab || 'explore');
   
@@ -107,11 +290,20 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   const [newPartnerCircleName, setNewPartnerCircleName] = useState('');
   const [creatingPartnerCircle, setCreatingPartnerCircle] = useState(false);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
-  const [selectedFilter, setSelectedFilter] = useState<ActivityType>(userPrefs.lastCategory || 'all');
+  const [selectedFilter, setSelectedFilter] = useState<ExploreIntent>(userPrefs.lastCategory || 'all');
+  const [selectedRequirements, setSelectedRequirements] = useState<RequirementFilter[]>([]);
+  const [showMustHavesSheet, setShowMustHavesSheet] = useState(false);
   const [places, setPlaces] = useState<Place[]>([]);
+  const [placeAccessibilityById, setPlaceAccessibilityById] = useState<Record<string, AccessibilityFeatureValue[]>>({});
+  const [placeAccessibilitySummaryById, setPlaceAccessibilitySummaryById] = useState<Record<string, string>>({});
+  const [submittingAccessibilityForPlaceId, setSubmittingAccessibilityForPlaceId] = useState<string | null>(null);
+  const [placeFamilyFacilitiesById, setPlaceFamilyFacilitiesById] = useState<Record<string, FamilyFacilityValue[]>>({});
+  const [placeFamilyFacilitiesSummaryById, setPlaceFamilyFacilitiesSummaryById] = useState<Record<string, string>>({});
+  const [submittingFamilyFacilitiesForPlaceId, setSubmittingFamilyFacilitiesForPlaceId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [placesNextPageToken, setPlacesNextPageToken] = useState<string | null>(null);
+  const [pagingComplete, setPagingComplete] = useState(false);
+  const [placesServerConfigured, setPlacesServerConfigured] = useState<boolean | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   // Location state - hydrate from saved preferences
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(
@@ -149,7 +341,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     onUpdateState('userPreferences', newPrefs);
   }, [isGuest, userPrefs, onUpdateState]);
   
-  const persistCategory = useCallback((category: ActivityType) => {
+  const persistCategory = useCallback((category: ExploreIntent) => {
     const newPrefs = updateCategory(category, isGuest, userPrefs);
     onUpdateState('userPreferences', newPrefs);
   }, [isGuest, userPrefs, onUpdateState]);
@@ -241,6 +433,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   const enrichInFlightRef = useRef<Set<string>>(new Set());
   const fallbackImage = 'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=400&h=300&fit=crop';
   const placesSearchKeyRef = useRef<string>('');
+  const placesRequestIdRef = useRef<number>(0);
   const familyPoolResetRef = useRef<string | null>(null);
   const partnerLinkRequiresPro = import.meta.env.VITE_PARTNER_LINK_REQUIRES_PRO === 'true';
   const canLinkPartner = !partnerLinkRequiresPro || isPaid;
@@ -584,68 +777,73 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     }
   };
 
+  useEffect(() => {
+    if (!apiBase) return;
+    let cancelled = false;
+    const checkHealth = async () => {
+      try {
+        const response = await fetch(`${apiBase}/api/health`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!cancelled && typeof data?.placesConfigured === 'boolean') {
+          setPlacesServerConfigured(data.placesConfigured);
+        }
+      } catch {
+        // Keep silent on health check failures.
+      }
+    };
+    checkHealth();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBase]);
+
   // Fetch places when location, filter, radius, or search changes - uses Google Places API (fast, no AI cost)
   useEffect(() => {
-    const fetchPlaces = async () => {
-      if (!userLocation) return;
+    const requestId = ++placesRequestIdRef.current;
+    if (activeTab !== 'explore' || !userLocation) {
+      return;
+    }
 
+    const fetchPlaces = async () => {
       const searchKey = `${userLocation.lat.toFixed(3)}:${userLocation.lng.toFixed(3)}:${selectedFilter}:${radiusKm}:${searchQuery.trim().toLowerCase()}`;
       placesSearchKeyRef.current = searchKey;
       setLoading(true);
       setLoadingMore(false);
-      setPlacesNextPageToken(null);
+      setPagingComplete(false);
       try {
-        let response: { places: Place[]; nextPageToken: string | null };
-        if (searchQuery.trim()) {
-          // Use text search for queries
-          response = await textSearchPlacesPaged(searchQuery, userLocation.lat, userLocation.lng, radiusKm);
-        } else {
-          // Use nearby search for browsing - fast and cheap
-          response = await searchNearbyPlacesPaged(userLocation.lat, userLocation.lng, selectedFilter, radiusKm);
-        }
-        if (placesSearchKeyRef.current !== searchKey) return;
-        setPlaces(response.places);
-        setPlacesNextPageToken(response.nextPageToken || null);
+        const result = await searchExploreIntent(
+          selectedFilter,
+          userLocation.lat,
+          userLocation.lng,
+          radiusKm,
+          {
+            searchQuery: searchQuery.trim() || undefined,
+            isCancelled: () =>
+              placesSearchKeyRef.current !== searchKey || placesRequestIdRef.current !== requestId,
+            onProgress: (update) => {
+              if (placesSearchKeyRef.current !== searchKey || placesRequestIdRef.current !== requestId) return;
+              setPlaces(update.places);
+              setLoadingMore(update.isBackgroundLoading);
+            },
+          }
+        );
+        if (placesSearchKeyRef.current !== searchKey || placesRequestIdRef.current !== requestId) return;
+        setPlaces(result.places);
+        console.log('[FamPals] Intent debug summary:', result.debug);
+        setPagingComplete(true);
       } catch (error) {
         console.error('Error fetching places:', error);
       } finally {
-        if (placesSearchKeyRef.current === searchKey) {
+        if (placesSearchKeyRef.current === searchKey && placesRequestIdRef.current === requestId) {
           setLoading(false);
+          setLoadingMore(false);
         }
       }
     };
-    
-    if (activeTab === 'explore' && userLocation) {
-      fetchPlaces();
-    }
-  }, [selectedFilter, activeTab, userLocation, radiusKm, searchQuery]);
 
-  const handleLoadMorePlaces = async () => {
-    if (!userLocation || loadingMore || !placesNextPageToken) return;
-    const searchKey = `${userLocation.lat.toFixed(3)}:${userLocation.lng.toFixed(3)}:${selectedFilter}:${radiusKm}:${searchQuery.trim().toLowerCase()}`;
-    setLoadingMore(true);
-    try {
-      let response: { places: Place[]; nextPageToken: string | null };
-      if (searchQuery.trim()) {
-        response = await textSearchPlacesPaged(searchQuery, userLocation.lat, userLocation.lng, radiusKm, placesNextPageToken);
-      } else {
-        response = await searchNearbyPlacesPaged(userLocation.lat, userLocation.lng, selectedFilter, radiusKm, placesNextPageToken);
-      }
-      if (placesSearchKeyRef.current !== searchKey) return;
-      setPlaces((prev) => {
-        const existingIds = new Set(prev.map(place => place.id));
-        const deduped = response.places.filter(place => !existingIds.has(place.id));
-        return [...prev, ...deduped];
-      });
-      setPlacesNextPageToken(response.nextPageToken || null);
-    } catch (error) {
-      console.warn('Load more places failed.', error);
-    } finally {
-      if (placesSearchKeyRef.current === searchKey) {
-        setLoadingMore(false);
-      }
-    }
-  };
+    fetchPlaces();
+  }, [selectedFilter, activeTab, userLocation, radiusKm, searchQuery]);
 
   useEffect(() => {
     if (isGuest) return;
@@ -774,7 +972,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   };
   
   // Handler for category filter that also persists
-  const handleFilterChange = (category: ActivityType) => {
+  const handleFilterChange = (category: ExploreIntent) => {
     isEditingCategoryRef.current = true;
     if (categoryEditTimeoutRef.current) {
       window.clearTimeout(categoryEditTimeoutRef.current);
@@ -784,6 +982,12 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     }, 800);
     setSelectedFilter(category);
     persistCategory(category);
+  };
+
+  const toggleRequirement = (requirement: RequirementFilter) => {
+    setSelectedRequirements((prev) =>
+      prev.includes(requirement) ? prev.filter((item) => item !== requirement) : [...prev, requirement]
+    );
   };
 
   const mapSavedPlaceToPlace = (saved: SavedPlace): Place => {
@@ -798,11 +1002,95 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
       type: saved.type || 'all',
       priceLevel: saved.priceLevel,
       imageUrl: saved.imageUrl || fallbackImage,
+      accessibility: placeAccessibilityById[saved.placeId],
+      accessibilitySummary:
+        placeAccessibilitySummaryById[saved.placeId] ||
+        generateAccessibilitySummary(placeAccessibilityById[saved.placeId] || []),
+      familyFacilities: placeFamilyFacilitiesById[saved.placeId],
+      familyFacilitiesSummary:
+        placeFamilyFacilitiesSummaryById[saved.placeId] ||
+        generateFamilyFacilitiesSummary(placeFamilyFacilitiesById[saved.placeId] || []),
     };
     return place;
   };
 
   const savedPlaces = state.savedPlaces || [];
+  const accessibilityPlaceIds = useMemo(
+    () => [...new Set([...places.map((place) => place.id), ...savedPlaces.map((saved) => saved.placeId)])],
+    [places, savedPlaces]
+  );
+
+  useEffect(() => {
+    if (accessibilityPlaceIds.length === 0) return;
+    let cancelled = false;
+    loadPlaceAccessibilityByIds(accessibilityPlaceIds)
+      .then(({ accessibilityById, summaryById }) => {
+        if (cancelled) return;
+        setPlaceAccessibilityById((prev) => ({ ...prev, ...accessibilityById }));
+        setPlaceAccessibilitySummaryById((prev) => ({ ...prev, ...summaryById }));
+      })
+      .catch((err) => {
+        console.warn('Failed to load place accessibility summaries', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessibilityPlaceIds]);
+
+  useEffect(() => {
+    if (!db || accessibilityPlaceIds.length === 0) return;
+    const unsubs = accessibilityPlaceIds.map((placeId) =>
+      onSnapshot(doc(db, 'places', placeId), (snap) => {
+        if (!snap.exists()) return;
+        const data = snap.data() as { accessibility?: AccessibilityFeatureValue[]; accessibilitySummary?: string };
+        if (Array.isArray(data.accessibility)) {
+          setPlaceAccessibilityById((prev) => ({ ...prev, [placeId]: data.accessibility || [] }));
+        }
+        if (typeof data.accessibilitySummary === 'string') {
+          setPlaceAccessibilitySummaryById((prev) => ({ ...prev, [placeId]: data.accessibilitySummary || '' }));
+        }
+      })
+    );
+    return () => {
+      unsubs.forEach((unsub) => unsub());
+    };
+  }, [accessibilityPlaceIds]);
+
+  useEffect(() => {
+    if (accessibilityPlaceIds.length === 0) return;
+    let cancelled = false;
+    loadPlaceFamilyFacilitiesByIds(accessibilityPlaceIds)
+      .then(({ familyFacilitiesById, summaryById }) => {
+        if (cancelled) return;
+        setPlaceFamilyFacilitiesById((prev) => ({ ...prev, ...familyFacilitiesById }));
+        setPlaceFamilyFacilitiesSummaryById((prev) => ({ ...prev, ...summaryById }));
+      })
+      .catch((err) => {
+        console.warn('Failed to load place family facilities summaries', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessibilityPlaceIds]);
+
+  useEffect(() => {
+    if (!db || accessibilityPlaceIds.length === 0) return;
+    const unsubs = accessibilityPlaceIds.map((placeId) =>
+      onSnapshot(doc(db, 'places', placeId), (snap) => {
+        if (!snap.exists()) return;
+        const data = snap.data() as { familyFacilities?: FamilyFacilityValue[]; familyFacilitiesSummary?: string };
+        if (Array.isArray(data.familyFacilities)) {
+          setPlaceFamilyFacilitiesById((prev) => ({ ...prev, [placeId]: data.familyFacilities || [] }));
+        }
+        if (typeof data.familyFacilitiesSummary === 'string') {
+          setPlaceFamilyFacilitiesSummaryById((prev) => ({ ...prev, [placeId]: data.familyFacilitiesSummary || '' }));
+        }
+      })
+    );
+    return () => {
+      unsubs.forEach((unsub) => unsub());
+    };
+  }, [accessibilityPlaceIds]);
 
   const buildSavedPlaceSnapshot = (place: Place): SavedPlace => ({
     placeId: place.id,
@@ -861,6 +1149,80 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
       upsertSavedPlace(uid, snapshot).catch(err => {
         console.warn('Failed to save place snapshot', err);
       });
+    }
+  };
+
+  const handleSubmitAccessibilityContribution = async (
+    placeId: string,
+    payload: { features: AccessibilityFeatureValue[]; comment?: string }
+  ) => {
+    if (isGuest) {
+      alert('Sign in to contribute accessibility information.');
+      return;
+    }
+    const uid = state.user?.uid || auth?.currentUser?.uid;
+    if (!uid) {
+      alert('You need to be signed in to contribute.');
+      return;
+    }
+    setSubmittingAccessibilityForPlaceId(placeId);
+    try {
+      const updated = await submitAccessibilityReport({
+        placeId,
+        userId: uid,
+        userDisplayName: state.user?.displayName || state.user?.email || 'Member',
+        features: payload.features,
+        comment: payload.comment,
+      });
+      setPlaceAccessibilityById((prev) => ({ ...prev, [placeId]: updated.accessibility }));
+      setPlaceAccessibilitySummaryById((prev) => ({ ...prev, [placeId]: updated.accessibilitySummary }));
+      setPlaces((prev) =>
+        prev.map((place) =>
+          place.id === placeId
+            ? { ...place, accessibility: updated.accessibility, accessibilitySummary: updated.accessibilitySummary }
+            : place
+        )
+      );
+      setSelectedPlace((prev) =>
+        prev && prev.id === placeId
+          ? { ...prev, accessibility: updated.accessibility, accessibilitySummary: updated.accessibilitySummary }
+          : prev
+      );
+    } catch (err) {
+      console.warn('Failed to submit accessibility contribution', err);
+      throw err;
+    } finally {
+      setSubmittingAccessibilityForPlaceId(null);
+    }
+  };
+
+  const handleSubmitFamilyFacilitiesContribution = async (
+    placeId: string,
+    payload: { features: FamilyFacilityValue[]; comment?: string }
+  ) => {
+    if (isGuest) {
+      alert('Sign in to contribute family facilities information.');
+      return;
+    }
+    const uid = state.user?.uid || auth?.currentUser?.uid;
+    if (!uid) {
+      alert('You need to be signed in to contribute.');
+      return;
+    }
+    setSubmittingFamilyFacilitiesForPlaceId(placeId);
+    try {
+      await submitFamilyFacilitiesReport({
+        placeId,
+        userId: uid,
+        userDisplayName: state.user?.displayName || state.user?.email || 'Member',
+        features: payload.features,
+        comment: payload.comment,
+      });
+    } catch (err) {
+      console.warn('Failed to submit family facilities contribution', err);
+      throw err;
+    } finally {
+      setSubmittingFamilyFacilitiesForPlaceId(null);
     }
   };
 
@@ -1096,6 +1458,65 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   }, [state.memories, onUpdateState]);
 
   const favoritePlaces = savedPlaces.map(mapSavedPlaceToPlace);
+  const accessibilityNeeds: UserAccessibilityNeeds = state.accessibilityNeeds || {
+    usesWheelchair: false,
+    needsStepFree: false,
+    needsAccessibleToilet: false,
+    prefersPavedPaths: false,
+    usesPushchair: false,
+  };
+  const placesWithAccessibility = useMemo(
+    () =>
+      places.map((place) => {
+        const accessibility = placeAccessibilityById[place.id] || place.accessibility || [];
+        const familyFacilities = placeFamilyFacilitiesById[place.id] || place.familyFacilities || [];
+        return {
+          ...place,
+          accessibility,
+          accessibilitySummary:
+            placeAccessibilitySummaryById[place.id] ||
+            place.accessibilitySummary ||
+            generateAccessibilitySummary(accessibility),
+          familyFacilities,
+          familyFacilitiesSummary:
+            placeFamilyFacilitiesSummaryById[place.id] ||
+            place.familyFacilitiesSummary ||
+            generateFamilyFacilitiesSummary(familyFacilities),
+        };
+      }),
+    [places, placeAccessibilityById, placeAccessibilitySummaryById, placeFamilyFacilitiesById, placeFamilyFacilitiesSummaryById]
+  );
+  const rankedPlaces = useMemo(
+    () => rankPlacesWithAccessibilityNeeds(placesWithAccessibility, accessibilityNeeds),
+    [placesWithAccessibility, accessibilityNeeds]
+  );
+  const intentAndRequirementFilteredPlaces = useMemo(
+    () =>
+      rankedPlaces.filter((place) => {
+        if (selectedRequirements.length === 0) return true;
+        return selectedRequirements.every((requirement) => matchesRequirement(place, requirement));
+      }),
+    [rankedPlaces, selectedRequirements]
+  );
+  const mustHavesButtonLabel = useMemo(
+    () => getMustHavesButtonLabel(selectedRequirements),
+    [selectedRequirements]
+  );
+  const selectedPlaceWithAccessibility = selectedPlace
+    ? {
+      ...selectedPlace,
+      accessibility: placeAccessibilityById[selectedPlace.id] || selectedPlace.accessibility || [],
+      accessibilitySummary:
+        placeAccessibilitySummaryById[selectedPlace.id] ||
+        selectedPlace.accessibilitySummary ||
+        generateAccessibilitySummary(placeAccessibilityById[selectedPlace.id] || selectedPlace.accessibility || []),
+      familyFacilities: placeFamilyFacilitiesById[selectedPlace.id] || selectedPlace.familyFacilities || [],
+      familyFacilitiesSummary:
+        placeFamilyFacilitiesSummaryById[selectedPlace.id] ||
+        selectedPlace.familyFacilitiesSummary ||
+        generateFamilyFacilitiesSummary(placeFamilyFacilitiesById[selectedPlace.id] || selectedPlace.familyFacilities || []),
+    }
+    : null;
 
   const handleIncrementAiRequests = async () => {
     const current = state.entitlement?.ai_requests_this_month || 0;
@@ -1277,6 +1698,43 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         {activeTab === 'explore' && (
           <>
             <Filters selected={selectedFilter} onChange={handleFilterChange} />
+            <p className="mt-2 text-xs font-semibold text-slate-500">
+              {getExploreIntentSubtitle(selectedFilter)}
+            </p>
+            {placesServerConfigured === false && (
+              <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                <p className="text-xs font-semibold text-amber-700">
+                  Places API is not configured on the server. Explore results may be limited.
+                </p>
+              </div>
+            )}
+            <div className="bg-white rounded-2xl p-4 mt-2 border border-slate-100 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setShowMustHavesSheet(true)}
+                className="w-full h-11 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold flex items-center justify-center px-3 text-center whitespace-nowrap overflow-hidden text-ellipsis"
+              >
+                <span className="transition-opacity duration-150">{mustHavesButtonLabel}</span>
+              </button>
+              {selectedRequirements.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {selectedRequirements.slice(0, 2).map((requirement) => (
+                    <span
+                      key={requirement}
+                      className="px-2 py-1 rounded-full text-[10px] font-semibold bg-sky-50 text-sky-700 border border-sky-100"
+                    >
+                      {REQUIREMENT_LABELS[requirement]}
+                    </span>
+                  ))}
+                  {selectedRequirements.length > 2 && (
+                    <span className="px-2 py-1 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600">
+                      +{selectedRequirements.length - 2}
+                    </span>
+                  )}
+                </div>
+              )}
+              {/* Future hook: cuisine intents (e.g., sushi) can be layered here using google place types + keyword matching on place name/types. */}
+            </div>
             
             {/* Radius Slider */}
             <div className="bg-white rounded-2xl p-4 mt-4 border border-slate-100 shadow-sm">
@@ -1451,7 +1909,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
               </div>
             ) : (
               <div className="space-y-4 mt-4">
-                {places
+                {intentAndRequirementFilteredPlaces
                   .filter(place => !hideSavedPlaces || !state.favorites.includes(place.id))
                   .map(place => (
                   <PlaceCard 
@@ -1463,24 +1921,21 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                     onClick={() => setSelectedPlace(place)}
                   />
                 ))}
-                {hideSavedPlaces && places.filter(p => !state.favorites.includes(p.id)).length === 0 && places.length > 0 && (
+                {hideSavedPlaces && intentAndRequirementFilteredPlaces.filter(p => !state.favorites.includes(p.id)).length === 0 && intentAndRequirementFilteredPlaces.length > 0 && (
                   <div className="py-12 text-center bg-white rounded-2xl border border-slate-100">
                     <span className="text-4xl mb-3 block">🎊</span>
                     <p className="text-slate-600 font-semibold">You've saved them all!</p>
                     <p className="text-slate-400 text-sm mt-1">Try a different category or expand your search radius.</p>
                   </div>
                 )}
-                {placesNextPageToken ? (
-                  <div className="pt-4 pb-8 flex justify-center">
-                    <button
-                      onClick={handleLoadMorePlaces}
-                      disabled={loadingMore}
-                      className="px-8 py-4 rounded-2xl text-sm font-bold bg-sky-500 text-white shadow-lg shadow-sky-200 disabled:opacity-60 active:scale-95 transition-transform min-h-[52px]"
-                    >
-                      {loadingMore ? 'Loading more places...' : 'Load More Places'}
-                    </button>
+                {loadingMore && (
+                  <div className="pt-4 pb-2 flex justify-center">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-sky-50 rounded-xl border border-sky-100">
+                      <span className="text-sm font-semibold text-sky-600">Loading more places...</span>
+                    </div>
                   </div>
-                ) : places.length > 0 && (
+                )}
+                {pagingComplete && !loadingMore && intentAndRequirementFilteredPlaces.length > 0 && (
                   <div className="pt-6 pb-8 text-center">
                     <div className="inline-flex items-center gap-2 px-6 py-3 bg-slate-100 rounded-2xl">
                       <span className="text-lg">🎉</span>
@@ -2112,21 +2567,32 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         </div>
       )}
 
-      {selectedPlace && (
+      <MustHavesSheet
+        isOpen={showMustHavesSheet}
+        onClose={() => setShowMustHavesSheet(false)}
+        title="Must haves"
+        selected={selectedRequirements}
+        labels={REQUIREMENT_LABELS}
+        options={Object.keys(REQUIREMENT_LABELS) as RequirementFilter[]}
+        onToggle={toggleRequirement}
+        onClear={() => setSelectedRequirements([])}
+      />
+
+      {selectedPlaceWithAccessibility && (
         <VenueProfile 
-          place={selectedPlace} 
-          isFavorite={state.favorites.includes(selectedPlace.id)}
-          isVisited={(state.visitedPlaces || []).some(v => v.placeId === selectedPlace.id)}
+          place={selectedPlaceWithAccessibility} 
+          isFavorite={state.favorites.includes(selectedPlaceWithAccessibility.id)}
+          isVisited={(state.visitedPlaces || []).some(v => v.placeId === selectedPlaceWithAccessibility.id)}
           memories={state.memories}
           memoryCount={state.memories.length}
-          onToggleFavorite={() => toggleFavorite(selectedPlace)}
-          onMarkVisited={() => markVisited(selectedPlace)}
+          onToggleFavorite={() => toggleFavorite(selectedPlaceWithAccessibility)}
+          onMarkVisited={() => markVisited(selectedPlaceWithAccessibility)}
           onClose={() => setSelectedPlace(null)}
           onUpdateDetails={(data) => {
-            const newDetails = { ...state.favoriteDetails, [selectedPlace.id]: { ...state.favoriteDetails[selectedPlace.id], ...data, placeId: selectedPlace.id } };
+            const newDetails = { ...state.favoriteDetails, [selectedPlaceWithAccessibility.id]: { ...state.favoriteDetails[selectedPlaceWithAccessibility.id], ...data, placeId: selectedPlaceWithAccessibility.id } };
             onUpdateState('favoriteDetails', newDetails);
           }}
-          favoriteData={state.favoriteDetails[selectedPlace.id]}
+          favoriteData={state.favoriteDetails[selectedPlaceWithAccessibility.id]}
           childrenAges={state.children?.map(c => c.age) || []}
           isGuest={isGuest}
           entitlement={state.entitlement}
@@ -2137,6 +2603,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
           userName={state.user?.displayName || 'You'}
           userId={state.user?.uid || ''}
           tripContext={prefFilterMode !== 'all' ? combinedPreferences : undefined}
+          onSubmitAccessibilityContribution={(votes) => handleSubmitAccessibilityContribution(selectedPlaceWithAccessibility.id, votes)}
+          isSubmittingAccessibilityContribution={submittingAccessibilityForPlaceId === selectedPlaceWithAccessibility.id}
+          onSubmitFamilyFacilitiesContribution={(votes) => handleSubmitFamilyFacilitiesContribution(selectedPlaceWithAccessibility.id, votes)}
+          isSubmittingFamilyFacilitiesContribution={submittingFamilyFacilitiesForPlaceId === selectedPlaceWithAccessibility.id}
           onTagMemoryToCircle={handleTagMemoryToCircle}
           onAddToCircle={(circleId, groupPlace) => {
             if (circleId === 'partner') {

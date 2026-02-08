@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import type { ActivityType, UserPreferences, Preferences, Child, PartnerLink, ProfileInfo } from '../types';
+import type { ExploreIntent, UserPreferences, Preferences, Child, PartnerLink, ProfileInfo } from '../types';
 import { FOOD_PREFERENCES, ALLERGY_OPTIONS, ACTIVITY_PREFERENCES } from '../types';
 
 interface OnboardingProps {
@@ -19,15 +19,14 @@ interface OnboardingProps {
   }) => void;
 }
 
-const CATEGORY_OPTIONS: { key: ActivityType; label: string; icon: string }[] = [
-  { key: 'all', label: 'All', icon: '🌟' },
-  { key: 'restaurant', label: 'Food', icon: '🍕' },
-  { key: 'outdoor', label: 'Outdoors', icon: '🌿' },
-  { key: 'indoor', label: 'Indoor', icon: '🎮' },
-  { key: 'active', label: 'Active', icon: '⚽' },
-  { key: 'hike', label: 'Hike', icon: '🥾' },
-  { key: 'wine', label: 'Wine', icon: '🍷' },
-  { key: 'golf', label: 'Golf', icon: '⛳' },
+const CATEGORY_OPTIONS: { key: ExploreIntent; label: string; icon: string }[] = [
+  { key: 'all', label: 'All', icon: '?' },
+  { key: 'eat_drink', label: 'Eat and drink', icon: '???' },
+  { key: 'play_kids', label: 'Play and kids', icon: '??' },
+  { key: 'outdoors', label: 'Outdoors', icon: '??' },
+  { key: 'things_to_do', label: 'Things to do', icon: '???' },
+  { key: 'sport_active', label: 'Sport and active', icon: '?' },
+  { key: 'indoor', label: 'Indoor', icon: '???' },
 ];
 
 const generateInviteCode = () => {
@@ -64,7 +63,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
 }) => {
   const [step, setStep] = useState(0);
   const [radiusKm, setRadiusKm] = useState(initialUserPreferences?.lastRadius || 10);
-  const [category, setCategory] = useState<ActivityType>(initialUserPreferences?.lastCategory || 'all');
+  const [category, setCategory] = useState<ExploreIntent>(initialUserPreferences?.lastCategory || 'all');
   const [profileName, setProfileName] = useState(initialProfileInfo?.displayName || userName || '');
   const [profileAge, setProfileAge] = useState(
     initialProfileInfo?.age ? String(initialProfileInfo.age) : ''
@@ -485,8 +484,8 @@ const StepFamily: React.FC<{
 const StepPreferences: React.FC<{
   radiusKm: number;
   setRadiusKm: (v: number) => void;
-  category: ActivityType;
-  setCategory: (v: ActivityType) => void;
+  category: ExploreIntent;
+  setCategory: (v: ExploreIntent) => void;
   preferences: Preferences;
   togglePreference: (key: keyof Preferences, value: string) => void;
 }> = ({ radiusKm, setRadiusKm, category, setCategory, preferences, togglePreference }) => (
@@ -600,3 +599,4 @@ const PreferenceSection: React.FC<{
 );
 
 export default Onboarding;
+

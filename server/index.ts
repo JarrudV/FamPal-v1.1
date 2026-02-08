@@ -1,20 +1,66 @@
 import express, { Request, Response, NextFunction } from 'express';
-import cors from 'cors';
+import type { CorsOptions, CorsOptionsDelegate } from 'cors';
+import { createRequire } from 'module';
 import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
+import { getExploreIntentDefinition, type ExploreIntentId } from './exploreIntentConfig.js';
+
+const require = createRequire(import.meta.url);
+const cors = require('cors/lib/index.js') as (options?: CorsOptions | CorsOptionsDelegate<Request>) => express.RequestHandler;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function resolveFirstExisting(candidates: string[]): string | null {
+  for (const candidate of candidates) {
+    const resolved = path.resolve(__dirname, '..', candidate);
+    if (fs.existsSync(resolved)) {
+      return resolved;
+    }
+  }
+  return null;
+}
+
+function loadEnvFiles(): string[] {
+  const appEnv = (process.env.APP_ENV || '').toLowerCase();
+  const nodeEnv = (process.env.NODE_ENV || '').toLowerCase();
+  const runtimeEnv = appEnv || (nodeEnv === 'production' ? 'production' : 'development');
+  const loadPlanByEnv: Record<string, string[][]> = {
+    development: [['.env.local', 'env.local'], ['.env.development', 'env.development'], ['.env', 'env']],
+    staging: [['.env.staging', 'env.staging'], ['.env', 'env']],
+    production: [['.env.production', 'env.production'], ['.env', 'env']],
+  };
+  const loadPlan = loadPlanByEnv[runtimeEnv] || loadPlanByEnv.development;
+
+  const loaded: string[] = [];
+  for (const candidates of loadPlan) {
+    const envFile = resolveFirstExisting(candidates);
+    if (!envFile) continue;
+    const result = dotenv.config({ path: envFile, override: false, quiet: true });
+    if (!result.error) {
+      loaded.push(path.basename(envFile));
+    }
+  }
+  return loaded;
+}
+
+const envFilesLoaded = loadEnvFiles();
+
+const placesFromAlias = process.env.GOOGLE_PLACES_API_KEY || process.env.VITE_GOOGLE_PLACES_API_KEY || '';
+if (!process.env.PLACES_API_KEY && placesFromAlias) {
+  process.env.PLACES_API_KEY = placesFromAlias;
+}
+const PLACES_API_KEY = process.env.PLACES_API_KEY || '';
 
 // Log startup immediately
 console.log('[FamPals API] Starting server...');
 console.log('[FamPals API] PORT env:', process.env.PORT);
 console.log('[FamPals API] NODE_ENV:', process.env.NODE_ENV);
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Extend Express Request type to include verified user
 interface AuthenticatedRequest extends Request {
@@ -42,7 +88,7 @@ const allowedOrigins = [
 const isProduction = process.env.NODE_ENV === 'production';
 app.use(cors({
   origin: isProduction
-    ? (origin, callback) => {
+    ? (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       if (!origin) return callback(null, true);
       if (allowedOrigins.includes(origin)) return callback(null, true);
       return callback(null, false);
@@ -55,14 +101,16 @@ const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || '';
 const PAYSTACK_PUBLIC_KEY = process.env.PAYSTACK_PUBLIC_KEY || '';
 const APP_URL = process.env.APP_URL
   || (replitDomains[0] ? `https://${replitDomains[0]}` : 'http://localhost:5000');
-
-const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY || process.env.VITE_GOOGLE_PLACES_API_KEY || '';
+const GOOGLE_PLACES_API_KEY = PLACES_API_KEY;
+const PLACES_CONFIGURED = !!GOOGLE_PLACES_API_KEY;
 
 console.log('[FamPals API] Startup config:', {
   port: process.env.PORT || 8080,
+  appEnv: process.env.APP_ENV || (process.env.NODE_ENV === 'production' ? 'production' : 'development'),
   nodeEnv: process.env.NODE_ENV,
+  envFilesLoaded,
   paystackConfigured: !!PAYSTACK_SECRET_KEY,
-  placesConfigured: !!GOOGLE_PLACES_API_KEY,
+  placesConfigured: PLACES_CONFIGURED,
 });
 
 // Initialize Firebase Admin SDK
@@ -108,7 +156,7 @@ async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextF
   }
 }
 
-if (!GOOGLE_PLACES_API_KEY) {
+if (!PLACES_CONFIGURED) {
   console.warn('[FamPals API] Google Places API key is not configured. Places search will fail.');
 }
 
@@ -127,6 +175,19 @@ function resolveLegacyType(type?: string | string[]) {
   if (!type) return undefined;
   const key = Array.isArray(type) ? type[0] : type;
   return LEGACY_PLACE_TYPE_MAP[key] || undefined;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizeType(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, '_').trim();
+}
+
+function includesAny(text: string, keywords: string[]): boolean {
+  const haystack = text.toLowerCase();
+  return keywords.some((keyword) => haystack.includes(keyword.toLowerCase()));
 }
 
 interface PlanConfig {
@@ -163,7 +224,12 @@ function verifyPaystackSignature(rawBody: Buffer, signature: string): boolean {
 }
 
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    placesConfigured: PLACES_CONFIGURED,
+    nodeEnv: process.env.NODE_ENV || 'development',
+  });
 });
 
 app.get('/api/places/nearby', async (req, res) => {
@@ -211,6 +277,7 @@ app.get('/api/places/nearby', async (req, res) => {
     return res.json({
       results: data.results || [],
       nextPageToken: data.next_page_token || null,
+      hasMore: !!data.next_page_token,
     });
   } catch (error) {
     console.error('Places nearby error:', error);
@@ -263,10 +330,147 @@ app.get('/api/places/text', async (req, res) => {
     return res.json({
       results: data.results || [],
       nextPageToken: data.next_page_token || null,
+      hasMore: !!data.next_page_token,
     });
   } catch (error) {
     console.error('Places text search error:', error);
     return res.status(500).json({ error: 'Places search failed' });
+  }
+});
+
+app.get('/api/places/intent', async (req, res) => {
+  try {
+    const apiKey = GOOGLE_PLACES_API_KEY || (typeof req.query.apiKey === 'string' ? req.query.apiKey : '');
+    if (!apiKey) {
+      return res.status(500).json({ error: 'Places API not configured' });
+    }
+    const intent = (typeof req.query.intent === 'string' ? req.query.intent : 'all') as ExploreIntentId;
+    const lat = Number(req.query.lat);
+    const lng = Number(req.query.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({ error: 'Missing or invalid lat/lng' });
+    }
+    const radiusKm = Number(req.query.radiusKm || 10);
+    const radiusMeters = Math.min(Math.max(radiusKm, 0.1) * 1000, 50000);
+    const searchQuery = typeof req.query.searchQuery === 'string' ? req.query.searchQuery.trim() : '';
+    const definition = getExploreIntentDefinition(intent);
+    const queries = Array.from(
+      new Set((searchQuery ? [searchQuery, ...definition.queries.slice(0, 2)] : definition.queries).map((q) => q.toLowerCase().trim()))
+    );
+
+    const dedupeMap = new Map<string, any>();
+    const perQueryCounts: Record<string, { pagesFetched: number; fetchedResults: number; uniqueAdded: number }> = {};
+
+    console.log(`[FamPals API] Explore intent selected: ${intent}`);
+    console.log(`[FamPals API] Intent queries executed: ${queries.join(', ')}`);
+
+    for (const query of queries) {
+      let nextPageToken: string | undefined = undefined;
+      let hasMore = true;
+      let page = 1;
+      let fetchedResults = 0;
+      const beforeUnique = dedupeMap.size;
+
+      while (page <= 3 && hasMore) {
+        if (page > 1) {
+          await sleep(2000);
+        }
+
+        const params = new URLSearchParams({
+          key: apiKey,
+          query: query,
+          location: `${lat},${lng}`,
+          radius: `${radiusMeters}`,
+        });
+        if (nextPageToken) {
+          params.set('pagetoken', nextPageToken);
+        }
+
+        const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?${params.toString()}`;
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.status === 'INVALID_REQUEST' && nextPageToken) {
+          await sleep(2000);
+          continue;
+        }
+        if (data.status && data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+          console.warn('[FamPals API] Intent text search warning:', data.status, data.error_message || '');
+          break;
+        }
+
+        const results = Array.isArray(data.results) ? data.results : [];
+        fetchedResults += results.length;
+        for (const result of results) {
+          const placeId = result?.place_id || result?.id;
+          if (!placeId) continue;
+          dedupeMap.set(placeId, result);
+        }
+
+        const mergedResults = Array.from(dedupeMap.values());
+        const filtered = mergedResults.filter((place) => {
+          const types = (Array.isArray(place?.types) ? place.types : []).map((t: string) => normalizeType(t));
+          const typeSet = new Set(types);
+          const text = `${place?.name || ''} ${place?.formatted_address || ''}`.toLowerCase();
+          const includeTypes = definition.includeTypes.map(normalizeType);
+          const excludeTypes = definition.excludeTypes.map(normalizeType);
+
+          if (includesAny(text, definition.keywordExclude)) return false;
+          if (excludeTypes.some((type) => typeSet.has(type))) return false;
+          if (includeTypes.length === 0) return true;
+          if (includeTypes.some((type) => typeSet.has(type))) return true;
+          return includesAny(text, definition.keywordInclude);
+        });
+
+        perQueryCounts[query] = {
+          pagesFetched: page,
+          fetchedResults,
+          uniqueAdded: dedupeMap.size - beforeUnique,
+        };
+
+        console.log(`[FamPals API] Query "${query}" page ${page}: ${results.length} results, hasMore: ${!!data.next_page_token}`);
+        console.log(`[FamPals API] Merge count after "${query}" page ${page}: ${mergedResults.length} before filter, ${filtered.length} after filter`);
+
+        nextPageToken = data.next_page_token || undefined;
+        hasMore = !!nextPageToken;
+        page += 1;
+      }
+    }
+
+    const mergedResults = Array.from(dedupeMap.values());
+    const filteredResults = mergedResults.filter((place) => {
+      const types = (Array.isArray(place?.types) ? place.types : []).map((t: string) => normalizeType(t));
+      const typeSet = new Set(types);
+      const text = `${place?.name || ''} ${place?.formatted_address || ''}`.toLowerCase();
+      const includeTypes = definition.includeTypes.map(normalizeType);
+      const excludeTypes = definition.excludeTypes.map(normalizeType);
+
+      if (includesAny(text, definition.keywordExclude)) return false;
+      if (excludeTypes.some((type) => typeSet.has(type))) return false;
+      if (includeTypes.length === 0) return true;
+      if (includeTypes.some((type) => typeSet.has(type))) return true;
+      return includesAny(text, definition.keywordInclude);
+    });
+
+    console.log(`[FamPals API] Intent "${intent}" filter counts: before=${mergedResults.length}, after=${filteredResults.length}`);
+
+    return res.json({
+      places: filteredResults,
+      results: filteredResults,
+      hasMore: false,
+      nextPageToken: null,
+      debug: {
+        intent,
+        subtitle: definition.subtitle,
+        queriesRun: queries,
+        perQueryCounts,
+        totalBeforeFilter: mergedResults.length,
+        totalAfterFilter: filteredResults.length,
+      },
+    });
+  } catch (error) {
+    console.error('Places intent search error:', error);
+    return res.status(500).json({ error: 'Places intent search failed' });
   }
 });
 

@@ -1,23 +1,20 @@
-
 import React from 'react';
-import { ActivityType } from '../types';
+import { ExploreIntent } from '../types';
 
 interface FiltersProps {
-  selected: ActivityType;
-  onChange: (type: ActivityType) => void;
+  selected: ExploreIntent;
+  onChange: (type: ExploreIntent) => void;
 }
 
 const Filters: React.FC<FiltersProps> = ({ selected, onChange }) => {
-  const categories: {id: ActivityType, label: string, icon: string}[] = [
+  const categories: { id: ExploreIntent; label: string; icon: string }[] = [
     { id: 'all', label: 'All', icon: '✨' },
-    { id: 'kids', label: 'Kids', icon: '🧒' },
-    { id: 'restaurant', label: 'Dine', icon: '🍕' },
-    { id: 'wine', label: 'Wine Farms', icon: '🍷' },
-    { id: 'outdoor', label: 'Parks', icon: '🌳' },
-    { id: 'hike', label: 'Hikes', icon: '⛰️' },
-    { id: 'active', label: 'Active', icon: '⚽' },
+    { id: 'eat_drink', label: 'Eat and drink', icon: '🍽️' },
+    { id: 'play_kids', label: 'Play and kids', icon: '🛝' },
+    { id: 'outdoors', label: 'Outdoors', icon: '🌿' },
+    { id: 'things_to_do', label: 'Things to do', icon: '🎟️' },
+    { id: 'sport_active', label: 'Sport and active', icon: '⚽' },
     { id: 'indoor', label: 'Indoor', icon: '🏛️' },
-    { id: 'golf', label: 'Golf', icon: '⛳' },
   ];
 
   return (
@@ -28,14 +25,20 @@ const Filters: React.FC<FiltersProps> = ({ selected, onChange }) => {
           onClick={() => onChange(cat.id)}
           className="flex flex-col items-center gap-3 shrink-0"
         >
-          <div className={`w-16 h-16 rounded-[24px] flex items-center justify-center text-2xl transition-all duration-300 ${
-            selected === cat.id 
-              ? 'bg-[#0EA5E9] text-white shadow-xl shadow-sky-200 -translate-y-1' 
-              : 'bg-white text-slate-400 shadow-sm border border-slate-50'
-          }`}>
+          <div
+            className={`w-16 h-16 rounded-[24px] flex items-center justify-center text-2xl transition-all duration-300 ${
+              selected === cat.id
+                ? 'bg-[#0EA5E9] text-white shadow-xl shadow-sky-200 -translate-y-1'
+                : 'bg-white text-slate-400 shadow-sm border border-slate-50'
+            }`}
+          >
             {cat.icon}
           </div>
-          <span className={`text-[11px] font-extrabold tracking-tighter uppercase ${selected === cat.id ? 'text-[#0EA5E9]' : 'text-slate-400'}`}>
+          <span
+            className={`text-[11px] font-extrabold tracking-tighter uppercase ${
+              selected === cat.id ? 'text-[#0EA5E9]' : 'text-slate-400'
+            }`}
+          >
             {cat.label}
           </span>
         </button>
@@ -45,3 +48,4 @@ const Filters: React.FC<FiltersProps> = ({ selected, onChange }) => {
 };
 
 export default Filters;
+

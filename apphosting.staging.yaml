@@ -1,0 +1,55 @@
+runConfig:
+  cpu: 1
+  memoryMiB: 512
+  minInstances: 0
+  maxInstances: 5
+  concurrency: 80
+
+env:
+  - variable: NODE_ENV
+    value: production
+    availability:
+      - RUNTIME
+  - variable: APP_ENV
+    value: staging
+    availability:
+      - RUNTIME
+  - variable: VITE_FIREBASE_API_KEY
+    secret: VITE_FIREBASE_API_KEY
+    availability:
+      - BUILD
+  - variable: VITE_FIREBASE_AUTH_DOMAIN
+    secret: VITE_FIREBASE_AUTH_DOMAIN
+    availability:
+      - BUILD
+  - variable: VITE_FIREBASE_PROJECT_ID
+    secret: VITE_FIREBASE_PROJECT_ID
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: VITE_FIREBASE_STORAGE_BUCKET
+    secret: VITE_FIREBASE_STORAGE_BUCKET
+    availability:
+      - BUILD
+  - variable: VITE_FIREBASE_MESSAGING_SENDER_ID
+    secret: VITE_FIREBASE_MESSAGING_SENDER_ID
+    availability:
+      - BUILD
+  - variable: VITE_FIREBASE_APP_ID
+    secret: VITE_FIREBASE_APP_ID
+    availability:
+      - BUILD
+  - variable: VITE_FIREBASE_MEASUREMENT_ID
+    secret: VITE_FIREBASE_MEASUREMENT_ID
+    availability:
+      - BUILD
+  - variable: VITE_GEMINI_API_KEY
+    secret: VITE_GEMINI_API_KEY
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: VITE_GOOGLE_PLACES_API_KEY
+    secret: VITE_GOOGLE_PLACES_API_KEY
+    availability:
+      - BUILD
+      - RUNTIME

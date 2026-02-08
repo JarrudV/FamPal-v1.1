@@ -1,0 +1,18 @@
+[
+  {
+    "origin": [
+      "https://app.fampal.co.za",
+      "https://fampal.co.za",
+      "http://localhost:5173",
+      "http://localhost:5000"
+    ],
+    "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
+    "responseHeader": [
+      "Content-Type",
+      "Authorization",
+      "x-goog-resumable",
+      "x-goog-meta-*"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]

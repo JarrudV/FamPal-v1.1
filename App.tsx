@@ -53,6 +53,13 @@ const getInitialState = (user: User | null, guestPrefs?: UserPreferences): AppSt
   children: [],
   spouseName: '',
   linkedEmail: '',
+  accessibilityNeeds: {
+    usesWheelchair: false,
+    needsStepFree: false,
+    needsAccessibleToilet: false,
+    prefersPavedPaths: false,
+    usesPushchair: false,
+  },
   groups: [],
   friendCircles: [],
   entitlement: getDefaultEntitlement(),

@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "fampals-56984122-8166e"
-  }
+    "default": "fampals-56984122-8166e",
+    "staging": "fampal-staging"
+  },
+  "targets": {},
+  "etags": {}
 }
