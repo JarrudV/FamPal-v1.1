@@ -215,7 +215,7 @@ export function createDefaultExploreFilters(): ExploreFilters {
     indoorOutdoor: [],
     strict: {
       foodTypes: false,
-      venueTypes: true,
+      venueTypes: false,
       kidPrefs: false,
       accessibility: false,
       indoorOutdoor: false,
@@ -283,7 +283,7 @@ export function derivePlaceCapabilities(place: Place): PlaceCapabilities {
   const nameAndDesc = `${place.name || ''} ${place.description || ''}`.toLowerCase();
   if (typeSet.has('market') || keywordMatches(nameAndDesc, ['market'])) venueTypes.add('market');
 
-  const isWineFarm = typeSet.has('winery') || typeSet.has('vineyard') || keywordMatches(nameAndDesc, ['wine farm', 'wine estate', 'wine cellar', 'cellar door']);
+  const isWineFarm = place.type === 'wine' || typeSet.has('winery') || typeSet.has('vineyard') || keywordMatches(nameAndDesc, ['wine farm', 'wine estate', 'wine cellar', 'cellar door', 'wine tasting', 'tasting room', 'wine route', 'wine bar', 'wine boutique']);
   if (isWineFarm) venueTypes.add('wine_farm');
 
   const isCoffeeFocused = keywordMatches(nameAndDesc, ['coffee']) && !isWineFarm;
@@ -363,14 +363,17 @@ export function scorePlace(place: Place, filters: ExploreFilters, lensDefs: Lens
   lensDefs.forEach((lens) => {
     const selected = filters[lens.key] as string[];
     if (selected.length === 0) return;
+    const isVenueType = lens.key === 'venueTypes';
+    const matchWeight = isVenueType ? 30 : 10;
+    const conflictWeight = isVenueType ? -20 : -5;
     selected.forEach((chipId) => {
       const chip = lens.chips.find((candidate) => candidate.id === chipId);
       if (!chip) return;
       if (chip.matches(caps)) {
-        score += 10;
+        score += matchWeight;
         matchedChips.push(`${lens.key}:${chip.id}`);
       } else if (chip.conflicts?.(caps)) {
-        score -= 5;
+        score += conflictWeight;
         conflictedChips.push(`${lens.key}:${chip.id}`);
       }
     });
