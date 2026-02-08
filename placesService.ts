@@ -437,9 +437,15 @@ function shouldKeepByIntent(place: Place, definition: ExploreIntentDefinition): 
 
   const matchedExcludeType = excludeTypes.find((type) => typeSet.has(type));
   if (matchedExcludeType) {
-    // Eat & Drink may still include farm stalls when keyword matched.
     const farmStallOverride = matchedExcludeType === 'farm' && textContainsAny(rawText, ['farm stall', 'farm shop']);
-    if (!farmStallOverride) {
+    const wineryWithFoodOverride =
+      (matchedExcludeType === 'winery' || matchedExcludeType === 'vineyard') &&
+      (typeSet.has('restaurant') || typeSet.has('cafe') || typeSet.has('meal_takeaway')) &&
+      textContainsAny(rawText, ['restaurant', 'cafe', 'bistro', 'grill', 'kitchen', 'eatery', 'menu', 'lunch', 'dinner', 'breakfast']);
+    const venueWithConcessionOverride =
+      (matchedExcludeType === 'cafe' || matchedExcludeType === 'restaurant') &&
+      (typeSet.has('park') || typeSet.has('tourist_attraction') || typeSet.has('gym') || typeSet.has('sports_complex') || typeSet.has('swimming_pool') || typeSet.has('playground'));
+    if (!farmStallOverride && !wineryWithFoodOverride && !venueWithConcessionOverride) {
       return false;
     }
   }

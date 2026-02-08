@@ -68,7 +68,7 @@ const LENS_DEFINITIONS: Record<ExploreLensKey, LensDefinition> = {
     title: 'Food type',
     helperText: 'Boost places matching your preferred food experience.',
     chips: [
-      { id: 'coffee', label: 'Coffee', matches: (caps) => caps.foodKeywords.has('coffee') || caps.venueTypes.has('cafe'), conflicts: (caps) => !caps.servesFood },
+      { id: 'coffee', label: 'Coffee', matches: (caps) => caps.foodKeywords.has('coffee') || (caps.venueTypes.has('cafe') && !caps.venueTypes.has('wine_farm')), conflicts: (caps) => !caps.servesFood },
       { id: 'bakery', label: 'Bakery', matches: (caps) => caps.foodKeywords.has('bakery') || caps.venueTypes.has('bakery'), conflicts: (caps) => !caps.servesFood },
       { id: 'brunch', label: 'Brunch', matches: (caps) => caps.foodKeywords.has('brunch') || caps.foodKeywords.has('breakfast'), conflicts: (caps) => !caps.servesFood },
       { id: 'pizza', label: 'Pizza', matches: (caps) => caps.foodKeywords.has('pizza'), conflicts: (caps) => !caps.servesFood },
@@ -87,7 +87,7 @@ const LENS_DEFINITIONS: Record<ExploreLensKey, LensDefinition> = {
       { id: 'cafe', label: 'Cafe', matches: (caps) => caps.venueTypes.has('cafe'), conflicts: (caps) => !caps.servesFood },
       { id: 'bar_pub', label: 'Bar or Pub', matches: (caps) => caps.venueTypes.has('bar_pub') },
       { id: 'market', label: 'Market', matches: (caps) => caps.venueTypes.has('market') },
-      { id: 'wine_farm', label: 'Wine farm', matches: (caps) => caps.venueTypes.has('wine_farm'), conflicts: (caps) => !caps.servesFood },
+      { id: 'wine_farm', label: 'Wine farm', matches: (caps) => caps.venueTypes.has('wine_farm') },
       { id: 'food_truck', label: 'Food truck', matches: (caps) => caps.venueTypes.has('food_truck') || caps.foodKeywords.has('food truck') },
     ],
   },
@@ -270,12 +270,19 @@ export function derivePlaceCapabilities(place: Place): PlaceCapabilities {
   if (typeSet.has('restaurant') || typeSet.has('meal_takeaway') || typeSet.has('meal_delivery')) venueTypes.add('restaurant');
   if (typeSet.has('cafe') || typeSet.has('coffee_shop')) venueTypes.add('cafe');
   if (typeSet.has('bar') || typeSet.has('pub') || typeSet.has('night_club')) venueTypes.add('bar_pub');
-  if (typeSet.has('market') || keywordMatches(text, ['market'])) venueTypes.add('market');
-  if (typeSet.has('winery') || typeSet.has('vineyard') || keywordMatches(text, ['wine farm', 'wine tasting'])) venueTypes.add('wine_farm');
-  if (typeSet.has('food_truck') || keywordMatches(text, ['food truck'])) venueTypes.add('food_truck');
   if (typeSet.has('bakery')) venueTypes.add('bakery');
+  if (typeSet.has('food_truck') || keywordMatches(text, ['food truck'])) venueTypes.add('food_truck');
 
-  ['coffee', 'bakery', 'brunch', 'breakfast', 'pizza', 'sushi', 'burger', 'burgers', 'wine tasting', 'farm stall', 'farm shop', 'pet friendly', 'quiet'].forEach((keyword) => {
+  const nameAndDesc = `${place.name || ''} ${place.description || ''}`.toLowerCase();
+  if (typeSet.has('market') || keywordMatches(nameAndDesc, ['market'])) venueTypes.add('market');
+
+  const isWineFarm = typeSet.has('winery') || typeSet.has('vineyard') || keywordMatches(nameAndDesc, ['wine farm', 'wine estate', 'wine tasting']);
+  if (isWineFarm) venueTypes.add('wine_farm');
+
+  const isCoffeeFocused = keywordMatches(nameAndDesc, ['coffee']) && !isWineFarm;
+  const foodKwList = ['bakery', 'brunch', 'breakfast', 'pizza', 'sushi', 'burger', 'burgers', 'wine tasting', 'farm stall', 'farm shop', 'pet friendly', 'quiet'];
+  if (isCoffeeFocused) foodKeywords.add('coffee');
+  foodKwList.forEach((keyword) => {
     if (text.includes(keyword)) foodKeywords.add(keyword);
   });
 
@@ -318,9 +325,9 @@ export function derivePlaceCapabilities(place: Place): PlaceCapabilities {
 
   const hasFoodType = Array.from(typeSet).some((type) => FOOD_TYPE_SET.has(type));
   const hasFoodKeyword = keywordMatches(text, ['restaurant', 'cafe', 'kitchen', 'menu', 'takeaway', 'diner', 'eatery', 'grill', 'bistro']);
-  const wineOrFarmVenue = venueTypes.has('wine_farm') || foodKeywords.has('farm stall') || foodKeywords.has('farm shop');
-  const servesFood = wineOrFarmVenue
-    ? (hasFoodType || hasFoodKeyword)
+  const isWineOrFarmVenue = venueTypes.has('wine_farm') || foodKeywords.has('farm stall') || foodKeywords.has('farm shop');
+  const servesFood = isWineOrFarmVenue
+    ? (hasFoodType || hasFoodKeyword || keywordMatches(text, ['lunch', 'dinner', 'breakfast', 'brunch', 'food']))
     : (hasFoodType || hasFoodKeyword);
 
   return {
