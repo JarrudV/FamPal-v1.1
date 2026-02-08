@@ -21,8 +21,6 @@ const DEFAULT_DENY_TYPES = [
 
 if (!PLACES_API_KEY) {
   console.error('[FamPals] CRITICAL: Google Places API key is missing! Places will not load.');
-} else {
-  console.log('[FamPals] Places API configured:', PLACES_API_KEY.substring(0, 8) + '...');
 }
 
 const PLACES_CACHE_KEY = 'fampals_google_places_cache';
@@ -818,7 +816,7 @@ export async function searchNearbyPlacesTextApi(
   if (useCache) {
     const cached = getCached<PlacesSearchResponse>(PLACES_CACHE_KEY, cacheKey);
     if (cached) {
-      console.log('[FamPals] Loaded places from cache (instant)');
+      intentLog('[FamPals] Loaded places from cache (instant)');
       return {
         ...cached,
         hasMore: typeof cached.hasMore === 'boolean' ? cached.hasMore : !!cached.nextPageToken,
@@ -873,7 +871,7 @@ export async function searchNearbyPlacesTextApi(
     const data = await response.json();
 
     if (!data.places || !Array.isArray(data.places)) {
-      console.log('[FamPals] No places found for this search');
+      intentLog('[FamPals] No places found for this search');
       return { places: [], nextPageToken: null, hasMore: false };
     }
 
@@ -930,7 +928,7 @@ export async function searchNearbyPlacesTextApi(
     if (useCache) {
       setCache(PLACES_CACHE_KEY, cacheKey, result);
     }
-    console.log(`[FamPals] Text Search: ${places.length} total, ${filteredPlaces.length} within ${radiusKm}km, hasMore: ${!!data.nextPageToken}`);
+    intentLog(`[FamPals] Text Search: ${places.length} total, ${filteredPlaces.length} within ${radiusKm}km, hasMore: ${!!data.nextPageToken}`);
 
     return result;
   } catch (error) {
@@ -953,7 +951,7 @@ export async function textSearchPlaces(
   
   const cached = getCached<Place[]>(PLACES_CACHE_KEY, cacheKey);
   if (cached) {
-    console.log('[FamPals] Loaded text search from cache');
+    intentLog('[FamPals] Loaded text search from cache');
     return cached;
   }
 
@@ -1035,7 +1033,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
 
   const cached = getCached<PlaceDetails>(DETAILS_CACHE_KEY, placeId);
   if (cached) {
-    console.log('[FamPals] Loaded place details from cache');
+    intentLog('[FamPals] Loaded place details from cache');
     return cached;
   }
 
@@ -1090,7 +1088,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
     };
 
     setCache(DETAILS_CACHE_KEY, placeId, details);
-    console.log('[FamPals] Cached place details');
+    intentLog('[FamPals] Cached place details');
     
     return details;
   } catch (error) {

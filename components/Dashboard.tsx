@@ -92,6 +92,7 @@ function getTimeAgo(date: Date): string {
 
 const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setView, onUpdateState, initialCircleId, onClearInitialCircle, initialTab, onTabChange }) => {
   const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+  const shouldLogDev = import.meta.env.DEV;
   const userPrefs = state.userPreferences || {};
   const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner'>(initialTab || 'explore');
   
@@ -678,7 +679,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         setPlaces((prev) => (cacheSeededRef.current ? applyFlickerGuard(prev, result.places) : result.places));
         cacheSeededRef.current = false;
         if (import.meta.env.DEV) {
-          console.log('[FamPals] Intent debug summary:', result.debug);
+          if (shouldLogDev) {
+            console.log('[FamPals] Intent debug summary:', result.debug);
+          }
         }
         setPagingComplete(true);
       } catch (error) {
@@ -1306,7 +1309,11 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
           try {
             const task = uploadBytesResumable(storageRef, blob);
             task.on('state_changed',
-              (snap: any) => console.log(`[FamPals] ${label}: ${Math.round((snap.bytesTransferred / snap.totalBytes) * 100)}%`),
+              (snap: any) => {
+                if (shouldLogDev) {
+                  console.log(`[FamPals] ${label}: ${Math.round((snap.bytesTransferred / snap.totalBytes) * 100)}%`);
+                }
+              },
               (err: any) => { clearTimeout(timeout); reject(err); },
               async () => {
                 clearTimeout(timeout);
@@ -1318,10 +1325,14 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         });
       };
 
-      console.log('[FamPals] Adding photo to memory', memoryId, 'file:', file.name, file.size);
+      if (shouldLogDev) {
+        console.log('[FamPals] Adding photo to memory', memoryId, 'file:', file.name, file.size);
+      }
       const fullBlob = await compress(file, 1600, 0.7);
       const thumbBlob = await compress(file, 400, 0.6);
-      console.log('[FamPals] Compressed. Full:', fullBlob.size, 'Thumb:', thumbBlob.size);
+      if (shouldLogDev) {
+        console.log('[FamPals] Compressed. Full:', fullBlob.size, 'Thumb:', thumbBlob.size);
+      }
       const fullRef = ref(storage, `${baseName}_full.jpg`);
       const thumbRef = ref(storage, `${baseName}_thumb.jpg`);
 
@@ -1329,7 +1340,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         uploadWithTimeout(fullRef, fullBlob, 'Photo'),
         uploadWithTimeout(thumbRef, thumbBlob, 'Thumbnail'),
       ]);
-      console.log('[FamPals] Photo added to memory successfully');
+      if (shouldLogDev) {
+        console.log('[FamPals] Photo added to memory successfully');
+      }
 
       const updated = state.memories.map(m => {
         if (m.id !== memoryId) return m;
@@ -1402,18 +1415,20 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     [exploreFilters, lensDefinitions]
   );
   useEffect(() => {
-    console.log('[FamPals] Explore lens filters changed:', exploreFilters);
-    console.log(`[FamPals] Lens scoring counts: before=${lensRankedResult.beforeCount}, afterStrict=${lensRankedResult.afterStrictCount}`);
-    console.log(
-      '[FamPals] Top 5 lens scores:',
-      lensRankedResult.scored.slice(0, 5).map((entry) => ({
-        id: entry.place.id,
-        name: entry.place.name,
-        score: entry.score,
-        matched: entry.matchedChips,
-      }))
-    );
-  }, [exploreFilters, lensRankedResult]);
+    if (shouldLogDev) {
+      console.log('[FamPals] Explore lens filters changed:', exploreFilters);
+      console.log(`[FamPals] Lens scoring counts: before=${lensRankedResult.beforeCount}, afterStrict=${lensRankedResult.afterStrictCount}`);
+      console.log(
+        '[FamPals] Top 5 lens scores:',
+        lensRankedResult.scored.slice(0, 5).map((entry) => ({
+          id: entry.place.id,
+          name: entry.place.name,
+          score: entry.score,
+          matched: entry.matchedChips,
+        }))
+      );
+    }
+  }, [exploreFilters, lensRankedResult, shouldLogDev]);
 
   const selectedPlaceWithAccessibility = selectedPlace
     ? {
