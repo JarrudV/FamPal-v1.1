@@ -16,7 +16,72 @@ const DEFAULT_DENY_TYPES = [
   'car_dealer',
   'car_rental',
   'car_repair',
-  'truck_stop'
+  'truck_stop',
+  'atm',
+  'bank',
+  'insurance_agency',
+  'real_estate_agency',
+  'lawyer',
+  'accounting',
+  'dentist',
+  'doctor',
+  'hospital',
+  'pharmacy',
+  'veterinary_care',
+  'funeral_home',
+  'cemetery',
+  'storage',
+  'moving_company',
+  'locksmith',
+  'electrician',
+  'plumber',
+  'roofing_contractor',
+  'general_contractor',
+  'lodging',
+  'school',
+  'university',
+  'shopping_mall',
+];
+
+const DEFAULT_DENY_BRANDS = [
+  'kfc',
+  'mcdonalds',
+  "mcdonald's",
+  'burger king',
+  'hungry lion',
+  'steers',
+  'nandos',
+  "nando's",
+  'debonairs',
+  'roman\'s pizza',
+  'domino\'s',
+  'pizza hut',
+  'subway',
+  'fishaways',
+  'chicken licken',
+  'wimpy',
+  'engen',
+  'shell garage',
+  'shell service station',
+  'shell ultra city',
+  'caltex',
+  'sasol',
+  'bp garage',
+  'bp express',
+  'total energies',
+  'totalenergies',
+  'shoprite',
+  'checkers',
+  'pick n pay',
+  'spar',
+  'woolworths food',
+  'clicks',
+  'dis-chem',
+  'pep store',
+  'pep cell',
+  'ackermans',
+  'cashbuild',
+  'builders warehouse',
 ];
 
 if (!PLACES_API_KEY) {
@@ -327,7 +392,7 @@ function getDenyTypes(): Set<string> {
 function getDenyBrands(): string[] {
   const runtime = getRuntimeList(DENY_BRANDS_STORAGE_KEY);
   const envBrands = parseCsvList(DENY_BRANDS_ENV);
-  return [...envBrands, ...runtime].map((entry) => entry.toLowerCase()).filter(Boolean);
+  return [...DEFAULT_DENY_BRANDS, ...envBrands, ...runtime].map((entry) => entry.toLowerCase()).filter(Boolean);
 }
 
 function shouldExcludePlace(types: string[] | undefined, name: string | undefined): boolean {
