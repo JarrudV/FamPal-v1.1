@@ -10,7 +10,7 @@ import PlanBilling from './PlanBilling';
 import MustHavesSheet from './MustHavesSheet';
 import { UpgradePrompt, LimitIndicator } from './UpgradePrompt';
 import { searchExploreIntent, getExploreIntentSubtitle, getPlaceDetails } from '../placesService';
-import { getLimits, canSavePlace, isPaidTier, getNextResetDate, getCurrentUsageMonth } from '../lib/entitlements';
+import { getLimits, canSavePlace, canCreateCircle, isPaidTier, getNextResetDate, getCurrentUsageMonth } from '../lib/entitlements';
 import { updateLocation, updateRadius, updateCategory, updateActiveCircle } from '../lib/profileSync';
 import {
   createDefaultExploreFilters,
@@ -257,7 +257,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
   }, [prefFilterMode, state.preferences, state.children, hasLinkedPartner]);
   
   // Upgrade prompt state
-  const [showUpgradePrompt, setShowUpgradePrompt] = useState<'savedPlaces' | 'memories' | null>(null);
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState<'savedPlaces' | 'memories' | 'circles' | null>(null);
   
   // Share memory state
   const [shareMemory, setShareMemory] = useState<Memory | null>(null);
@@ -1499,6 +1499,11 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
       window.alert('Circle editing is disabled in read-only review mode.');
       return;
     }
+    const circleCheck = canCreateCircle(accessContext?.entitlement ?? state.entitlement, regularCircles.length);
+    if (!circleCheck.allowed) {
+      setShowUpgradePrompt('circles');
+      return;
+    }
     const currentUser = state.user || (auth?.currentUser ? {
       uid: auth.currentUser.uid,
       displayName: auth.currentUser.displayName,
@@ -2656,8 +2661,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6" onClick={() => setShowUpgradePrompt(null)}>
           <div className="bg-white rounded-3xl p-6 max-w-sm w-full" onClick={e => e.stopPropagation()}>
             <UpgradePrompt 
-              feature={showUpgradePrompt === 'savedPlaces' ? 'saved places' : 'memories'}
-              currentLimit={showUpgradePrompt === 'savedPlaces' ? limits.savedPlaces : limits.memories}
+              feature={showUpgradePrompt === 'savedPlaces' ? 'saved places' : showUpgradePrompt === 'circles' ? 'circles' : 'memories'}
+              currentLimit={showUpgradePrompt === 'savedPlaces' ? limits.savedPlaces : showUpgradePrompt === 'circles' ? limits.circles : limits.memories}
               onUpgrade={() => {
                 setShowUpgradePrompt(null);
                 setShowPlanBilling(true);

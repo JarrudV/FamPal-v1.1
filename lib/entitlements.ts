@@ -41,12 +41,13 @@ function getEffectiveCreditsUsed(
 }
 
 export function getLimits(entitlement: Entitlement | undefined) {
-  const tier =
+  const raw =
     entitlement?.subscription_tier === 'admin'
       ? 'pro'
       : entitlement?.subscription_tier === 'pro'
         ? 'pro'
         : (entitlement?.plan_tier || 'free');
+  const tier = (raw === 'family' || raw === 'lifetime') ? 'pro' : raw as 'free' | 'pro';
   const status = entitlement?.plan_status || 'active';
   
   if (status === 'expired' || status === 'cancelled') {
@@ -146,9 +147,10 @@ export function getRemainingCount(current: number, limit: number): string {
 
 export function getPlanDisplayName(tier: PlanTier): string {
   switch (tier) {
-    case 'pro': return 'Pro';
-    case 'family': return 'Family';
-    case 'lifetime': return 'Lifetime';
+    case 'pro':
+    case 'family':
+    case 'lifetime':
+      return 'Pro';
     default: return 'Free';
   }
 }
@@ -157,7 +159,6 @@ export function isEntitlementValid(entitlement: Entitlement | undefined): boolea
   if (!entitlement) return false;
   if (entitlement.plan_tier === 'free') return true;
   if (entitlement.plan_status !== 'active') return false;
-  if (entitlement.plan_tier === 'lifetime') return true;
   
   if (entitlement.entitlement_end_date) {
     return new Date(entitlement.entitlement_end_date) > new Date();

@@ -201,17 +201,11 @@ interface PlanConfig {
 const PLANS: Record<string, PlanConfig> = {
   pro: {
     name: 'Pro Plan',
-    amount: 7500,
+    amount: 5900,
     currency: 'ZAR',
-    interval: 'annually',
+    interval: 'monthly',
     plan_code: process.env.PAYSTACK_PRO_PLAN_CODE || '',
   },
-  lifetime: {
-    name: 'Lifetime Plan',
-    amount: 39900,
-    currency: 'ZAR',
-    interval: null,
-  }
 };
 
 function verifyPaystackSignature(rawBody: Buffer, signature: string): boolean {
@@ -712,19 +706,15 @@ async function updateUserEntitlement(
   paymentData: any
 ) {
   const now = new Date();
-  const isLifetime = plan === 'lifetime';
-  
   let endDate: string | null = null;
-  if (!isLifetime) {
-    const oneYearLater = new Date(now);
-    oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
-    endDate = oneYearLater.toISOString();
-  }
+  const oneMonthLater = new Date(now);
+  oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+  endDate = oneMonthLater.toISOString();
   
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   
   const entitlement = {
-    plan_tier: isLifetime ? 'lifetime' : 'pro',
+    plan_tier: 'pro' as const,
     plan_status: 'active',
     entitlement_source: 'paystack',
     entitlement_start_date: now.toISOString(),

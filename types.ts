@@ -268,10 +268,10 @@ export interface ProfileInfo {
 
 export const PLAN_LIMITS = {
   free: {
-    savedPlaces: 25,
-    notebookEntries: 25,
+    savedPlaces: 10,
+    notebookEntries: 10,
     memories: 15,
-    circles: 5,
+    circles: 1,
     aiRequestsPerMonth: 5,
     preferencesPerCategory: 3,
     partnerFavorites: 3,
@@ -287,32 +287,10 @@ export const PLAN_LIMITS = {
     partnerFavorites: Infinity,
     partnerMemories: Infinity,
   },
-  family: {
-    savedPlaces: Infinity,
-    notebookEntries: Infinity,
-    memories: Infinity,
-    circles: Infinity,
-    aiRequestsPerMonth: 200,
-    preferencesPerCategory: Infinity,
-    partnerFavorites: Infinity,
-    partnerMemories: Infinity,
-  },
-  lifetime: {
-    savedPlaces: Infinity,
-    notebookEntries: Infinity,
-    memories: Infinity,
-    circles: Infinity,
-    aiRequestsPerMonth: 200,
-    preferencesPerCategory: Infinity,
-    partnerFavorites: Infinity,
-    partnerMemories: Infinity,
-  }
 } as const;
 
 export const PLAN_PRICES = {
-  pro: { amount: 7500, currency: 'ZAR', label: 'R75/year' },
-  family: { amount: 12900, currency: 'ZAR', label: 'R129/year (family)' },
-  lifetime: { amount: 39900, currency: 'ZAR', label: 'R399 once-off' }
+  pro: { amount: 5900, currency: 'ZAR', label: 'R59/month' },
 } as const;
 
 export function getDefaultEntitlement(): Entitlement {

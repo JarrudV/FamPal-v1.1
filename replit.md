@@ -41,15 +41,15 @@ Key features include:
 - **PWA Support**: Installable as a web app on iOS and Android with proper manifest and icons.
 
 ## Plan Limits (Entitlements)
-| Feature | Free | Pro | Family/Lifetime |
-|---|---|---|---|
-| Saved Places | 25 | Unlimited | Unlimited |
-| Memories | 15 | Unlimited | Unlimited |
-| Circles | 5 | Unlimited | Unlimited |
-| AI Requests/mo | 15 | 100 | 200 |
-| Preferences | 3/category | Unlimited | Unlimited |
-| Partner Favorites | 3 | Unlimited | Unlimited |
-| Partner Memories | 3 | Unlimited | Unlimited |
+| Feature | Free | Pro (R59/month) |
+|---|---|---|
+| Saved Places | 10 | Unlimited |
+| Memories | 15 | Unlimited |
+| Circles | 1 | Unlimited |
+| AI Requests/mo | 5 | 100 |
+| Preferences | 3/category | Unlimited |
+| Partner Favorites | 3 | Unlimited |
+| Partner Memories | 3 | Unlimited |
 
 ## External Dependencies
 - **Firebase**: User authentication (Google Sign-In), Firestore database, Firebase App Hosting (Cloud Run).
@@ -84,4 +84,5 @@ Key features include:
 - **V1.3.0 (2026-02-08)**: Intent-first Explore with Netflix-style layered refinement lenses, Explore performance improvements (core/optional query strategy, parallel page-1 loading, background pagination, abortable requests, 5-minute intent cache), accessibility and family-facilities confirmed/suggested model, version display on Profile page.
 - **V1.2.0 (2026-02-07)**: Must-haves filtering UX and Explore ranking improvements.
 - **V1.1.0 (2026-02-06)**: Partner space enhancements, sharing improvements, and profile sync updates.
-- **Replit session (2026-02-08)**: Fixed category cross-contamination. Discovery Mode toggle added to Dashboard home screen (switches between classic/Netflix layout without reload). "Fresh Finds Only" toggle (hides saved places) added alongside. Dark mode implemented via CSS class-based overrides (toggle in Profile). Fixed toggle alignment across all switch components. Increased free tier limits (memories 10→15, AI 10→15, circles 2→5), fixed circles entitlement bug. Expanded deny lists (30+ types, 30+ brands) to filter out petrol stations, fast food chains, pharmacies, shopping malls, contractors. Fixed wine tasting results in eat_drink intent. Added COMMON_KEYWORD_EXCLUDE for server-side brand/chain filtering. Wine farm detection broadened (place.type, typeSet, 9 keyword patterns), venue type scoring weighted 3x (match +30, conflict -20), conflicts added to all venue chips, MustHavesSheet bottom padding fix (pb-32). 7 new food type filters (Steak, Seafood, Italian, Indian, Mexican, Asian, Ice cream). Venue type reordered above Food type in filters.
+- **Replit session (2026-02-08)**: Fixed category cross-contamination. Discovery Mode toggle, Fresh Finds Only toggle, dark mode, toggle alignment fixes, deny list expansion, wine farm detection improvements, venue type scoring, food type filters expansion.
+- **Replit session (2026-02-09)**: Aligned tiers to Free + Pro (R59/month) only. Removed family/lifetime tiers from PLAN_LIMITS, PLAN_PRICES, server PLANS, and all UI. Free limits: savedPlaces 10, circles 1, AI 5/mo. Pro: unlimited places/circles/memories, 100 AI/mo. Circle creation enforced with UpgradePrompt. Legacy family/lifetime entitlements mapped to Pro.

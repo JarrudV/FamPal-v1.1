@@ -1172,9 +1172,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
               >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center text-xl">
-                    {planTier === 'lifetime' ? (
-                      <svg className="w-6 h-6 text-amber-500" viewBox="0 0 24 24" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm0 0v2a2 2 0 002 2h10a2 2 0 002-2v-2" /></svg>
-                    ) : planTier === 'pro' ? (
+                    {getPlanDisplayName(planTier) === 'Pro' ? (
                       <svg className="w-6 h-6 text-amber-500" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
                     ) : (
                       <svg className="w-6 h-6 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
@@ -1183,9 +1181,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
                   <div className="text-left">
                     <p className="font-bold text-slate-800">{getPlanDisplayName(planTier)} Plan</p>
                     <p className="text-xs text-slate-400">
-                      {planTier === 'lifetime' ? 'Lifetime access' : 
-                       planTier === 'family' ? 'Family pool active' :
-                       planTier === 'pro' ? 'Pro subscription' : 
+                      {getPlanDisplayName(planTier) === 'Pro' ? 'Pro subscription' : 
                        'Upgrade for unlimited features'}
                     </p>
                   </div>

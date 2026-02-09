@@ -17,7 +17,7 @@ export default function PlanBilling({ state, onClose }: PlanBillingProps) {
 
   const statusLabel = useMemo(() => {
     if (currentTier === 'admin') return 'Admin tester access';
-    if (currentTier === 'pro') return 'Pro monthly entitlement';
+    if (currentTier === 'pro' || currentTier === 'family' || currentTier === 'lifetime') return 'Pro monthly entitlement';
     return 'Free tier';
   }, [currentTier]);
 
@@ -53,7 +53,7 @@ export default function PlanBilling({ state, onClose }: PlanBillingProps) {
             <ul className="mt-3 space-y-2 text-sm text-slate-600">
               <li>{PLAN_LIMITS.free.aiRequestsPerMonth} smart insights per calendar month</li>
               <li>Browse and discover places</li>
-              <li>Save places, notebook, and memories with limits</li>
+              <li>Save up to {PLAN_LIMITS.free.savedPlaces} places, {PLAN_LIMITS.free.circles} circle</li>
             </ul>
           </div>
 
@@ -61,8 +61,8 @@ export default function PlanBilling({ state, onClose }: PlanBillingProps) {
             <h4 className="font-bold text-slate-800">Pro</h4>
             <p className="text-xs text-slate-500 mt-1">More planning power every month.</p>
             <ul className="mt-3 space-y-2 text-sm text-slate-600">
-              <li>100 smart insights per calendar month</li>
-              <li>Higher limits across planning features</li>
+              <li>{PLAN_LIMITS.pro.aiRequestsPerMonth} smart insights per calendar month</li>
+              <li>Unlimited saved places, circles, and memories</li>
             </ul>
             {isPaid ? (
               <p className="mt-4 text-xs font-semibold text-emerald-700">Pro is active on this account.</p>
