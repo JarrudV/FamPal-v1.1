@@ -25,8 +25,33 @@ import type { User as FirebaseUser } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
 import { shouldResetMonthlyAI, getNextResetDate } from './lib/entitlements';
 import { joinCircleByCode } from './lib/circles';
+import { buildAccessContext, type AppAccessContext } from './lib/access';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const AUTH_REDIRECT_PENDING_KEY = 'fampals_auth_redirect_pending';
+
+const isLikelyInAppBrowser = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return /FBAN|FBAV|Instagram|Line|wv|WebView|GSA|TikTok/i.test(ua);
+};
+
+const isMobileUa = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return /Android|iPhone|iPad|iPod|IEMobile|Opera Mini|CriOS|FxiOS/i.test(ua);
+};
+
+const isStandaloneDisplayMode = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const mediaStandalone = window.matchMedia?.('(display-mode: standalone)')?.matches;
+  const iosStandalone = (window.navigator as any)?.standalone === true;
+  return !!mediaStandalone || !!iosStandalone;
+};
+
+const canUsePopupFlowSafely = (): boolean => {
+  return !isMobileUa() && !isLikelyInAppBrowser() && !isStandaloneDisplayMode();
+};
 
 // Convert Firebase Auth User to plain serializable object
 const serializeUser = (firebaseUser: FirebaseUser): User => ({
@@ -70,6 +95,14 @@ const getInitialState = (user: User | null, guestPrefs?: UserPreferences): AppSt
 });
 
 const App: React.FC = () => {
+  const authBypassEnabled = import.meta.env.DEV && import.meta.env.VITE_AUTH_BYPASS === 'true';
+  const mockBypassUser: User = {
+    uid: 'dev-bypass-user',
+    email: 'dev-bypass@local.fampals',
+    displayName: 'Dev Bypass User',
+    photoURL: null,
+  };
+  const bypassInitializedRef = useRef(false);
   const [state, setState] = useState<AppState>(() => getInitialState(null));
   const [isGuest, setIsGuest] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -84,6 +117,12 @@ const App: React.FC = () => {
   });
   const [darkMode, setDarkMode] = useState(() => {
     try { return localStorage.getItem('fampals_dark_mode') === 'true'; } catch { return false; }
+  });
+  const accessContext: AppAccessContext = buildAccessContext({
+    isGuest,
+    user: state.user,
+    entitlement: state.entitlement,
+    isAuthBypass: authBypassEnabled,
   });
 
   useEffect(() => {
@@ -115,38 +154,72 @@ const App: React.FC = () => {
   };
 
   const handleSignIn = useCallback(async () => {
+    if (authBypassEnabled) {
+      setError(null);
+      setIsGuest(false);
+      setNeedsOnboarding(false);
+      setOnboardingChecked(true);
+      setState(prev => ({
+        ...getInitialState(mockBypassUser),
+        userPreferences: prev.userPreferences || {},
+        isAuthenticated: true,
+        user: mockBypassUser,
+      }));
+      setView('dashboard');
+      return;
+    }
     if (!isFirebaseConfigured || !auth || !googleProvider) {
       setError(firebaseConfigError || "Firebase is not configured properly.");
       return;
     }
+    const isDev = import.meta.env.DEV;
+    const popupSafe = canUsePopupFlowSafely();
     setError(null);
     setLoading(true);
     try {
-      // Use popup as primary method - redirect has session storage issues in modern browsers
-      await signInWithPopup(auth, googleProvider);
-    } catch (popupErr: any) {
-      console.warn("Login popup error:", popupErr);
-      if (popupErr.code === 'auth/popup-blocked') {
-        // Fallback to redirect only if popup is blocked
-        try {
-          await signInWithRedirect(auth, googleProvider);
-        } catch (redirectErr: any) {
-          setError(`Login failed: ${redirectErr.message}`);
-          setLoading(false);
+      const redirectPending = typeof window !== 'undefined' && window.sessionStorage.getItem(AUTH_REDIRECT_PENDING_KEY) === '1';
+      if (!redirectPending) {
+        if (typeof window !== 'undefined') {
+          window.sessionStorage.setItem(AUTH_REDIRECT_PENDING_KEY, '1');
         }
-      } else if (popupErr.code === 'auth/unauthorized-domain') {
-        setError("This domain is not authorized for Google Sign-In. Please add it to Firebase Console -> Authentication -> Settings -> Authorized domains.");
-        setLoading(false);
-      } else if (popupErr.code === 'auth/popup-closed-by-user') {
-        setError(null);
-        setLoading(false);
-      } else {
-        setError(`Login failed: ${popupErr.message}`);
-        console.error("Login popup error:", popupErr);
-        setLoading(false);
+        if (isDev) {
+          console.log('[FamPals Auth] Using redirect flow for Google sign-in');
+        }
+        await signInWithRedirect(auth, googleProvider);
+        return;
       }
+      setLoading(false);
+    } catch (redirectErr: any) {
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
+      }
+      if (popupSafe) {
+        try {
+          if (isDev) {
+            console.log('[FamPals Auth] Redirect failed, falling back to popup flow');
+          }
+          await signInWithPopup(auth, googleProvider);
+          return;
+        } catch (popupErr: any) {
+          if (popupErr.code === 'auth/unauthorized-domain') {
+            setError("This domain is not authorized for Google Sign-In. Please add it to Firebase Console -> Authentication -> Settings -> Authorized domains.");
+          } else if (popupErr.code === 'auth/popup-closed-by-user') {
+            setError(null);
+          } else {
+            setError(`Login failed: ${popupErr.message}`);
+          }
+          setLoading(false);
+          return;
+        }
+      }
+      if (redirectErr?.code === 'auth/unauthorized-domain') {
+        setError("This domain is not authorized for Google Sign-In. Please add it to Firebase Console -> Authentication -> Settings -> Authorized domains.");
+      } else {
+        setError(`Login failed: ${redirectErr?.message || 'Unknown error'}`);
+      }
+      setLoading(false);
     }
-  }, []);
+  }, [authBypassEnabled]);
 
   const handleGuestLogin = () => {
     setIsGuest(true);
@@ -193,7 +266,7 @@ const App: React.FC = () => {
       // Save to Firestore if user is logged in (not guest)
       // Use auth.currentUser for more reliable UID access
       const uid = auth?.currentUser?.uid || prev.user?.uid;
-      if (!isGuest && uid) {
+      if (accessContext.canSyncCloud && uid) {
         // Centralised save via userData service
         if (key !== 'savedPlaces' && key !== 'partnerSharedPlaces' && key !== 'familyPool') {
           saveUserField(uid, key as string, value).catch(err => {
@@ -204,10 +277,33 @@ const App: React.FC = () => {
       
       return newState;
     });
-  }, [isGuest]);
+  }, [accessContext.canSyncCloud]);
   
 
   useEffect(() => {
+    if (authBypassEnabled) {
+      if (bypassInitializedRef.current) return;
+      bypassInitializedRef.current = true;
+      setIsGuest(false);
+      setSavedPlacesLoaded(false);
+      legacyFavoritesRef.current = [];
+      savedPlacesMigratedAtRef.current = null;
+      migrationAttemptedRef.current = true;
+      aiResetAttemptedRef.current = null;
+      lastAuthUidRef.current = mockBypassUser.uid;
+      setNeedsOnboarding(false);
+      setOnboardingChecked(true);
+      setPendingJoinCircleId(null);
+      setState(prev => ({
+        ...getInitialState(mockBypassUser),
+        userPreferences: prev.userPreferences || {},
+        isAuthenticated: true,
+        user: mockBypassUser,
+      }));
+      setView('dashboard');
+      setLoading(false);
+      return;
+    }
     if (isGuest) {
       setLoading(false);
       return;
@@ -366,16 +462,22 @@ const App: React.FC = () => {
       }
       unsubscribe();
     };
-  }, [isGuest, state.user?.uid]);
+  }, [authBypassEnabled, isGuest, state.user?.uid]);
 
   const handleOnboardingComplete = useCallback(async (result: OnboardingResult) => {
     const uid = state.user?.uid || auth?.currentUser?.uid;
-    if (!uid) return;
+    if (!uid) {
+      setNeedsOnboarding(false);
+      setView('dashboard');
+      return;
+    }
     const completedAt = Timestamp.now();
     try {
-      await saveUserField(uid, 'onboardingCompletedAt', completedAt);
-      await saveUserField(uid, 'onboardingCompleted', true);
-      await saveUserField(uid, 'profileCompletionRequired', result.skipped);
+      if (accessContext.canSyncCloud) {
+        await saveUserField(uid, 'onboardingCompletedAt', completedAt);
+        await saveUserField(uid, 'onboardingCompleted', true);
+        await saveUserField(uid, 'profileCompletionRequired', result.skipped);
+      }
       if (result.userPreferences) {
         handleUpdateState('userPreferences', result.userPreferences);
       }
@@ -403,27 +505,41 @@ const App: React.FC = () => {
       setNeedsOnboarding(false);
       setView('dashboard');
     }
-  }, [state.user?.uid, state.profileInfo, state.partnerLink, handleUpdateState]);
+  }, [state.user?.uid, state.profileInfo, state.partnerLink, handleUpdateState, accessContext.canSyncCloud]);
 
   useEffect(() => {
-    if (isGuest) return;
+    if (!accessContext.canSyncCloud) return;
     if (!isFirebaseConfigured || !auth || redirectHandledRef.current) return;
     redirectHandledRef.current = true;
-    getRedirectResult(auth).catch((err: any) => {
-      if (err?.code === 'auth/unauthorized-domain') {
-        setError("This domain is not authorized for Google Sign-In. Please add it to Firebase Console -> Authentication -> Settings -> Authorized domains.");
-      } else if (err?.code === 'auth/cancelled-popup-request' || err?.code === 'auth/redirect-cancelled-by-user') {
-        setError(null);
-      } else if (err) {
-        setError(`Login failed: ${err.message || 'Unknown error'}`);
+    (async () => {
+      try {
+        const redirectResult = await getRedirectResult(auth);
+        if (redirectResult && import.meta.env.DEV) {
+          console.log('[FamPals Auth] Redirect result completed successfully');
+        }
+        if (redirectResult) {
+          setView('dashboard');
+        }
+      } catch (err: any) {
+        if (err?.code === 'auth/unauthorized-domain') {
+          setError("This domain is not authorized for Google Sign-In. Please add it to Firebase Console -> Authentication -> Settings -> Authorized domains.");
+        } else if (err?.code === 'auth/cancelled-popup-request' || err?.code === 'auth/redirect-cancelled-by-user') {
+          setError(null);
+        } else if (err) {
+          setError(`Login failed: ${err.message || 'Unknown error'}`);
+        }
+        console.warn('Redirect result error:', err);
+        setLoading(false);
+      } finally {
+        if (typeof window !== 'undefined') {
+          window.sessionStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
+        }
       }
-      console.warn('Redirect result error:', err);
-      setLoading(false);
-    });
-  }, [isGuest]);
+    })();
+  }, [accessContext.canSyncCloud]);
 
   useEffect(() => {
-    if (isGuest) return;
+    if (!accessContext.canSyncCloud) return;
     if (!isFirebaseConfigured) return;
     const params = new URLSearchParams(window.location.search);
     const isPaymentCallback = params.get('payment_callback') === 'true';
@@ -446,10 +562,10 @@ const App: React.FC = () => {
         window.history.replaceState({}, '', cleanUrl);
       }
     })();
-  }, [isGuest]);
+  }, [accessContext.canSyncCloud]);
 
   useEffect(() => {
-    if (isGuest) return;
+    if (!accessContext.canSyncCloud) return;
     const uid = state.user?.uid || auth?.currentUser?.uid;
     if (!uid) return;
     const unsub = listenToSavedPlaces(uid, (places) => {
@@ -461,10 +577,16 @@ const App: React.FC = () => {
       }));
     });
     return () => unsub();
-  }, [isGuest, state.user?.uid]);
+  }, [accessContext.canSyncCloud, state.user?.uid]);
 
   const consumeJoinCode = useCallback(async (code: string) => {
     if (!code || joinInFlightRef.current) return;
+    if (!accessContext.canSyncCloud) {
+      setError('Join links are disabled in auth bypass mode.');
+      setView('dashboard');
+      navigate('/', { replace: true });
+      return;
+    }
     if (lastJoinCodeRef.current === code) return;
     const uid = state.user?.uid || auth?.currentUser?.uid;
     const currentUser = state.user || (auth?.currentUser ? {
@@ -501,17 +623,17 @@ const App: React.FC = () => {
     } finally {
       joinInFlightRef.current = false;
     }
-  }, [state.user, state.user?.uid, navigate]);
+  }, [state.user, state.user?.uid, navigate, accessContext.canSyncCloud]);
 
   useEffect(() => {
-    if (isGuest) return;
+    if (!accessContext.canSyncCloud) return;
     const uid = state.user?.uid || auth?.currentUser?.uid;
     if (!uid) return;
     const pendingCode = localStorage.getItem(PENDING_JOIN_KEY);
     if (pendingCode) {
       consumeJoinCode(pendingCode);
     }
-  }, [isGuest, state.user?.uid, consumeJoinCode]);
+  }, [accessContext.canSyncCloud, state.user?.uid, consumeJoinCode]);
 
   const JoinRoute: React.FC = () => {
     const params = useParams();
@@ -530,7 +652,7 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (isGuest) return;
+    if (!accessContext.canSyncCloud) return;
     const uid = state.user?.uid || auth?.currentUser?.uid;
     if (!uid) return;
     if (!savedPlacesLoaded) return;
@@ -576,7 +698,7 @@ const App: React.FC = () => {
         console.warn('Failed to mark savedPlaces migration', err);
       }
     })();
-  }, [isGuest, state.user?.uid, savedPlacesLoaded, state.savedPlaces]);
+  }, [accessContext.canSyncCloud, state.user?.uid, savedPlacesLoaded, state.savedPlaces]);
 
   const renderView = () => {
     console.log('[FamPals] renderView called - loading:', loading, 'view:', view, 'onboardingChecked:', onboardingChecked, 'needsOnboarding:', needsOnboarding);
@@ -615,6 +737,7 @@ const App: React.FC = () => {
     const dashboardProps = {
       state,
       isGuest,
+      accessContext,
       onSignOut: handleSignOut,
       setView,
       onUpdateState: handleUpdateState,
@@ -647,7 +770,7 @@ const App: React.FC = () => {
           />
         );
       case 'profile':
-        return <Profile state={state} isGuest={isGuest} onSignOut={handleSignOut} setView={setView} onUpdateState={handleUpdateState} onResetOnboarding={() => setNeedsOnboarding(true)} darkMode={darkMode} onToggleDarkMode={() => { const next = !darkMode; setDarkMode(next); try { localStorage.setItem('fampals_dark_mode', next ? 'true' : 'false'); } catch {} }} />;
+        return <Profile state={state} isGuest={isGuest} accessContext={accessContext} onSignOut={handleSignOut} setView={setView} onUpdateState={handleUpdateState} onResetOnboarding={() => setNeedsOnboarding(true)} darkMode={darkMode} onToggleDarkMode={() => { const next = !darkMode; setDarkMode(next); try { localStorage.setItem('fampals_dark_mode', next ? 'true' : 'false'); } catch {} }} />;
       default:
         return <Login onLogin={handleSignIn} onGuestLogin={handleGuestLogin} error={error} />;
     }

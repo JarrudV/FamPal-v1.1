@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FamPal</string>
+    <string name="title_activity_main">FamPal</string>
+    <string name="package_name">co.fampal.app</string>
+    <string name="custom_url_scheme">co.fampal.app</string>
+</resources>

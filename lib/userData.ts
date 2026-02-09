@@ -2,6 +2,7 @@ import { db, doc, onSnapshot, setDoc, deleteField, collection, deleteDoc } from 
 import type { SavedPlace } from '../types';
 
 type Unsubscribe = () => void;
+const DEV_AUTH_BYPASS = import.meta.env.DEV && import.meta.env.VITE_AUTH_BYPASS === 'true';
 
 export function listenToUserDoc(uid: string, onData: (data: any | null) => void): Unsubscribe {
   console.log('[FamPals] listenToUserDoc called for uid:', uid);
@@ -59,6 +60,7 @@ function stripUndefined(value: any): any {
 }
 
 export async function upsertUserProfile(uid: string, profile: Record<string, any>) {
+  if (DEV_AUTH_BYPASS) return;
   console.log('[FamPals] upsertUserProfile called for uid:', uid);
   if (!db) {
     console.error('[FamPals] upsertUserProfile: Firestore db is null/undefined!');
@@ -83,6 +85,7 @@ export async function upsertUserProfile(uid: string, profile: Record<string, any
 }
 
 export async function saveUserField(uid: string, key: string, value: any) {
+  if (DEV_AUTH_BYPASS) return;
   if (!db) {
     console.warn('saveUserField: Firestore not initialized');
     return;
@@ -132,6 +135,7 @@ export function listenToSavedPlaces(uid: string, onData: (places: SavedPlace[]) 
 }
 
 export async function upsertSavedPlace(uid: string, place: SavedPlace): Promise<void> {
+  if (DEV_AUTH_BYPASS) return;
   if (!db) {
     console.warn('upsertSavedPlace: Firestore not initialized');
     return;
@@ -147,6 +151,7 @@ export async function upsertSavedPlace(uid: string, place: SavedPlace): Promise<
 }
 
 export async function deleteSavedPlace(uid: string, placeId: string): Promise<void> {
+  if (DEV_AUTH_BYPASS) return;
   if (!db) {
     console.warn('deleteSavedPlace: Firestore not initialized');
     return;

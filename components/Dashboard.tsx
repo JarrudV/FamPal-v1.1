@@ -41,10 +41,12 @@ import {
 } from '../lib/circles';
 import { getPartnerThreadId, ensurePartnerThread } from '../lib/partnerThreads';
 import { Timestamp } from 'firebase/firestore';
+import type { AppAccessContext } from '../lib/access';
 
 interface DashboardProps {
   state: AppState;
   isGuest: boolean;
+  accessContext?: AppAccessContext;
   onSignOut: () => void;
   setView: (view: string) => void;
   onUpdateState: (key: keyof AppState, value: any) => void;
@@ -92,9 +94,11 @@ function getTimeAgo(date: Date): string {
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setView, onUpdateState, initialCircleId, onClearInitialCircle, initialTab, onTabChange, discoveryMode, onToggleDiscoveryMode }) => {
+const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, onSignOut, setView, onUpdateState, initialCircleId, onClearInitialCircle, initialTab, onTabChange, discoveryMode, onToggleDiscoveryMode }) => {
   const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
   const shouldLogDev = import.meta.env.DEV;
+  const canSyncCloud = accessContext?.canSyncCloud ?? !isGuest;
+  const effectiveGuestForPersistence = !canSyncCloud;
   const userPrefs = state.userPreferences || {};
   const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner'>(initialTab || 'explore');
   
@@ -167,19 +171,19 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   
   // Preference update callbacks - persist to database with debouncing
   const persistLocation = useCallback((lat: number, lng: number, label: string) => {
-    const newPrefs = updateLocation({ lat, lng, label }, isGuest, userPrefs);
+    const newPrefs = updateLocation({ lat, lng, label }, effectiveGuestForPersistence, userPrefs);
     onUpdateState('userPreferences', newPrefs);
-  }, [isGuest, userPrefs, onUpdateState]);
+  }, [effectiveGuestForPersistence, userPrefs, onUpdateState]);
   
   const persistRadius = useCallback((radius: number) => {
-    const newPrefs = updateRadius(radius, isGuest, userPrefs);
+    const newPrefs = updateRadius(radius, effectiveGuestForPersistence, userPrefs);
     onUpdateState('userPreferences', newPrefs);
-  }, [isGuest, userPrefs, onUpdateState]);
+  }, [effectiveGuestForPersistence, userPrefs, onUpdateState]);
   
   const persistCategory = useCallback((category: ExploreIntent) => {
-    const newPrefs = updateCategory(category, isGuest, userPrefs);
+    const newPrefs = updateCategory(category, effectiveGuestForPersistence, userPrefs);
     onUpdateState('userPreferences', newPrefs);
-  }, [isGuest, userPrefs, onUpdateState]);
+  }, [effectiveGuestForPersistence, userPrefs, onUpdateState]);
   
   // Circles state
   const [circles, setCircles] = useState<CircleDoc[]>([]);
@@ -263,8 +267,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   const [showPlanBilling, setShowPlanBilling] = useState(false);
   
   // Entitlement limits
-  const limits = getLimits(state.entitlement);
-  const isPaid = isPaidTier(state.entitlement);
+  const limits = accessContext?.limits ?? getLimits(state.entitlement);
+  const isPaid = accessContext?.isPro ?? isPaidTier(state.entitlement);
   const enrichInFlightRef = useRef<Set<string>>(new Set());
   const fallbackImage = 'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=400&h=300&fit=crop';
   const placesSearchKeyRef = useRef<string>('');
@@ -365,7 +369,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   }, [state.partnerLink, onUpdateState]);
 
   useEffect(() => {
-    if (isGuest) return;
+    if (!canSyncCloud) return;
     const uid = state.user?.uid || auth?.currentUser?.uid;
     const partnerId = state.partnerLink?.partnerUserId;
     if (!uid || !partnerId) return;
@@ -373,17 +377,17 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     ensurePartnerThread(uid, partnerId).catch(err => {
       console.warn('Failed to ensure partner thread', err);
     });
-  }, [isGuest, state.user?.uid, state.partnerLink?.partnerUserId, state.partnerLink?.status]);
+  }, [canSyncCloud, state.user?.uid, state.partnerLink?.partnerUserId, state.partnerLink?.status]);
 
   useEffect(() => {
-    if (isGuest || !state.user?.uid) {
+    if (!canSyncCloud || !state.user?.uid) {
       setCircles([]);
       return;
     }
     return listenToUserCircles(state.user.uid, (next) => {
       setCircles(next);
     });
-  }, [isGuest, state.user?.uid]);
+  }, [canSyncCloud, state.user?.uid]);
 
   useEffect(() => {
     if (!initialCircleId) return;
@@ -400,7 +404,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   useEffect(() => {
     if (!db) return;
     if (!state.user?.uid) return;
-    if (isGuest) return;
+    if (!canSyncCloud) return;
     const link = state.partnerLink;
     if (!link?.partnerUserId || link.status !== 'accepted') {
       setPartnerNotes([]);
@@ -439,11 +443,11 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
       cancelled = true;
       if (unsub) unsub();
     };
-  }, [state.user?.uid, state.partnerLink, isGuest]);
+  }, [state.user?.uid, state.partnerLink, canSyncCloud]);
 
   useEffect(() => {
     if (!db) return;
-    if (isGuest) return;
+    if (!canSyncCloud) return;
     const uid = state.user?.uid;
     const link = state.partnerLink;
     if (!uid || !link?.partnerUserId || link.status !== 'accepted') {
@@ -542,14 +546,14 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
       if (unsubMemories) unsubMemories();
       if (unsubThread) unsubThread();
     };
-  }, [state.user?.uid, state.partnerLink, isGuest, onUpdateState]);
+  }, [state.user?.uid, state.partnerLink, canSyncCloud, onUpdateState]);
 
   const handleSendPartnerNote = async () => {
     if (!noteInput.trim()) {
       setNoteError('Please enter a note before sending.');
       return;
     }
-    if (!db || !state.user?.uid) {
+    if (!canSyncCloud || !db || !state.user?.uid) {
       setNoteError('Please sign in to send notes.');
       return;
     }
@@ -726,7 +730,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   }, [selectedFilter, activeTab, userLocation, radiusKm, searchQuery, applyFlickerGuard]);
 
   useEffect(() => {
-    if (isGuest) return;
+    if (!canSyncCloud) return;
     const prefs = state.userPreferences;
     if (!prefs) return;
 
@@ -1021,7 +1025,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     const isRemoving = state.favorites.includes(place.id);
     
     if (!isRemoving) {
-      const saveCheck = canSavePlace(state.entitlement, state.favorites.length);
+      const saveCheck = canSavePlace(accessContext?.entitlement ?? state.entitlement, state.favorites.length);
       if (!saveCheck.allowed) {
         setShowUpgradePrompt('savedPlaces');
         return;
@@ -1037,7 +1041,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
       : [...savedPlaces.filter(saved => saved.placeId !== place.id), buildSavedPlaceSnapshot(place)];
     onUpdateState('savedPlaces', nextSavedPlaces);
 
-    if (isGuest) return;
+    if (!canSyncCloud) return;
     const uid = state.user?.uid || auth?.currentUser?.uid;
     if (!uid) {
       console.warn('toggleFavorite: missing user uid');
@@ -1059,8 +1063,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     placeId: string,
     payload: { features: AccessibilityFeatureValue[]; comment?: string }
   ) => {
-    if (isGuest) {
-      alert('Sign in to contribute accessibility information.');
+    if (!canSyncCloud) {
+      alert('Contributions are disabled in read-only review mode.');
       return;
     }
     const uid = state.user?.uid || auth?.currentUser?.uid;
@@ -1103,8 +1107,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     placeId: string,
     payload: { features: FamilyFacilityValue[]; comment?: string }
   ) => {
-    if (isGuest) {
-      alert('Sign in to contribute family facilities information.');
+    if (!canSyncCloud) {
+      alert('Contributions are disabled in read-only review mode.');
       return;
     }
     const uid = state.user?.uid || auth?.currentUser?.uid;
@@ -1130,7 +1134,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   };
 
   const handleAddPartnerPlace = async (groupPlace: GroupPlace) => {
-    if (!db || !state.user?.uid || !state.partnerLink?.partnerUserId) {
+    if (!canSyncCloud || !db || !state.user?.uid || !state.partnerLink?.partnerUserId) {
       alert('Please sign in and link a partner first.');
       return;
     }
@@ -1151,7 +1155,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   };
 
   useEffect(() => {
-    if (isGuest) return;
+    if (!canSyncCloud) return;
     if (activeTab !== 'favorites') return;
     const uid = state.user?.uid || auth?.currentUser?.uid;
     if (!uid) return;
@@ -1201,7 +1205,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
     for (let i = 0; i < maxConcurrent; i += 1) {
       runNext();
     }
-  }, [activeTab, isGuest, savedPlaces, state.user?.uid]);
+  }, [activeTab, canSyncCloud, savedPlaces, state.user?.uid]);
 
   const markVisited = (place: Place) => {
     const visitedPlaces = state.visitedPlaces || [];
@@ -1227,7 +1231,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   const handleAddMemory = useCallback((memory: Omit<Memory, 'id'>) => {
     const newMemory: Memory = { ...memory, id: Date.now().toString() };
     onUpdateState('memories', [...state.memories, newMemory]);
-    if (!isGuest && db && state.partnerLink?.status === 'accepted' && state.partnerLink.partnerUserId && memory.sharedWithPartner && state.user?.uid) {
+    if (canSyncCloud && db && state.partnerLink?.status === 'accepted' && state.partnerLink.partnerUserId && memory.sharedWithPartner && state.user?.uid) {
       const threadId = getPartnerThreadId(state.user.uid, state.partnerLink.partnerUserId);
       const sharedRef = doc(db, 'partnerThreads', threadId, 'sharedMemories', newMemory.id);
       const payload: Omit<Memory, 'id'> = {
@@ -1267,7 +1271,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
         onUpdateState('visitedPlaces', [...visitedPlaces, newVisit]);
       }
     }
-  }, [onUpdateState, places, state.favorites, state.memories, state.visitedPlaces, isGuest, state.partnerLink, state.user?.uid]);
+  }, [onUpdateState, places, state.favorites, state.memories, state.visitedPlaces, canSyncCloud, state.partnerLink, state.user?.uid]);
 
   const memoryPhotoInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadingMemoryId, setUploadingMemoryId] = useState<string | null>(null);
@@ -1451,6 +1455,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   const handleIncrementAiRequests = async () => {
     const current = state.entitlement?.ai_requests_this_month || 0;
     if (
+      canSyncCloud &&
       state.entitlement?.plan_tier === 'family' &&
       state.partnerLink?.status === 'accepted' &&
       state.partnerLink?.partnerUserId &&
@@ -1485,6 +1490,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   };
 
   const handleCreateCircle = async (name: string) => {
+    if (!canSyncCloud) {
+      window.alert('Circle editing is disabled in read-only review mode.');
+      return;
+    }
     const currentUser = state.user || (auth?.currentUser ? {
       uid: auth.currentUser.uid,
       displayName: auth.currentUser.displayName,
@@ -1504,6 +1513,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   };
 
   const handleJoinCircle = async (code: string) => {
+    if (!canSyncCloud) {
+      window.alert('Circle editing is disabled in read-only review mode.');
+      return;
+    }
     const currentUser = state.user || (auth?.currentUser ? {
       uid: auth.currentUser.uid,
       displayName: auth.currentUser.displayName,
@@ -1523,6 +1536,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   };
 
   const handleDeleteCircle = async (circleId: string) => {
+    if (!canSyncCloud) {
+      window.alert('Circle editing is disabled in read-only review mode.');
+      return;
+    }
     const currentUser = state.user || (auth?.currentUser ? {
       uid: auth.currentUser.uid,
       displayName: auth.currentUser.displayName,
@@ -1542,6 +1559,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   };
 
   const handleCreatePartnerCircle = async () => {
+    if (!canSyncCloud) {
+      window.alert('Partner circle editing is disabled in read-only review mode.');
+      return;
+    }
     if (!newPartnerCircleName.trim()) return;
     if (!state.user || !partnerUserId) {
       window.alert('Please link with a partner first.');
@@ -1565,6 +1586,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
   };
 
   const handleTagMemoryToCircle = async (circleId: string, memory: Omit<Memory, 'id'>) => {
+    if (!canSyncCloud) return;
     if (!state.user) return;
     try {
       await addCircleMemory(circleId, {
@@ -1926,7 +1948,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                   isFavorite={true}
                   onToggleFavorite={() => toggleFavorite(place)}
                   onClick={() => setSelectedPlace(place)}
-                  showAddToGroup={!isGuest && circles.length > 0}
+                  showAddToGroup={canSyncCloud && circles.length > 0}
                   onAddToGroup={() => setAddToCirclePlace(place)}
                 />
               ))
@@ -1949,6 +1971,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
                     <button
                       key={circle.id}
                       onClick={() => {
+                        if (!canSyncCloud) {
+                          window.alert('Circle editing is disabled in read-only review mode.');
+                          return;
+                        }
                         const note = window.prompt('Why are we saving this?') || '';
                         saveCirclePlace(circle.id, {
                           placeId: addToCirclePlace.id,
@@ -2084,10 +2110,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
             onCreateCircle={handleCreateCircle}
             onJoinCircle={handleJoinCircle}
             onSelectCircle={setSelectedCircle}
-            isGuest={isGuest}
+            isGuest={isGuest || !canSyncCloud}
             onDeleteCircle={handleDeleteCircle}
             userId={state.user?.uid}
-            maxCircles={getLimits(state.entitlement).circles}
+            maxCircles={limits.circles}
           />
         )}
 
@@ -2561,7 +2587,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
           favoriteData={state.favoriteDetails[selectedPlaceWithAccessibility.id]}
           childrenAges={state.children?.map(c => c.age) || []}
           isGuest={isGuest}
-          entitlement={state.entitlement}
+          entitlement={accessContext?.entitlement ?? state.entitlement}
           familyPool={state.familyPool}
           onIncrementAiRequests={handleIncrementAiRequests}
           circles={circles}
@@ -2583,6 +2609,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, onSignOut, setVie
               }
               handleAddPartnerPlace(groupPlace);
             } else {
+              if (!canSyncCloud) {
+                alert('Circle editing is disabled in read-only review mode.');
+                return;
+              }
               const note = window.prompt('Add a note for this place (optional)') || '';
               const circle = circles.find(c => c.id === circleId);
               saveCirclePlace(circleId, {

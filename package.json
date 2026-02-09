@@ -11,9 +11,16 @@
     "build:staging": "vite build --mode staging && npx tsc --project tsconfig.server.json",
     "build:production": "vite build --mode production && npx tsc --project tsconfig.server.json",
     "preview": "vite preview",
-    "start": "node dist-server/index.js"
+    "start": "node dist-server/index.js",
+    "cap:sync": "npx cap sync",
+    "cap:open:android": "npx cap open android",
+    "cap:open:ios": "npx cap open ios"
   },
   "dependencies": {
+    "@capacitor/android": "^8.0.2",
+    "@capacitor/cli": "^8.0.2",
+    "@capacitor/core": "^8.0.2",
+    "@capacitor/ios": "^8.0.2",
     "@google/genai": "^1.38.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",

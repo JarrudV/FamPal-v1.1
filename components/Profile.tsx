@@ -3,12 +3,48 @@ import { AppState, Child, PartnerLink, Preferences, UserAccessibilityNeeds, FOOD
 import PlanBilling from './PlanBilling';
 import { getLimits, getPlanDisplayName, canUseAI, isPaidTier } from '../lib/entitlements';
 import { storage, auth, db, collection, query, where, getDocs, getDoc, doc, setDoc, ref, uploadBytes, getDownloadURL, writeBatch, deleteField, serverTimestamp } from '../lib/firebase';
+import type { AppAccessContext } from '../lib/access';
+import { googleProvider, signOut as firebaseSignOut } from '../lib/firebase';
+import { reauthenticateWithPopup, reauthenticateWithRedirect } from 'firebase/auth';
+import {
+  clearLocalAppState,
+  deleteUserOwnedFirestoreData,
+  getCurrentAuthUser,
+  hasRecentLogin,
+  isDeleteBlockedByBypass,
+} from '../lib/accountDeletion';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const DELETE_CONFIRM_TEXT = 'DELETE';
+const DELETE_REAUTH_PENDING_KEY = 'fampals_delete_reauth_pending';
+
+const isLikelyInAppBrowser = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return /FBAN|FBAV|Instagram|Line|wv|WebView|GSA|TikTok/i.test(ua);
+};
+
+const isMobileUa = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return /Android|iPhone|iPad|iPod|IEMobile|Opera Mini|CriOS|FxiOS/i.test(ua);
+};
+
+const isStandaloneDisplayMode = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const mediaStandalone = window.matchMedia?.('(display-mode: standalone)')?.matches;
+  const iosStandalone = (window.navigator as any)?.standalone === true;
+  return !!mediaStandalone || !!iosStandalone;
+};
+
+const canUsePopupFlowSafely = (): boolean => {
+  return !isMobileUa() && !isLikelyInAppBrowser() && !isStandaloneDisplayMode();
+};
 
 interface ProfileProps {
   state: AppState;
   isGuest: boolean;
+  accessContext?: AppAccessContext;
   onSignOut: () => void;
   setView: (view: string) => void;
   onUpdateState: (key: keyof AppState, value: any) => void;
@@ -26,7 +62,7 @@ const generateInviteCode = () => {
   return code;
 };
 
-const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, onUpdateState, onResetOnboarding, darkMode, onToggleDarkMode }) => {
+const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSignOut, setView, onUpdateState, onResetOnboarding, darkMode, onToggleDarkMode }) => {
   const [childName, setChildName] = useState('');
   const [childAge, setChildAge] = useState('');
   const [spouseEmail, setSpouseEmail] = useState('');
@@ -40,6 +76,13 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
   const [adminCode, setAdminCode] = useState('');
   const [adminTapCount, setAdminTapCount] = useState(0);
   const [uploadingProfilePic, setUploadingProfilePic] = useState(false);
+  const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
+  const [deleteInProgress, setDeleteInProgress] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
+  const [requiresReauthForDelete, setRequiresReauthForDelete] = useState(false);
+  const [reauthInProgress, setReauthInProgress] = useState(false);
   const profilePicInputRef = React.useRef<HTMLInputElement>(null);
   const [profileDisplayName, setProfileDisplayName] = useState(state.profileInfo?.displayName || state.user?.displayName || '');
   const [profileAgeInput, setProfileAgeInput] = useState(
@@ -59,15 +102,32 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
     prefersPavedPaths: false,
     usesPushchair: false,
   };
-  const limits = getLimits(state.entitlement);
-  const isPaid = isPaidTier(state.entitlement);
+  const effectiveEntitlement = accessContext?.entitlement ?? state.entitlement;
+  const limits = accessContext?.limits ?? getLimits(effectiveEntitlement);
+  const isPaid = accessContext?.isPro ?? isPaidTier(effectiveEntitlement);
+  const canSyncCloud = accessContext?.canSyncCloud ?? !isGuest;
+  const isLoggedIn = accessContext?.isLoggedIn ?? !!state.user;
+  const isAuthBypass = accessContext?.isAuthBypass ?? isDeleteBlockedByBypass();
   const partnerLinkRequiresPro = import.meta.env.VITE_PARTNER_LINK_REQUIRES_PRO === 'true';
-  const canLinkPartner = !partnerLinkRequiresPro || isPaidTier(state.entitlement);
-  const aiInfo = canUseAI(state.entitlement, state.familyPool);
-  const planTier = state.entitlement?.plan_tier || 'free';
+  const canLinkPartner = !partnerLinkRequiresPro || isPaidTier(effectiveEntitlement);
+  const aiInfo = canUseAI(effectiveEntitlement, state.familyPool);
+  const planTier = effectiveEntitlement?.plan_tier || 'free';
   const appVersion = __APP_VERSION__;
 
   const FREE_PREF_LIMIT = limits.preferencesPerCategory;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.sessionStorage.getItem(DELETE_REAUTH_PENDING_KEY) === '1') {
+      window.sessionStorage.removeItem(DELETE_REAUTH_PENDING_KEY);
+      const currentUser = getCurrentAuthUser();
+      if (currentUser && hasRecentLogin(currentUser)) {
+        setRequiresReauthForDelete(false);
+        setDeleteError(null);
+        setDeleteSuccess('Re-authentication complete. Confirm deletion to continue.');
+      }
+    }
+  }, []);
   
   const toggleUserPref = (category: keyof Preferences, value: string) => {
     const current = userPrefs[category] as string[] || [];
@@ -196,6 +256,10 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
   };
 
   const handleJoinWithCode = async () => {
+    if (!canSyncCloud) {
+      alert('Partner linking is disabled in read-only review mode.');
+      return;
+    }
     if (!canLinkPartner) {
       alert('Partner linking is available on Pro or Family plans.');
       setShowPlanBilling(true);
@@ -280,6 +344,12 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
   };
 
   const handleUnlinkPartner = async () => {
+    if (!canSyncCloud) {
+      onUpdateState('partnerLink', undefined);
+      onUpdateState('spouseName', undefined);
+      onUpdateState('linkedEmail', undefined);
+      return;
+    }
     if (!db || !auth?.currentUser?.uid) {
       onUpdateState('partnerLink', undefined);
       onUpdateState('spouseName', undefined);
@@ -340,6 +410,10 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
   };
   
   const refreshPartnerStatus = async () => {
+    if (!canSyncCloud) {
+      alert('Partner refresh is disabled in read-only review mode.');
+      return;
+    }
     if (!auth?.currentUser) {
       return;
     }
@@ -387,6 +461,10 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
   const userPhoto = state.user?.photoURL || 'https://picsum.photos/seed/guest/200';
   
   const handleProfilePicUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canSyncCloud) {
+      alert('Profile photo uploads are disabled in read-only review mode.');
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file || !storage || !auth?.currentUser) return;
     
@@ -434,6 +512,108 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
     onUpdateState('profileInfo', payload);
   };
 
+  const handleDeleteAccount = async () => {
+    if (!isLoggedIn || isGuest || isAuthBypass || !canSyncCloud) {
+      setDeleteError('Account deletion is unavailable in the current mode.');
+      return;
+    }
+    const currentUser = getCurrentAuthUser();
+    if (!currentUser) {
+      setDeleteError('You need to be signed in to delete your account.');
+      return;
+    }
+    if (deleteConfirmInput.trim().toUpperCase() !== DELETE_CONFIRM_TEXT) {
+      setDeleteError('Please type DELETE to confirm.');
+      return;
+    }
+    const authUser = auth?.currentUser;
+    if (!authUser || !hasRecentLogin(authUser)) {
+      setRequiresReauthForDelete(true);
+      setDeleteError('For security, please sign in again before deleting your account.');
+      return;
+    }
+
+    setDeleteInProgress(true);
+    setDeleteError(null);
+    setDeleteSuccess(null);
+    const devLog = (message: string, details?: unknown) => {
+      if (!import.meta.env.DEV) return;
+      if (details !== undefined) {
+        console.log(`[FamPals Delete] ${message}`, details);
+      } else {
+        console.log(`[FamPals Delete] ${message}`);
+      }
+    };
+
+    try {
+      devLog('Starting Firestore deletion');
+      await deleteUserOwnedFirestoreData(authUser.uid, { onLog: devLog });
+      devLog('Firestore deletion complete');
+
+      await authUser.delete();
+      devLog('Firebase Auth user deleted');
+
+      await firebaseSignOut(auth).catch(() => {});
+      clearLocalAppState();
+      setDeleteSuccess('Your account and synced data were deleted successfully.');
+      window.alert('Your account was deleted successfully.');
+      setShowDeleteAccountConfirm(false);
+      setDeleteConfirmInput('');
+      setView('login');
+    } catch (err: any) {
+      const code = err?.code || '';
+      if (code === 'auth/requires-recent-login') {
+        setRequiresReauthForDelete(true);
+        setDeleteError('Please sign in again, then retry account deletion.');
+      } else {
+        setDeleteError('Failed to delete your account. Please try again.');
+      }
+      if (import.meta.env.DEV) {
+        console.warn('[FamPals Delete] Account deletion failed', err);
+      }
+    } finally {
+      setDeleteInProgress(false);
+    }
+  };
+
+  const handleReauthenticateForDelete = async () => {
+    if (isAuthBypass) {
+      setDeleteError('Re-authentication is disabled in auth bypass mode.');
+      return;
+    }
+    if (!auth?.currentUser || !googleProvider) {
+      setDeleteError('Unable to start re-authentication right now.');
+      return;
+    }
+    setReauthInProgress(true);
+    setDeleteError(null);
+    try {
+      if (canUsePopupFlowSafely()) {
+        if (import.meta.env.DEV) {
+          console.log('[FamPals Delete] Re-auth using popup flow');
+        }
+        await reauthenticateWithPopup(auth.currentUser, googleProvider);
+        setRequiresReauthForDelete(false);
+        setDeleteSuccess('Re-authentication complete. Confirm deletion to continue.');
+      } else {
+        if (import.meta.env.DEV) {
+          console.log('[FamPals Delete] Re-auth using redirect flow');
+        }
+        if (typeof window !== 'undefined') {
+          window.sessionStorage.setItem(DELETE_REAUTH_PENDING_KEY, '1');
+        }
+        await reauthenticateWithRedirect(auth.currentUser, googleProvider);
+      }
+    } catch (err: any) {
+      setDeleteError(err?.message || 'Re-authentication failed. Please try again.');
+      if (import.meta.env.DEV) {
+        console.warn('[FamPals Delete] Re-authentication failed', err);
+      }
+    } finally {
+      setReauthInProgress(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-24 container-safe">
       <header className="px-5 pt-8 pb-4 bg-white/80 backdrop-blur-lg sticky top-0 z-50 border-b border-slate-100">
@@ -449,6 +629,11 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
       </header>
 
       <div className="px-5 py-10 space-y-12 animate-slide-up">
+        {!isGuest && !canSyncCloud && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-4 py-3 text-sm">
+            Review mode: account-linked writes are disabled. You can browse all sections safely.
+          </div>
+        )}
         <div className="flex flex-col items-center gap-6">
           <div className="relative">
             <input
@@ -459,8 +644,8 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
               className="hidden"
             />
             <div 
-              onClick={() => !isGuest && profilePicInputRef.current?.click()}
-              className={`w-36 h-36 rounded-[56px] overflow-hidden border-8 border-white shadow-2xl shadow-slate-200 ${!isGuest ? 'cursor-pointer' : ''}`}
+              onClick={() => canSyncCloud && profilePicInputRef.current?.click()}
+              className={`w-36 h-36 rounded-[56px] overflow-hidden border-8 border-white shadow-2xl shadow-slate-200 ${canSyncCloud ? 'cursor-pointer' : ''}`}
             >
               {uploadingProfilePic ? (
                 <div className="w-full h-full bg-slate-100 flex items-center justify-center">
@@ -471,10 +656,10 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
               )}
             </div>
             <button 
-              onClick={() => !isGuest && profilePicInputRef.current?.click()}
-              disabled={isGuest || uploadingProfilePic}
+              onClick={() => canSyncCloud && profilePicInputRef.current?.click()}
+              disabled={!canSyncCloud || uploadingProfilePic}
               className={`absolute -bottom-2 -right-2 w-12 h-12 rounded-2xl flex items-center justify-center text-white border-4 border-[#F8FAFC] shadow-lg ${
-                isGuest ? 'bg-slate-300 cursor-not-allowed' : 'bg-sky-500 hover:bg-sky-600 cursor-pointer'
+                !canSyncCloud ? 'bg-slate-300 cursor-not-allowed' : 'bg-sky-500 hover:bg-sky-600 cursor-pointer'
               }`}
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" /><circle cx="12" cy="13" r="4" /></svg>
@@ -1093,7 +1278,85 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, onSignOut, setView, o
           </button>
         </div>
 
+        {isLoggedIn && !isAuthBypass && (
+          <div className="bg-white rounded-[32px] border border-rose-100 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-rose-100">
+              <h3 className="text-sm font-black text-rose-700 uppercase tracking-widest">Delete Account</h3>
+              <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                This permanently deletes your account sign-in and your cloud-synced FamPal data.
+              </p>
+            </div>
+            {!showDeleteAccountConfirm ? (
+              <div className="p-6">
+                <button
+                  onClick={() => {
+                    setShowDeleteAccountConfirm(true);
+                    setDeleteError(null);
+                    setDeleteSuccess(null);
+                  }}
+                  className="w-full h-11 rounded-2xl bg-rose-600 text-white text-xs font-black uppercase tracking-widest"
+                >
+                  Delete account permanently
+                </button>
+              </div>
+            ) : (
+              <div className="p-6 space-y-3">
+                <p className="text-xs text-slate-600">
+                  Type <span className="font-black text-rose-600">DELETE</span> to confirm:
+                </p>
+                <input
+                  value={deleteConfirmInput}
+                  onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                  placeholder="Type DELETE"
+                  className="w-full h-11 rounded-xl border border-rose-200 px-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-200"
+                />
+                {deleteError && (
+                  <p className="text-xs text-rose-600 font-semibold">{deleteError}</p>
+                )}
+                {deleteSuccess && (
+                  <p className="text-xs text-emerald-700 font-semibold">{deleteSuccess}</p>
+                )}
+                {requiresReauthForDelete && (
+                  <button
+                    onClick={handleReauthenticateForDelete}
+                    disabled={reauthInProgress}
+                    className="w-full h-10 rounded-xl bg-sky-500 text-white text-xs font-bold uppercase tracking-wide disabled:opacity-60"
+                  >
+                    {reauthInProgress ? 'Re-authenticating...' : 'Sign in again to continue'}
+                  </button>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setShowDeleteAccountConfirm(false);
+                      setDeleteConfirmInput('');
+                      setDeleteError(null);
+                      setDeleteSuccess(null);
+                      setRequiresReauthForDelete(false);
+                    }}
+                    className="flex-1 h-10 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold uppercase tracking-wide"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteAccount}
+                    disabled={deleteInProgress}
+                    className="flex-1 h-10 rounded-xl bg-rose-600 text-white text-xs font-bold uppercase tracking-wide disabled:opacity-60"
+                  >
+                    {deleteInProgress ? 'Deleting...' : 'Confirm delete'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+          {!isGuest && (
+            <div className="px-6 pt-6 pb-2 text-xs text-slate-500 leading-relaxed border-b border-slate-100">
+              Data controls: your profile, memories, and saved places are stored in Firebase. You can self-serve account deletion from the Delete Account section above.
+            </div>
+          )}
           <button 
             onClick={onSignOut}
             className="w-full flex items-center justify-between p-6 text-slate-400 font-black text-xs uppercase tracking-widest hover:bg-rose-50 hover:text-rose-500 transition-colors"

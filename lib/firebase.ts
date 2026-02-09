@@ -8,7 +8,8 @@ import {
   getRedirectResult,
   signOut,
   setPersistence,
-  browserLocalPersistence
+  browserLocalPersistence,
+  browserSessionPersistence
 } from "firebase/auth";
 import {
   getFirestore,
@@ -19,6 +20,7 @@ import {
   collectionGroup,
   query,
   where,
+  limit,
   addDoc,
   increment,
   FieldPath,
@@ -73,8 +75,11 @@ if (isConfigValid) {
   storage = getStorage(app);
   googleProvider = new GoogleAuthProvider();
 
-  setPersistence(auth, browserLocalPersistence).catch((e) => {
-    console.warn("Auth persistence failed", e);
+  setPersistence(auth, browserLocalPersistence).catch((localErr) => {
+    console.warn("Auth local persistence failed, falling back to session persistence", localErr);
+    return setPersistence(auth!, browserSessionPersistence).catch((sessionErr) => {
+      console.warn("Auth session persistence failed", sessionErr);
+    });
   });
 }
 
@@ -102,6 +107,7 @@ export {
   collectionGroup,
   query,
   where,
+  limit,
   addDoc,
   increment,
   FieldPath,

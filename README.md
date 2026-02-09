@@ -56,6 +56,24 @@ Key notes:
   - `VITE_GOOGLE_PLACES_API_KEY`
 - Keep all `.env*` files local and uncommitted.
 
+## Dev Auth Bypass (QA/Store Review Only)
+
+- Use `VITE_AUTH_BYPASS=true` in local development to inject a mock signed-in user.
+- Bypass is DEV-only and ignored in production builds.
+- In bypass mode, cloud writes are disabled to avoid accidental production data changes.
+- Before any production build/deploy, ensure `VITE_AUTH_BYPASS` is unset or `false`.
+
+## Google Auth Reliability (Mobile)
+
+- FamPal uses **redirect-first** Google sign-in for better reliability in iOS Safari, Android WebView, Capacitor wrappers, and installed PWA mode.
+- The redirect completion handler lives in `App.tsx` (the `getRedirectResult(auth)` effect).
+- Popup is only used as a fallback when redirect initialization fails and the browser is a known safe desktop popup environment.
+
+Quick mobile test:
+1. Open app in iOS Safari or Android WebView shell.
+2. Tap Sign in with Google and complete consent.
+3. Confirm app returns signed in (dashboard/profile) without repeated redirect loops.
+
 ## Versioning
 
 - Semantic version source of truth: `package.json` `version`.
@@ -66,3 +84,20 @@ Release steps:
 2. Update `CHANGELOG.md`.
 3. Merge `staging -> main`.
 4. Deploy `main` to production.
+
+## Release Flows
+
+### Web (Firebase App Hosting)
+- Web deploy remains unchanged and automatic from Git push.
+- Standard flow: push to the branch wired for App Hosting deployment.
+- CI/build output remains `dist`.
+
+### Mobile (Capacitor iOS/Android)
+1. `npm run build`
+2. `npm run cap:sync`
+3. Open native project:
+   - Android: `npm run cap:open:android`
+   - iOS: `npm run cap:open:ios`
+4. Build/archive in Android Studio or Xcode.
+
+Note: mobile binaries do **not** auto-update when web is deployed. You must rebuild/sync and ship a new mobile release.

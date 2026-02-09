@@ -9,10 +9,12 @@ import { updateLocation, updateRadius } from '../lib/profileSync';
 import { auth } from '../lib/firebase';
 import { upsertSavedPlace, deleteSavedPlace } from '../lib/userData';
 import { Timestamp } from 'firebase/firestore';
+import type { AppAccessContext } from '../lib/access';
 
 interface DashboardNetflixProps {
   state: AppState;
   isGuest: boolean;
+  accessContext?: AppAccessContext;
   onSignOut: () => void;
   setView: (view: string) => void;
   onUpdateState: (key: keyof AppState, value: any) => void;
@@ -170,8 +172,10 @@ const HeroCard: React.FC<{
   </div>
 );
 
-const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onSignOut, setView, onUpdateState, initialCircleId, onClearInitialCircle, initialTab, onTabChange, discoveryMode, onToggleDiscoveryMode }) => {
+const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, accessContext, onSignOut, setView, onUpdateState, initialCircleId, onClearInitialCircle, initialTab, onTabChange, discoveryMode, onToggleDiscoveryMode }) => {
   const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+  const canSyncCloud = accessContext?.canSyncCloud ?? !isGuest;
+  const effectiveGuestForPersistence = !canSyncCloud;
   const userPrefs = state.userPreferences || {};
   const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner'>(
     (initialTab as any) || 'explore'
@@ -215,10 +219,10 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
           const d = await r.json();
           const name = d.address?.city || d.address?.town || d.address?.suburb || 'Your area';
           setLocationName(name);
-          if (!isGuest) {
+          if (canSyncCloud) {
             const newPrefs = updateLocation(
               { lat: loc.lat, lng: loc.lng, label: name },
-              isGuest,
+              effectiveGuestForPersistence,
               userPrefs
             );
             onUpdateState('userPreferences', newPrefs);
@@ -232,10 +236,10 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
         const fallback = { lat: -33.9249, lng: 18.4241 };
         setUserLocation(fallback);
         setLocationName('Cape Town');
-        if (!isGuest) {
+        if (canSyncCloud) {
           const newPrefs = updateLocation(
             { lat: fallback.lat, lng: fallback.lng, label: 'Cape Town' },
-            isGuest,
+            effectiveGuestForPersistence,
             userPrefs
           );
           onUpdateState('userPreferences', newPrefs);
@@ -317,7 +321,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
   const toggleFavorite = useCallback(
     async (place: Place) => {
       const uid = state.user?.uid || auth?.currentUser?.uid;
-      if (!uid && !isGuest) return;
+      if (!uid && canSyncCloud) return;
       const isSaved = state.favorites.includes(place.id);
       if (isSaved) {
         onUpdateState('favorites', state.favorites.filter((f) => f !== place.id));
@@ -325,14 +329,14 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
           deleteSavedPlace(uid, place.id).catch(console.warn);
         }
       } else {
-        if (!isGuest && uid) {
-          const check = canSavePlace(state.entitlement, state.savedPlaces?.length || 0);
+        if (canSyncCloud && uid) {
+          const check = canSavePlace(accessContext?.entitlement ?? state.entitlement, state.savedPlaces?.length || 0);
           if (!check.allowed) {
             return;
           }
         }
         onUpdateState('favorites', [...state.favorites, place.id]);
-        if (uid) {
+        if (uid && canSyncCloud) {
           const saved: SavedPlace = {
             placeId: place.id,
             name: place.name,
@@ -346,7 +350,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
         }
       }
     },
-    [state.favorites, state.savedPlaces, state.entitlement, state.user?.uid, isGuest, onUpdateState]
+    [state.favorites, state.savedPlaces, state.entitlement, state.user?.uid, canSyncCloud, onUpdateState]
   );
 
   const handleLocationChange = async (input: string) => {
@@ -358,10 +362,10 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
         setUserLocation(loc);
         const locName = results[0].display_name.split(',')[0];
         setLocationName(locName);
-        if (!isGuest) {
+        if (canSyncCloud) {
           const newPrefs = updateLocation(
             { lat: loc.lat, lng: loc.lng, label: locName },
-            isGuest,
+            effectiveGuestForPersistence,
             userPrefs
           );
           onUpdateState('userPreferences', newPrefs);
@@ -401,7 +405,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
         memories={state.memories?.filter((m) => m.placeId === selectedPlace.id)}
         childrenAges={state.children?.map((c) => c.age).filter((a): a is number => a !== undefined)}
         isGuest={isGuest}
-        entitlement={state.entitlement}
+        entitlement={accessContext?.entitlement ?? state.entitlement}
         userId={state.user?.uid}
         userName={state.user?.displayName || state.user?.email || ''}
         onClose={() => setSelectedPlace(null)}
@@ -469,8 +473,8 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, onS
               onChange={(e) => {
                 const val = parseInt(e.target.value);
                 setRadiusKm(val);
-                if (!isGuest) {
-                  const newPrefs = updateRadius(val, isGuest, userPrefs);
+                if (canSyncCloud) {
+                  const newPrefs = updateRadius(val, effectiveGuestForPersistence, userPrefs);
                   onUpdateState('userPreferences', newPrefs);
                 }
               }}
