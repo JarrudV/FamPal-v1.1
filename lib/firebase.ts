@@ -89,6 +89,7 @@ export const firebaseConfigError = !isConfigValid
   : null;
 
 export {
+  app,
   auth,
   db,
   storage,

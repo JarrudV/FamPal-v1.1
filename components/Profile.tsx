@@ -111,7 +111,9 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
   const partnerLinkRequiresPro = import.meta.env.VITE_PARTNER_LINK_REQUIRES_PRO === 'true';
   const canLinkPartner = !partnerLinkRequiresPro || isPaidTier(effectiveEntitlement);
   const aiInfo = canUseAI(effectiveEntitlement, state.familyPool);
-  const planTier = effectiveEntitlement?.plan_tier || 'free';
+  const planTier = effectiveEntitlement?.subscription_tier === 'admin'
+    ? 'pro'
+    : (effectiveEntitlement?.subscription_tier === 'pro' ? 'pro' : (effectiveEntitlement?.plan_tier || 'free'));
   const appVersion = __APP_VERSION__;
 
   const FREE_PREF_LIMIT = limits.preferencesPerCategory;
@@ -222,6 +224,12 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
         const now = new Date();
         const resetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
         const proEntitlement = {
+          subscription_tier: 'pro',
+          subscription_status: 'active',
+          subscription_source: 'admin',
+          gemini_credits_used: 0,
+          gemini_credits_limit: 100,
+          usage_reset_month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
           plan_tier: 'pro',
           plan_status: 'active',
           entitlement_source: 'admin',
@@ -722,7 +730,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
               <div>
                 <p className="text-sm font-bold text-purple-800">Better recommendations for your family</p>
                 <p className="text-xs text-purple-600 mt-1">
-                  Add your children's ages below to get personalized AI summaries and place recommendations tailored to your family's needs.
+                  Add your children's ages below to get personalized smart insights and place recommendations tailored to your family's needs.
                 </p>
               </div>
             </div>
@@ -1177,7 +1185,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
                     <p className="text-xs text-slate-400">
                       {planTier === 'lifetime' ? 'Lifetime access' : 
                        planTier === 'family' ? 'Family pool active' :
-                       planTier === 'pro' ? 'Annual subscription' : 
+                       planTier === 'pro' ? 'Pro subscription' : 
                        'Upgrade for unlimited features'}
                     </p>
                   </div>

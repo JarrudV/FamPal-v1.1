@@ -10,7 +10,7 @@ import PlanBilling from './PlanBilling';
 import MustHavesSheet from './MustHavesSheet';
 import { UpgradePrompt, LimitIndicator } from './UpgradePrompt';
 import { searchExploreIntent, getExploreIntentSubtitle, getPlaceDetails } from '../placesService';
-import { getLimits, canSavePlace, isPaidTier, getNextResetDate } from '../lib/entitlements';
+import { getLimits, canSavePlace, isPaidTier, getNextResetDate, getCurrentUsageMonth } from '../lib/entitlements';
 import { updateLocation, updateRadius, updateCategory, updateActiveCircle } from '../lib/profileSync';
 import {
   createDefaultExploreFilters,
@@ -1453,7 +1453,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
     : null;
 
   const handleIncrementAiRequests = async () => {
-    const current = state.entitlement?.ai_requests_this_month || 0;
+    const currentUsageMonth = getCurrentUsageMonth();
+    const isNewMonth = !!state.entitlement?.usage_reset_month && state.entitlement.usage_reset_month !== currentUsageMonth;
+    const current = isNewMonth ? 0 : (state.entitlement?.gemini_credits_used ?? state.entitlement?.ai_requests_this_month ?? 0);
+    const usageResetMonth = currentUsageMonth;
     if (
       canSyncCloud &&
       state.entitlement?.plan_tier === 'family' &&
@@ -1485,6 +1488,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
 
     onUpdateState('entitlement', {
       ...state.entitlement,
+      gemini_credits_used: current + 1,
+      usage_reset_month: usageResetMonth,
       ai_requests_this_month: current + 1
     });
   };

@@ -2,6 +2,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Place, ActivityType, Child, Preferences } from "./types";
 import { db, collection, addDoc, serverTimestamp } from "./lib/firebase";
+import { reserveSmartInsightCredit, refundSmartInsightCredit } from "./lib/smartInsightCredits";
 
 export interface SearchContext {
   userPreferences?: Preferences;
@@ -83,6 +84,44 @@ type AiUsageMeta = {
 };
 
 type AiUsageCallback = (info: { cached: boolean; usage?: AiUsageMeta }) => void;
+
+function getUsageMonthKey(date = new Date()): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function buildLimitReachedError(limit: number): Error {
+  const error = new Error('limit_reached');
+  (error as any).code = 'limit_reached';
+  (error as any).limit = limit;
+  return error;
+}
+
+function buildRateLimitedError(): Error {
+  const error = new Error('rate_limited');
+  (error as any).code = 'rate_limited';
+  return error;
+}
+
+async function reserveCreditBeforeGemini(userId?: string): Promise<boolean> {
+  if (!userId) return false;
+  const result = await reserveSmartInsightCredit();
+  if (!result.ok) {
+    if (result.reason === 'rate_limited') {
+      throw buildRateLimitedError();
+    }
+    throw buildLimitReachedError(result.limit);
+  }
+  return true;
+}
+
+async function tryRefundCredit(userId?: string): Promise<void> {
+  if (!userId) return;
+  try {
+    await refundSmartInsightCredit();
+  } catch (refundError) {
+    console.warn('[FamPals] Failed to refund smart insight credit.', refundError);
+  }
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -373,7 +412,9 @@ export async function askAboutPlace(
   const agesKey = userContext?.childrenAges?.sort().join(',') || 'none';
   const tripKey = userContext?.tripContext ? 
     `${userContext.tripContext.allergies?.join(',')}|${userContext.tripContext.foodPreferences?.join(',')}` : 'none';
-  const cacheKey = `${place.id}:${question.toLowerCase().trim()}:ages:${agesKey}:trip:${tripKey}`;
+  const usageMonth = getUsageMonthKey();
+  const userIdPart = options?.userId || 'guest';
+  const cacheKey = `user:${userIdPart}:place:${place.id}:month:${usageMonth}:q:${question.toLowerCase().trim()}:ages:${agesKey}:trip:${tripKey}`;
   
   // Check memory cache first
   if (!options?.forceRefresh) {
@@ -388,6 +429,8 @@ export async function askAboutPlace(
       return cached;
     }
   }
+
+  const creditReserved = await reserveCreditBeforeGemini(options?.userId);
   
   const ai = getAI();
   
@@ -454,8 +497,11 @@ Provide a helpful, concise answer focused on family-friendliness, kid safety, an
     
     return answer;
   } catch (error: any) {
+    if (creditReserved) {
+      await tryRefundCredit(options?.userId);
+    }
     console.error("Gemini Ask Error:", error);
-    throw new Error("Failed to get AI response. Please try again.");
+    throw error;
   }
 }
 
@@ -468,7 +514,9 @@ export async function generateFamilySummary(
     throw new Error("Gemini API key missing – AI disabled");
   }
   
-  const cacheKey = `summary:${place.id}:${childrenAges?.join(',') || 'general'}`;
+  const usageMonth = getUsageMonthKey();
+  const userIdPart = options?.userId || 'guest';
+  const cacheKey = `summary:user:${userIdPart}:place:${place.id}:month:${usageMonth}:ages:${childrenAges?.join(',') || 'general'}`;
   
   if (!options?.forceRefresh) {
     if (aiResponseCache.has(cacheKey)) {
@@ -482,6 +530,8 @@ export async function generateFamilySummary(
       return cached;
     }
   }
+
+  const creditReserved = await reserveCreditBeforeGemini(options?.userId);
   
   const ai = getAI();
   
@@ -531,8 +581,11 @@ Keep it under 80 words, warm and helpful tone.`;
     
     return summary;
   } catch (error: any) {
+    if (creditReserved) {
+      await tryRefundCredit(options?.userId);
+    }
     console.error("Gemini Summary Error:", error);
-    return place.description;
+    throw error;
   }
 }
 

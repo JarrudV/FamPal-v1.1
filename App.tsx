@@ -23,12 +23,13 @@ import { AppState, User, getDefaultEntitlement, UserPreferences, SavedPlace, Pre
 import { getGuestPreferences, syncGuestPreferencesToUser } from './lib/profileSync';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
-import { shouldResetMonthlyAI, getNextResetDate } from './lib/entitlements';
+import { shouldResetMonthlyAI, getNextResetDate, getCurrentUsageMonth } from './lib/entitlements';
 import { joinCircleByCode } from './lib/circles';
 import { buildAccessContext, type AppAccessContext } from './lib/access';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const AUTH_REDIRECT_PENDING_KEY = 'fampals_auth_redirect_pending';
+const BILLING_ENABLED = import.meta.env.VITE_BILLING_ENABLED === 'true';
 
 const isLikelyInAppBrowser = (): boolean => {
   if (typeof navigator === 'undefined') return false;
@@ -353,19 +354,25 @@ const App: React.FC = () => {
             setOnboardingChecked(true);
             legacyFavoritesRef.current = Array.isArray(dbState.favorites) ? dbState.favorites : [];
             savedPlacesMigratedAtRef.current = dbState.savedPlacesMigratedAt || null;
-            const loadedEntitlement = dbState.entitlement || getDefaultEntitlement();
+            const loadedEntitlement = {
+              ...getDefaultEntitlement(),
+              ...(dbState.entitlement || {}),
+            };
             const guestPrefs = getGuestPreferences();
             const hasGuestPrefs = Object.keys(guestPrefs).length > 0;
             if (hasGuestPrefs && !dbState.userPreferences) {
               syncGuestPreferencesToUser(userAuth.uid);
             }
             const { isPro: _ignoredIsPro, ...restDbState } = dbState;
-            const resetKey = `${userAuth.uid}:${loadedEntitlement.ai_requests_reset_date || 'none'}`;
+            const resetKey = `${userAuth.uid}:${loadedEntitlement.usage_reset_month || loadedEntitlement.ai_requests_reset_date || 'none'}`;
             if (shouldResetMonthlyAI(loadedEntitlement) && aiResetAttemptedRef.current !== resetKey) {
               aiResetAttemptedRef.current = resetKey;
               const nextResetDate = getNextResetDate();
+              const currentUsageMonth = getCurrentUsageMonth();
               saveUserField(userAuth.uid, 'entitlement', {
                 ...loadedEntitlement,
+                gemini_credits_used: 0,
+                usage_reset_month: currentUsageMonth,
                 ai_requests_this_month: 0,
                 ai_requests_reset_date: nextResetDate,
               }).catch(err => console.warn('Failed to reset AI usage.', err));
@@ -539,6 +546,7 @@ const App: React.FC = () => {
   }, [accessContext.canSyncCloud]);
 
   useEffect(() => {
+    if (!BILLING_ENABLED) return;
     if (!accessContext.canSyncCloud) return;
     if (!isFirebaseConfigured) return;
     const params = new URLSearchParams(window.location.search);

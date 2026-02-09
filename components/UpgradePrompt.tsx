@@ -97,7 +97,7 @@ export function AILimitBadge({ remaining, limit }: AILimitBadgeProps) {
   if (isUnlimited) {
     return (
       <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full font-medium">
-        Unlimited AI
+        Unlimited smart insights
       </span>
     );
   }
@@ -110,7 +110,7 @@ export function AILimitBadge({ remaining, limit }: AILimitBadgeProps) {
         ? 'text-amber-700 bg-amber-50' 
         : 'text-sky-700 bg-sky-50'
     }`}>
-      {remaining} AI {remaining === 1 ? 'question' : 'questions'} left
+      {remaining} {remaining === 1 ? 'insight' : 'insights'} left this month
     </span>
   );
 }

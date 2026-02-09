@@ -342,8 +342,8 @@ const StepFeatures: React.FC = () => (
       />
       <FeatureCard
         icon={<svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>}
-        title="AI Suggestions"
-        description="Get personalised activity ideas powered by AI."
+        title="Smart Suggestions"
+        description="Get personalised activity ideas tailored to your family."
         gradient="from-violet-400 to-purple-500"
         delay={300}
       />

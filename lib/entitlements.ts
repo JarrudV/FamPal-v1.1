@@ -1,7 +1,52 @@
 import { Entitlement, PlanTier, PLAN_LIMITS, getDefaultEntitlement } from '../types';
 
+const FREE_CREDITS_PER_MONTH = 5;
+const PRO_CREDITS_PER_MONTH = 100;
+
+export function getCurrentUsageMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getEntitlementTier(entitlement: Entitlement | undefined): 'free' | 'pro' | 'admin' {
+  if (!entitlement) return 'free';
+  if (entitlement.subscription_tier) return entitlement.subscription_tier;
+  if (entitlement.plan_tier === 'pro' || entitlement.plan_tier === 'family' || entitlement.plan_tier === 'lifetime') return 'pro';
+  return 'free';
+}
+
+function getEffectiveCreditLimit(entitlement: Entitlement | undefined): number {
+  if (!entitlement) return FREE_CREDITS_PER_MONTH;
+  if (typeof entitlement.gemini_credits_limit === 'number' && entitlement.gemini_credits_limit > 0) {
+    return entitlement.gemini_credits_limit;
+  }
+  const tier = getEntitlementTier(entitlement);
+  if (tier === 'admin') return Infinity;
+  return tier === 'pro' ? PRO_CREDITS_PER_MONTH : FREE_CREDITS_PER_MONTH;
+}
+
+function getEffectiveCreditsUsed(
+  entitlement: Entitlement | undefined,
+  poolUsage?: { ai_requests_this_month?: number; ai_requests_reset_date?: string } | null
+): number {
+  if (!entitlement) return 0;
+  if (typeof entitlement.gemini_credits_used === 'number') {
+    return entitlement.gemini_credits_used;
+  }
+  const isLegacyFamilyPool = entitlement.plan_tier === 'family' && poolUsage;
+  if (isLegacyFamilyPool) {
+    return poolUsage?.ai_requests_this_month || 0;
+  }
+  return entitlement.ai_requests_this_month || 0;
+}
+
 export function getLimits(entitlement: Entitlement | undefined) {
-  const tier = entitlement?.plan_tier || 'free';
+  const tier =
+    entitlement?.subscription_tier === 'admin'
+      ? 'pro'
+      : entitlement?.subscription_tier === 'pro'
+        ? 'pro'
+        : (entitlement?.plan_tier || 'free');
   const status = entitlement?.plan_status || 'active';
   
   if (status === 'expired' || status === 'cancelled') {
@@ -13,6 +58,11 @@ export function getLimits(entitlement: Entitlement | undefined) {
 
 export function isPaidTier(entitlement: Entitlement | undefined): boolean {
   if (!entitlement) return false;
+  const tier = getEntitlementTier(entitlement);
+  if (tier === 'admin') return true;
+  if (tier === 'pro' && entitlement.subscription_status) {
+    return entitlement.subscription_status === 'active';
+  }
   const { plan_tier, plan_status } = entitlement;
   return (plan_tier === 'pro' || plan_tier === 'family' || plan_tier === 'lifetime') && plan_status === 'active';
 }
@@ -55,11 +105,8 @@ export function canUseAI(
   entitlement: Entitlement | undefined,
   poolUsage?: { ai_requests_this_month?: number; ai_requests_reset_date?: string } | null
 ): { allowed: boolean; remaining: number; limit: number } {
-  const limits = getLimits(entitlement);
-  const limit = limits.aiRequestsPerMonth;
-  const used = entitlement?.plan_tier === 'family' && poolUsage
-    ? (poolUsage.ai_requests_this_month || 0)
-    : (entitlement?.ai_requests_this_month || 0);
+  const limit = getEffectiveCreditLimit(entitlement);
+  const used = getEffectiveCreditsUsed(entitlement, poolUsage);
   const remaining = Math.max(0, limit - used);
   const unlimited = limit === Infinity;
   return {
@@ -77,6 +124,9 @@ export function canAddPreference(entitlement: Entitlement | undefined, currentCo
 }
 
 export function shouldResetMonthlyAI(entitlement: Entitlement | undefined): boolean {
+  if (entitlement?.usage_reset_month) {
+    return entitlement.usage_reset_month !== getCurrentUsageMonth();
+  }
   if (!entitlement?.ai_requests_reset_date) return true;
   const resetDate = new Date(entitlement.ai_requests_reset_date);
   return new Date() >= resetDate;

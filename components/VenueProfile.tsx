@@ -111,6 +111,8 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [lastAiQuestion, setLastAiQuestion] = useState('');
   const [aiCached, setAiCached] = useState(false);
+  const [serverLimitReached, setServerLimitReached] = useState(false);
+  const [serverLimitValue, setServerLimitValue] = useState<number | null>(null);
   const [showNavOptions, setShowNavOptions] = useState(false);
   
   const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
@@ -176,7 +178,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
     "Best time to visit?"
   ];
 
-  const aiLimitReached = !aiInfo.allowed;
+  const aiLimitReached = serverLimitReached || !aiInfo.allowed;
   
   const handleAskAI = async (question: string, forceRefresh: boolean = false) => {
     if (!question.trim()) return;
@@ -204,13 +206,22 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
         forceRefresh,
         onUsage: ({ cached }) => {
           setAiCached(cached);
-          if (!cached && onIncrementAiRequests) {
-            onIncrementAiRequests();
-          }
         },
       });
       setAiAnswer(answer);
     } catch (error: any) {
+      if (error?.code === 'rate_limited' || error?.message === 'rate_limited') {
+        setAiAnswer('Give us a second...');
+        setAiLoading(false);
+        return;
+      }
+      if (error?.code === 'limit_reached' || error?.message === 'limit_reached') {
+        setServerLimitReached(true);
+        setServerLimitValue(typeof error?.limit === 'number' ? error.limit : null);
+        setAiAnswer("You've reached your monthly smart insights limit.");
+        setAiLoading(false);
+        return;
+      }
       setAiAnswer(error.message || 'Failed to get response. Please try again.');
     }
     setAiLoading(false);
@@ -222,7 +233,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
     if (!aiAnswer) return;
     const currentNotes = favoriteData?.notes || '';
     const timestamp = new Date().toLocaleDateString();
-    const newNote = `\n\n--- AI Summary (${timestamp}) ---\n${aiAnswer}`;
+    const newNote = `\n\n--- Smart Insight (${timestamp}) ---\n${aiAnswer}`;
     const updatedNotes = currentNotes + newNote;
     onUpdateDetails({ notes: updatedNotes.trim() });
     setSummarySaved(true);
@@ -448,11 +459,11 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                     className="w-full h-16 bg-gradient-to-r from-slate-300 to-slate-400 text-white rounded-3xl font-extrabold shadow-lg flex items-center justify-center gap-3 opacity-60 cursor-not-allowed"
                   >
                     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
-                    Ask AI About This Place
+                    Smart Insights for This Place
                   </button>
                   <div className="mt-3 bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center">
-                    <p className="text-sm font-bold text-amber-700">Sign in to unlock AI summaries</p>
-                    <p className="text-xs text-amber-600 mt-1">Get personalized insights for your family</p>
+                    <p className="text-sm font-bold text-amber-700">Sign in to unlock smart insights</p>
+                    <p className="text-xs text-amber-600 mt-1">Get personalized recommendations for your family</p>
                   </div>
                 </div>
               ) : (
@@ -462,10 +473,10 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                     className="w-full h-16 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-3xl font-extrabold shadow-xl shadow-purple-100 flex items-center justify-center gap-3 active:scale-95 transition-all"
                   >
                     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
-                    Ask AI About This Place
+                    Smart Insights for This Place
                     {aiInfo.limit !== -1 && (
                       <span className="text-xs bg-white/20 px-2 py-1 rounded-lg">
-                        {aiInfo.remaining} left
+                        {aiInfo.remaining} left this month
                       </span>
                     )}
                   </button>
@@ -474,14 +485,23 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                     <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-3xl p-6 space-y-4 border border-purple-100 animate-slide-up">
                       {aiLimitReached ? (
                         <div className="text-center py-4">
-                          <p className="text-lg font-bold text-purple-700">AI Limit Reached</p>
-                          <p className="text-sm text-purple-500 mt-2">You've used all {aiInfo.limit} AI requests this month</p>
+                          <p className="text-lg font-bold text-purple-700">Monthly Limit Reached</p>
+                          <p className="text-sm text-purple-500 mt-2">
+                            {aiInfo.limit === 5
+                              ? "You've used your 5 free smart insights this month. Upgrade to Pro to keep planning smarter."
+                              : `You've used all ${(serverLimitValue ?? aiInfo.limit)} smart insights this month.`}
+                          </p>
                           <button className="mt-4 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-bold text-sm shadow-lg">
-                            Upgrade to Pro for Unlimited
+                            Upgrade to Pro
                           </button>
                         </div>
                       ) : (
                         <>
+                          {aiInfo.limit === 100 && aiInfo.remaining <= 20 && (
+                            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                              You are close to your monthly limit: {aiInfo.remaining} smart insights left.
+                            </p>
+                          )}
                           <div className="flex flex-wrap gap-2">
                             {quickQuestions.map(q => (
                               <button 
@@ -500,7 +520,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                               value={aiQuestion}
                               onChange={(e) => setAiQuestion(e.target.value)}
                               onKeyDown={(e) => e.key === 'Enter' && handleAskAI(aiQuestion)}
-                              placeholder="Ask anything about this place..."
+                              placeholder="Ask for a smart insight about this place..."
                               className="flex-1 px-4 py-3 rounded-xl bg-white text-sm font-medium focus:ring-2 focus:ring-purple-500 outline-none"
                             />
                             <button 
@@ -508,7 +528,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                               disabled={aiLoading || !aiQuestion.trim()}
                               className="px-6 py-3 bg-purple-600 text-white rounded-xl font-bold text-sm disabled:opacity-50 active:scale-95 transition-all"
                             >
-                              {aiLoading ? '...' : 'Ask'}
+                              {aiLoading ? '...' : 'Get insight'}
                             </button>
                           </div>
                         </>
@@ -529,14 +549,14 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                                 : 'bg-purple-100 text-purple-600 hover:bg-purple-200'
                             }`}
                           >
-                            {summarySaved ? 'Saved!' : 'Save Summary to Notes'}
+                            {summarySaved ? 'Saved!' : 'Save Insight to Notes'}
                           </button>
                           <button
                             onClick={() => handleAskAI(lastAiQuestion || aiQuestion, true)}
                             disabled={aiLoading || !(lastAiQuestion || aiQuestion)}
                             className="w-full py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-60"
                           >
-                            Refresh AI Response
+                            Refresh Insight
                           </button>
                         </div>
                       )}

@@ -237,8 +237,17 @@ export interface User {
 export type PlanTier = 'free' | 'pro' | 'family' | 'lifetime';
 export type PlanStatus = 'active' | 'cancelled' | 'expired';
 export type EntitlementSource = 'paystack' | 'apple' | 'google' | 'admin' | null;
+export type SubscriptionTier = 'free' | 'pro' | 'admin';
+export type SubscriptionStatus = 'active' | 'inactive';
+export type SubscriptionSource = 'apple' | 'google' | 'admin' | null;
 
 export interface Entitlement {
+  subscription_tier: SubscriptionTier;
+  subscription_status: SubscriptionStatus;
+  subscription_source: SubscriptionSource;
+  gemini_credits_used: number;
+  gemini_credits_limit: number;
+  usage_reset_month: string;
   plan_tier: PlanTier;
   plan_status: PlanStatus;
   entitlement_source: EntitlementSource;
@@ -263,7 +272,7 @@ export const PLAN_LIMITS = {
     notebookEntries: 25,
     memories: 15,
     circles: 5,
-    aiRequestsPerMonth: 15,
+    aiRequestsPerMonth: 5,
     preferencesPerCategory: 3,
     partnerFavorites: 3,
     partnerMemories: 3,
@@ -309,7 +318,14 @@ export const PLAN_PRICES = {
 export function getDefaultEntitlement(): Entitlement {
   const now = new Date();
   const resetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const usageResetMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   return {
+    subscription_tier: 'free',
+    subscription_status: 'active',
+    subscription_source: null,
+    gemini_credits_used: 0,
+    gemini_credits_limit: 5,
+    usage_reset_month: usageResetMonth,
     plan_tier: 'free',
     plan_status: 'active',
     entitlement_source: null,
