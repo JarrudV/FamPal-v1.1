@@ -514,8 +514,8 @@ const App: React.FC = () => {
             setLoading(false);
             if (!onboardingCompleted) {
               setView('onboarding');
-            } else if (view === 'onboarding' || view === 'login') {
-              setView('dashboard');
+            } else {
+              setView((prev) => (prev === 'login' || prev === 'onboarding') ? 'dashboard' : prev);
             }
           } else {
             legacyFavoritesRef.current = [];
