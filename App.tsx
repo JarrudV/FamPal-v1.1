@@ -12,6 +12,10 @@ import {
   signOut as firebaseSignOut,
   isFirebaseConfigured,
   firebaseConfigError,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  updateProfile,
 } from './lib/firebase';
 import { listenToUserDoc, upsertUserProfile, saveUserField, listenToSavedPlaces, upsertSavedPlace } from './lib/userData';
 import Login from './components/Login';
@@ -221,6 +225,94 @@ const App: React.FC = () => {
       setLoading(false);
     }
   }, [authBypassEnabled]);
+
+  const handleEmailSignIn = useCallback(async (email: string, password: string) => {
+    if (!isFirebaseConfigured || !auth) {
+      setError(firebaseConfigError || "Firebase is not configured properly.");
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (err: any) {
+      setLoading(false);
+      const code = err.code || '';
+      if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+        setError('Invalid email or password. Please try again.');
+      } else if (code === 'auth/invalid-email') {
+        setError('Please enter a valid email address.');
+      } else if (code === 'auth/user-disabled') {
+        setError('This account has been disabled. Please contact support.');
+      } else if (code === 'auth/too-many-requests') {
+        setError('Too many attempts. Please try again later.');
+      } else if (code === 'auth/network-request-failed') {
+        setError('Network error. Please check your connection and try again.');
+      } else if (code === 'auth/operation-not-allowed') {
+        setError('Email sign-in is not enabled. Please use Google Sign-In.');
+      } else {
+        setError(err.message || 'Sign in failed.');
+      }
+    }
+  }, []);
+
+  const handleEmailSignUp = useCallback(async (email: string, password: string, displayName: string) => {
+    if (!isFirebaseConfigured || !auth) {
+      setError(firebaseConfigError || "Firebase is not configured properly.");
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      if (displayName) {
+        await updateProfile(result.user, { displayName });
+      }
+    } catch (err: any) {
+      setLoading(false);
+      const code = err.code || '';
+      if (code === 'auth/email-already-in-use') {
+        setError('An account with this email already exists. Try signing in instead.');
+      } else if (code === 'auth/weak-password') {
+        setError('Password must be at least 6 characters.');
+      } else if (code === 'auth/invalid-email') {
+        setError('Please enter a valid email address.');
+      } else if (code === 'auth/user-disabled') {
+        setError('This account has been disabled. Please contact support.');
+      } else if (code === 'auth/operation-not-allowed') {
+        setError('Email sign-up is not enabled. Please use Google Sign-In.');
+      } else if (code === 'auth/network-request-failed') {
+        setError('Network error. Please check your connection and try again.');
+      } else {
+        setError(err.message || 'Sign up failed.');
+      }
+    }
+  }, []);
+
+  const handleForgotPassword = useCallback(async (email: string) => {
+    if (!isFirebaseConfigured || !auth) {
+      setError(firebaseConfigError || "Firebase is not configured properly.");
+      return;
+    }
+    setError(null);
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setError(null);
+      return true;
+    } catch (err: any) {
+      const code = err.code || '';
+      if (code === 'auth/user-not-found') {
+        setError('No account found with this email.');
+      } else if (code === 'auth/invalid-email') {
+        setError('Please enter a valid email address.');
+      } else if (code === 'auth/network-request-failed') {
+        setError('Network error. Please check your connection and try again.');
+      } else {
+        setError(err.message || 'Failed to send reset email.');
+      }
+      return false;
+    }
+  }, []);
 
   const handleGuestLogin = () => {
     setIsGuest(true);
@@ -780,7 +872,7 @@ const App: React.FC = () => {
       case 'profile':
         return <Profile state={state} isGuest={isGuest} accessContext={accessContext} onSignOut={handleSignOut} setView={setView} onUpdateState={handleUpdateState} onResetOnboarding={() => setNeedsOnboarding(true)} darkMode={darkMode} onToggleDarkMode={() => { const next = !darkMode; setDarkMode(next); try { localStorage.setItem('fampals_dark_mode', next ? 'true' : 'false'); } catch {} }} />;
       default:
-        return <Login onLogin={handleSignIn} onGuestLogin={handleGuestLogin} error={error} />;
+        return <Login onLogin={handleSignIn} onEmailSignIn={handleEmailSignIn} onEmailSignUp={handleEmailSignUp} onForgotPassword={handleForgotPassword} onGuestLogin={handleGuestLogin} error={error} />;
     }
   };
 
