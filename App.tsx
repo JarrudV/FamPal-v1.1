@@ -422,7 +422,7 @@ const App: React.FC = () => {
             setLoading(false);
             if (!onboardingCompleted) {
               setView('onboarding');
-            } else if (view === 'onboarding') {
+            } else if (view === 'onboarding' || view === 'login') {
               setView('dashboard');
             }
           } else {
