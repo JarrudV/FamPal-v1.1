@@ -9,7 +9,11 @@ import {
   signOut,
   setPersistence,
   browserLocalPersistence,
-  browserSessionPersistence
+  browserSessionPersistence,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  updateProfile
 } from "firebase/auth";
 import {
   getFirestore,
@@ -99,6 +103,10 @@ export {
   signInWithRedirect,
   getRedirectResult,
   signOut,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  updateProfile,
   doc,
   onSnapshot,
   setDoc,
