@@ -69,14 +69,15 @@ const Login: React.FC<LoginProps> = ({ onLogin, onEmailSignIn, onEmailSignUp, on
   const clearErrors = () => { if (localError) setLocalError(null); };
   const displayError = localError || error;
 
-  const inputClass = "w-full bg-white/20 backdrop-blur-sm text-white placeholder-white/60 h-14 rounded-2xl px-4 border border-white/30 focus:border-white/60 focus:outline-none transition-colors text-sm";
-  const primaryBtnClass = "w-full bg-white text-[#0369A1] h-14 rounded-2xl font-bold flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all text-sm disabled:opacity-50";
-  const secondaryBtnClass = "w-full bg-white/10 backdrop-blur-sm text-white h-14 rounded-2xl font-bold border border-white/20 active:scale-95 transition-all text-sm";
+  const inputClass = "w-full bg-white/10 backdrop-blur-sm text-white placeholder-white/40 h-14 rounded-2xl px-4 border border-white/15 focus:border-purple-400/60 focus:outline-none transition-colors text-sm";
+  const primaryBtnClass = "w-full bg-gradient-to-r from-[#A855F7] via-[#D946EF] to-[#EC4899] text-white h-14 rounded-2xl font-bold flex items-center justify-center gap-3 shadow-lg shadow-purple-500/30 active:scale-95 transition-all text-sm disabled:opacity-50";
+  const secondaryBtnClass = "w-full bg-white/10 backdrop-blur-sm text-white h-14 rounded-2xl font-bold border border-white/15 active:scale-95 transition-all text-sm hover:bg-white/15";
 
   return (
-    <div className="h-screen w-full bg-gradient-to-br from-[#7DD3FC] via-[#0EA5E9] to-[#0369A1] flex flex-col items-center justify-center px-8 text-white relative overflow-hidden">
-      <div className="absolute top-[-10%] right-[-10%] w-64 h-64 rounded-full bg-white/20 blur-3xl"></div>
-      <div className="absolute bottom-[-10%] left-[-10%] w-96 h-96 rounded-full bg-indigo-900/20 blur-3xl"></div>
+    <div className="h-screen w-full bg-gradient-to-br from-[#0F0A2A] via-[#1A1145] to-[#2D1B69] flex flex-col items-center justify-center px-8 text-white relative overflow-hidden">
+      <div className="absolute top-[-10%] right-[-10%] w-72 h-72 rounded-full bg-purple-600/20 blur-3xl"></div>
+      <div className="absolute bottom-[-10%] left-[-10%] w-96 h-96 rounded-full bg-blue-600/15 blur-3xl"></div>
+      <div className="absolute top-[30%] left-[60%] w-48 h-48 rounded-full bg-pink-500/10 blur-3xl"></div>
 
       <div className="relative mb-6 animate-bounce-slow">
         <Logo size={80} variant="white" className="shadow-2xl rounded-[28px]" />
@@ -110,9 +111,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, onEmailSignIn, onEmailSignUp, on
             </button>
 
             <div className="flex items-center gap-3 py-1">
-              <div className="flex-1 h-px bg-white/30"></div>
-              <span className="text-white/60 text-xs font-medium">or</span>
-              <div className="flex-1 h-px bg-white/30"></div>
+              <div className="flex-1 h-px bg-white/15"></div>
+              <span className="text-white/40 text-xs font-medium">or</span>
+              <div className="flex-1 h-px bg-white/15"></div>
             </div>
 
             <button
