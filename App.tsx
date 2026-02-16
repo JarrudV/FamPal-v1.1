@@ -607,7 +607,6 @@ const App: React.FC = () => {
   }, [state.user?.uid, state.profileInfo, state.partnerLink, handleUpdateState, accessContext.canSyncCloud]);
 
   useEffect(() => {
-    if (!accessContext.canSyncCloud) return;
     if (!isFirebaseConfigured || !auth || redirectHandledRef.current) return;
     redirectHandledRef.current = true;
     (async () => {
@@ -635,7 +634,7 @@ const App: React.FC = () => {
         }
       }
     })();
-  }, [accessContext.canSyncCloud]);
+  }, []);
 
   useEffect(() => {
     if (!BILLING_ENABLED) return;
