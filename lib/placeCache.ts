@@ -2,7 +2,7 @@ import { db, doc, getDoc, setDoc } from './firebase';
 import type { PlaceDetails } from '../placesService';
 
 const COLLECTION = 'placeCache';
-const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 
 interface CachedPlaceDoc {
   details: PlaceDetails;
