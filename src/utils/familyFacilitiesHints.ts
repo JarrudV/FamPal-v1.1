@@ -44,5 +44,16 @@ export function getFamilyFacilitiesHintsFromGoogle(placeDetails?: PlaceDetails |
     hints.add('stroller_friendly');
   }
 
+  const reviewText = (placeDetails.reviews || []).map(r => r.text || '').join(' ').toLowerCase();
+  if (reviewText) {
+    if (/high\s?chair/i.test(reviewText)) hints.add('high_chairs');
+    if (/baby\s?chang|nappy\s?chang|diaper\s?chang/i.test(reviewText)) hints.add('baby_changing_table');
+    if (/nursing\s?room|breastfeed/i.test(reviewText)) hints.add('nursing_room');
+    if (/playground|play\s?area|jungle\s?gym|play\s?zone|kids?\s?play/i.test(reviewText)) hints.add('playground');
+    if (/kids?\s?menu|children.s\s?menu/i.test(reviewText) && !hints.has('kids_menu')) hints.add('kids_menu');
+    if (/kid\s?friendly|child\s?friendly|family\s?friendly|great\s+for\s+kids/i.test(reviewText) && !hints.has('child_friendly_space')) hints.add('child_friendly_space');
+    if (/stroller|pram|pushchair/i.test(reviewText) && !hints.has('stroller_friendly')) hints.add('stroller_friendly');
+  }
+
   return [...hints];
 }

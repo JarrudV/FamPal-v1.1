@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { Place, FavoriteData, ACTIVITY_OPTIONS, Memory, Entitlement, PartnerLink, GroupPlace, AccessibilityFeatureValue, FamilyFacilityValue } from '../types';
 import { askAboutPlace, generateFamilySummary } from '../geminiService';
 import { getPlaceDetails, PlaceDetails, PlaceReview } from '../placesService';
@@ -267,6 +268,63 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
     }
   };
 
+  const reviewInsights = React.useMemo(() => {
+    if (!placeDetails?.reviews || placeDetails.reviews.length === 0) return null;
+    const allText = placeDetails.reviews.map(r => r.text).join(' ').toLowerCase();
+    const familyMentions: string[] = [];
+    const keywords: [string, string][] = [
+      ['playground', 'Has playground'],
+      ['play area', 'Play area'],
+      ['kids menu', "Kids' menu"],
+      ['children.s menu', "Kids' menu"],
+      ['kid friendly', 'Kid friendly'],
+      ['child friendly', 'Child friendly'],
+      ['family friendly', 'Family friendly'],
+      ['stroller', 'Stroller accessible'],
+      ['pram', 'Pram friendly'],
+      ['high chair', 'High chairs'],
+      ['highchair', 'High chairs'],
+      ['baby change', 'Baby changing'],
+      ['nappy change', 'Nappy changing'],
+      ['diaper', 'Diaper facilities'],
+      ['nursing', 'Nursing area'],
+      ['breastfeed', 'Breastfeeding friendly'],
+      ['jungle gym', 'Jungle gym'],
+      ['jumping castle', 'Jumping castle'],
+      ['trampoline', 'Trampoline'],
+      ['sandpit', 'Sandpit'],
+      ['splash pad', 'Splash pad'],
+      ['water play', 'Water play'],
+      ['face paint', 'Face painting'],
+      ['petting zoo', 'Petting zoo'],
+      ['pony ride', 'Pony rides'],
+      ['safe.* for kids', 'Safe for kids'],
+      ['toddler', 'Toddler friendly'],
+      ['baby friendly', 'Baby friendly'],
+    ];
+    const seen = new Set<string>();
+    for (const [pattern, label] of keywords) {
+      if (new RegExp(pattern, 'i').test(allText) && !seen.has(label)) {
+        seen.add(label);
+        familyMentions.push(label);
+      }
+    }
+    let highlightQuote: string | null = null;
+    const familyPatterns = /(?:kids?|children|family|families|toddler|baby|babies|little ones)[^.!?]*[.!?]/gi;
+    for (const review of placeDetails.reviews) {
+      const matches = review.text.match(familyPatterns);
+      if (matches) {
+        const best = matches.reduce((a, b) => b.length > a.length ? b : a, '');
+        if (best.length >= 20 && best.length <= 200) {
+          highlightQuote = best.trim();
+          break;
+        }
+      }
+    }
+    if (familyMentions.length === 0 && !highlightQuote) return null;
+    return { familyMentions: familyMentions.slice(0, 6), highlightQuote };
+  }, [placeDetails]);
+
   const confirmedAccessibility = (place.accessibility || []).filter(
     (item) => item.value === true && (item.confidence === 'reported' || item.confidence === 'verified')
   );
@@ -410,22 +468,46 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
       <div className="p-6 space-y-8 pb-40">
         {activeTab === 'info' ? (
           <>
-            <section className="space-y-4">
-              {(placeDetails?.editorialSummary || placeDetails?.reviewSummary) && (
-                <div className="bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl border border-sky-100 p-4 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <svg className="w-4 h-4 text-sky-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
-                    <span className="text-xs font-bold text-sky-700 uppercase tracking-wide">About this place</span>
+            {(placeDetails?.editorialSummary || placeDetails?.reviewSummary || reviewInsights) && (
+              <section className="space-y-3">
+                {(placeDetails?.editorialSummary || placeDetails?.reviewSummary) && (
+                  <div className="bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl border border-sky-100 p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-sky-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
+                      <span className="text-xs font-bold text-sky-700 uppercase tracking-wide">About this place</span>
+                    </div>
+                    {placeDetails?.editorialSummary && (
+                      <p className="text-sm text-slate-700 leading-relaxed">{placeDetails.editorialSummary}</p>
+                    )}
+                    {placeDetails?.reviewSummary && placeDetails.reviewSummary !== placeDetails.editorialSummary && (
+                      <p className="text-sm text-slate-600 leading-relaxed">{placeDetails.reviewSummary}</p>
+                    )}
+                    <p className="text-[10px] text-slate-400">Source: Google</p>
                   </div>
-                  {placeDetails.editorialSummary && (
-                    <p className="text-sm text-slate-700 leading-relaxed">{placeDetails.editorialSummary}</p>
-                  )}
-                  {placeDetails.reviewSummary && placeDetails.reviewSummary !== placeDetails.editorialSummary && (
-                    <p className="text-sm text-slate-600 leading-relaxed">{placeDetails.reviewSummary}</p>
-                  )}
-                  <p className="text-[10px] text-slate-400">Source: Google Places</p>
-                </div>
-              )}
+                )}
+                {reviewInsights && (
+                  <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-100 p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-amber-500" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+                      <span className="text-xs font-bold text-amber-700 uppercase tracking-wide">What visitors say</span>
+                    </div>
+                    {reviewInsights.familyMentions.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {reviewInsights.familyMentions.map((mention, i) => (
+                          <span key={i} className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800">{mention}</span>
+                        ))}
+                      </div>
+                    )}
+                    {reviewInsights.highlightQuote && (
+                      <p className="text-xs text-slate-600 italic leading-relaxed">"{reviewInsights.highlightQuote}"</p>
+                    )}
+                    <p className="text-[10px] text-slate-400">Based on {placeDetails?.userRatingsTotal || 'visitor'} reviews</p>
+                  </div>
+                )}
+              </section>
+            )}
+
+            <section className="space-y-4">
               <h3 className="text-base font-bold text-[#1E293B]">Family Review</h3>
               <p className="text-slate-500 leading-relaxed text-sm font-medium">
                 {place.fullSummary || place.description}
@@ -442,17 +524,6 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
               )}
             </section>
 
-            <PlaceAccessibilitySection
-              accessibility={place.accessibility}
-              accessibilitySummary={place.accessibilitySummary}
-              suggestedFeatures={suggestedGoogleHints}
-              onAddAccessibilityInfo={(options) => {
-                setAccessibilityModalScrollTarget(options?.focusSection || 'manual');
-                setAccessibilityHighlightedSuggested(options?.highlightedSuggestedFeatures || []);
-                setShowAccessibilityModal(true);
-              }}
-            />
-
             <PlaceFamilyFacilitiesSection
               familyFacilities={place.familyFacilities}
               familyFacilitiesSummary={place.familyFacilitiesSummary}
@@ -461,6 +532,17 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                 setFamilyModalScrollTarget(options?.focusSection || 'manual');
                 setFamilyHighlightedSuggested(options?.highlightedSuggestedFeatures || []);
                 setShowFamilyFacilitiesModal(true);
+              }}
+            />
+
+            <PlaceAccessibilitySection
+              accessibility={place.accessibility}
+              accessibilitySummary={place.accessibilitySummary}
+              suggestedFeatures={suggestedGoogleHints}
+              onAddAccessibilityInfo={(options) => {
+                setAccessibilityModalScrollTarget(options?.focusSection || 'manual');
+                setAccessibilityHighlightedSuggested(options?.highlightedSuggestedFeatures || []);
+                setShowAccessibilityModal(true);
               }}
             />
 
@@ -1032,9 +1114,11 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
             if (diff < 0 && safeIndex > 0) setPhotoViewerIndex(safeIndex - 1);
           }
         };
-        return (
+        if (typeof document === 'undefined') return null;
+        return ReactDOM.createPortal(
           <div
-            className="fixed inset-0 z-[100] bg-black flex flex-col"
+            className="fixed inset-0 z-[9999] bg-black flex flex-col"
+            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh' }}
             onClick={() => setPhotoViewerOpen(false)}
             onTouchStart={handleSwipeStart}
             onTouchEnd={handleSwipeEnd}
@@ -1082,7 +1166,8 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                 </button>
               </div>
             )}
-          </div>
+          </div>,
+          document.body
         );
       })()}
     </div>
