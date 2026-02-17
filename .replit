@@ -50,3 +50,8 @@ externalPort = 8080
 deploymentTarget = "static"
 build = ["npm", "run", "build"]
 publicDir = "dist"
+
+[userenv]
+
+[userenv.shared]
+VITE_ADMIN_UIDS = "mDITQMVhKccMLEuPExmsLRCNfhK2"
