@@ -521,7 +521,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                 <p className="text-slate-500 leading-relaxed text-sm font-medium">{placeDetails.editorialSummary}</p>
               ) : placeDetails?.reviews && placeDetails.reviews.length > 0 ? (
                 <p className="text-slate-500 leading-relaxed text-sm font-medium">
-                  Based on {placeDetails.userRatingsTotal || placeDetails.reviews.length} reviews, this {place.description || 'place'} has a {place.rating ? `${place.rating}/5 rating` : 'solid reputation'}. Check the visitor insights above for family-relevant details.
+                  Based on {placeDetails.userRatingsTotal || placeDetails.reviews.length} reviews, this {place.description || 'place'} has a {place.rating ? `${place.rating}/5 rating` : 'solid reputation'}.{reviewInsights && reviewInsights.familyMentions.length > 0 ? ` Visitors mention: ${reviewInsights.familyMentions.slice(0, 3).join(', ').toLowerCase()}.` : ' Use Smart Insights below to ask about family-friendliness.'}
                 </p>
               ) : (
                 <p className="text-slate-400 leading-relaxed text-sm italic">
@@ -588,44 +588,48 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                 <>
                   <button 
                     onClick={() => setShowAiPanel(!showAiPanel)}
-                    className="w-full h-16 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-3xl font-extrabold shadow-xl shadow-purple-100 flex items-center justify-center gap-3 active:scale-95 transition-all"
+                    className="w-full h-14 bg-white border-2 border-violet-200 text-violet-700 rounded-2xl font-bold flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all"
                   >
-                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
-                    <span className="px-2">Smart Insights for This Place</span>
+                    <svg className="w-5 h-5 text-violet-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+                    <span className="text-sm">Smart Insights</span>
                     {aiInfo.limit !== -1 && aiInfo.limit !== Infinity && (
-                      <span className="text-xs bg-white/20 px-3 py-1.5 rounded-lg shrink-0">
-                        {aiInfo.remaining}/{aiInfo.limit} left
+                      <span className="text-[10px] font-semibold bg-violet-100 text-violet-600 px-2 py-0.5 rounded-full">
+                        {aiInfo.remaining}/{aiInfo.limit}
                       </span>
                     )}
+                    <svg className={`w-4 h-4 text-violet-400 transition-transform ${showAiPanel ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 9l-7 7-7-7" /></svg>
                   </button>
                   
                   {showAiPanel && (
-                    <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-3xl p-6 space-y-4 border border-purple-100 animate-slide-up">
+                    <div className="bg-white rounded-2xl p-5 space-y-4 border border-slate-100 shadow-sm animate-slide-up">
                       {aiLimitReached ? (
-                        <div className="text-center py-4">
-                          <p className="text-lg font-bold text-purple-700">Monthly Limit Reached</p>
-                          <p className="text-sm text-purple-500 mt-2">
+                        <div className="text-center py-3">
+                          <p className="text-base font-bold text-slate-700">Monthly Limit Reached</p>
+                          <p className="text-sm text-slate-500 mt-2">
                             {aiInfo.limit === 5
-                              ? "You've used your 5 free smart insights this month. Upgrade to Pro to keep planning smarter."
-                              : `You've used all ${(serverLimitValue ?? aiInfo.limit)} smart insights this month.`}
+                              ? "You've used your 5 free insights this month. Upgrade to Pro for 100/month."
+                              : `You've used all ${(serverLimitValue ?? aiInfo.limit)} insights this month.`}
                           </p>
-                          <button className="mt-4 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-bold text-sm shadow-lg">
-                            Upgrade to Pro
-                          </button>
+                          {aiInfo.limit === 5 && (
+                            <button className="mt-4 px-6 py-3 bg-violet-600 text-white rounded-xl font-bold text-sm active:scale-95 transition-all">
+                              Upgrade to Pro
+                            </button>
+                          )}
                         </div>
                       ) : (
                         <>
                           {aiInfo.limit === 100 && aiInfo.remaining <= 20 && (
                             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                              You are close to your monthly limit: {aiInfo.remaining} smart insights left.
+                              {aiInfo.remaining} insights remaining this month
                             </p>
                           )}
+                          <p className="text-xs text-slate-400 font-medium">Quick questions</p>
                           <div className="flex flex-wrap gap-2">
                             {quickQuestions.map(q => (
                               <button 
                                 key={q}
                                 onClick={() => { setAiQuestion(q); handleAskAI(q); }}
-                                className="px-4 py-2 bg-white rounded-xl text-xs font-bold text-purple-600 hover:bg-purple-100 transition-colors shadow-sm"
+                                className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 active:bg-violet-50 active:border-violet-200 active:text-violet-700 transition-colors"
                               >
                                 {q}
                               </button>
@@ -638,33 +642,33 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                               value={aiQuestion}
                               onChange={(e) => setAiQuestion(e.target.value)}
                               onKeyDown={(e) => e.key === 'Enter' && handleAskAI(aiQuestion)}
-                              placeholder="Ask for a smart insight about this place..."
-                              className="flex-1 px-4 py-3 rounded-xl bg-white text-sm font-medium focus:ring-2 focus:ring-purple-500 outline-none"
+                              placeholder="Ask about this place..."
+                              className="flex-1 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-violet-300 focus:border-violet-300 outline-none"
                             />
                             <button 
                               onClick={() => handleAskAI(aiQuestion)}
                               disabled={aiLoading || !aiQuestion.trim()}
-                              className="px-6 py-3 bg-purple-600 text-white rounded-xl font-bold text-sm disabled:opacity-50 active:scale-95 transition-all"
+                              className="px-5 py-3 bg-violet-600 text-white rounded-xl font-bold text-sm disabled:opacity-40 active:scale-95 transition-all"
                             >
-                              {aiLoading ? '...' : 'Get insight'}
+                              {aiLoading ? '...' : 'Ask'}
                             </button>
                           </div>
                         </>
                       )}
                       
                       {aiAnswer && (
-                        <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
-                          <p className="text-sm text-slate-600 leading-relaxed">{aiAnswer}</p>
+                        <div className="bg-violet-50 rounded-xl p-4 space-y-3 border border-violet-100">
+                          <p className="text-sm text-slate-700 leading-relaxed">{aiAnswer}</p>
                           {aiCached && (
                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Cached response</p>
                           )}
                           <button 
                             onClick={handleSaveSummary}
                             disabled={summarySaved}
-                            className={`w-full py-2 rounded-xl text-xs font-bold transition-colors ${
+                            className={`w-full py-2.5 rounded-xl text-xs font-bold transition-colors ${
                               summarySaved 
-                                ? 'bg-green-100 text-green-600' 
-                                : 'bg-purple-100 text-purple-600 hover:bg-purple-200'
+                                ? 'bg-green-100 text-green-600 border border-green-200' 
+                                : 'bg-white text-violet-600 border border-violet-200 active:bg-violet-50'
                             }`}
                           >
                             {summarySaved ? 'Saved!' : 'Save Insight to Notes'}
@@ -672,7 +676,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                           <button
                             onClick={() => handleAskAI(lastAiQuestion || aiQuestion, true)}
                             disabled={aiLoading || !(lastAiQuestion || aiQuestion)}
-                            className="w-full py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-60"
+                            className="w-full py-2.5 rounded-xl text-xs font-bold bg-white text-slate-500 border border-slate-200 active:bg-slate-50 disabled:opacity-40"
                           >
                             Refresh Insight
                           </button>

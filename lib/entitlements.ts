@@ -17,12 +17,13 @@ function getEntitlementTier(entitlement: Entitlement | undefined): 'free' | 'pro
 
 function getEffectiveCreditLimit(entitlement: Entitlement | undefined): number {
   if (!entitlement) return FREE_CREDITS_PER_MONTH;
-  if (typeof entitlement.gemini_credits_limit === 'number' && entitlement.gemini_credits_limit > 0) {
-    return entitlement.gemini_credits_limit;
-  }
   const tier = getEntitlementTier(entitlement);
   if (tier === 'admin') return Infinity;
-  return tier === 'pro' ? PRO_CREDITS_PER_MONTH : FREE_CREDITS_PER_MONTH;
+  const tierDefault = tier === 'pro' ? PRO_CREDITS_PER_MONTH : FREE_CREDITS_PER_MONTH;
+  if (typeof entitlement.gemini_credits_limit === 'number' && entitlement.gemini_credits_limit > tierDefault) {
+    return entitlement.gemini_credits_limit;
+  }
+  return tierDefault;
 }
 
 function getEffectiveCreditsUsed(

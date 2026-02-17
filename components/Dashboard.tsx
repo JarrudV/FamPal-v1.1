@@ -10,7 +10,7 @@ import GroupDetail from './GroupDetail';
 import PlanBilling from './PlanBilling';
 import MustHavesSheet from './MustHavesSheet';
 import { UpgradePrompt, LimitIndicator } from './UpgradePrompt';
-import { searchExploreIntent, getExploreIntentSubtitle, getPlaceDetails } from '../placesService';
+import { searchExploreIntent, getExploreIntentSubtitle, getPlaceDetails, textSearchPlaces } from '../placesService';
 import { getLimits, canSavePlace, canCreateCircle, isPaidTier, getNextResetDate, getCurrentUsageMonth } from '../lib/entitlements';
 import { updateLocation, updateRadius, updateCategory, updateActiveCircle } from '../lib/profileSync';
 import {
@@ -166,6 +166,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
   
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Place[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [isSearchMode, setIsSearchMode] = useState(false);
   
   // Preference filter mode: all (no filter), family (everyone), partner (adults), solo (just me)
   const [prefFilterMode, setPrefFilterMode] = useState<'all' | 'family' | 'partner' | 'solo'>('all');
@@ -674,7 +677,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
     }
 
     const fetchPlaces = async () => {
-      const searchKey = `${userLocation.lat.toFixed(3)}:${userLocation.lng.toFixed(3)}:${selectedFilter}:${radiusKm}:${searchQuery.trim().toLowerCase()}:${prefFilterMode}:${hideSavedPlaces ? 'discover' : 'all'}:${manualRefreshTrigger}`;
+      const searchKey = `${userLocation.lat.toFixed(3)}:${userLocation.lng.toFixed(3)}:${selectedFilter}:${radiusKm}:${prefFilterMode}:${hideSavedPlaces ? 'discover' : 'all'}:${manualRefreshTrigger}`;
       placesSearchKeyRef.current = searchKey;
       setLoading(true);
       setLoadingMore(false);
@@ -688,7 +691,6 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
           userLocation.lng,
           radiusKm,
           {
-            searchQuery: searchQuery.trim() || undefined,
             searchKey,
             cacheContext: `${prefFilterMode}:${hideSavedPlaces ? 'discover' : 'all'}`,
             exploreFilters,
@@ -742,7 +744,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
     return () => {
       controller.abort();
     };
-  }, [selectedFilter, activeTab, userLocation, radiusKm, searchQuery, applyFlickerGuard, exploreFilters, prefFilterMode, hideSavedPlaces, manualRefreshTrigger]);
+  }, [selectedFilter, activeTab, userLocation, radiusKm, applyFlickerGuard, exploreFilters, prefFilterMode, hideSavedPlaces, manualRefreshTrigger]);
 
   useEffect(() => {
     if (!canSyncCloud) return;
@@ -775,10 +777,26 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
     }
   }, [state.userPreferences, radiusKm, selectedFilter, userLocation, locationName, locationError, isGuest]);
   
-  // Handle search from header
-  const handleSearch = (query: string) => {
+  const handleSearch = async (query: string) => {
     setSearchQuery(query);
+    if (!query.trim()) {
+      setIsSearchMode(false);
+      setSearchResults([]);
+      return;
+    }
+    if (!userLocation) return;
+    setIsSearchMode(true);
     handleTabChange('explore');
+    setSearchLoading(true);
+    try {
+      const results = await textSearchPlaces(query.trim(), userLocation.lat, userLocation.lng, radiusKm);
+      setSearchResults(results);
+    } catch (error) {
+      console.error('Search error:', error);
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
   };
   
   // Refresh GPS location from device
@@ -1817,11 +1835,50 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
               subtitleText={getExploreIntentSubtitle(selectedFilter)}
             />
 
-            {loading || !userLocation ? (
+            {isSearchMode && (
+              <div className="mt-4">
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <p className="text-sm font-bold text-slate-700">
+                    {searchLoading ? 'Searching...' : `Results for "${searchQuery}"`}
+                  </p>
+                  <button
+                    onClick={() => { setIsSearchMode(false); setSearchResults([]); setSearchQuery(''); }}
+                    className="text-xs font-bold text-sky-500 active:text-sky-700"
+                  >
+                    Clear search
+                  </button>
+                </div>
+                {searchLoading ? (
+                  <div className="py-16 text-center text-slate-300 font-black text-xs uppercase tracking-widest">
+                    Searching nearby...
+                  </div>
+                ) : searchResults.length > 0 ? (
+                  <div className="space-y-4">
+                    {searchResults.map(place => (
+                      <PlaceCard
+                        key={place.id}
+                        place={place}
+                        variant="list"
+                        isFavorite={state.favorites.includes(place.id)}
+                        onToggleFavorite={() => toggleFavorite(place)}
+                        onClick={() => setSelectedPlace(place)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-12 text-center bg-white rounded-2xl border border-slate-100">
+                    <p className="text-slate-500 font-semibold">No places found for "{searchQuery}"</p>
+                    <p className="text-slate-400 text-sm mt-1">Try a different name or expand your search radius</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!isSearchMode && (loading || !userLocation) ? (
               <div className="py-24 text-center text-slate-300 font-black text-xs uppercase tracking-widest">
                 {!userLocation ? 'Getting your location...' : 'Finding adventures...'}
               </div>
-            ) : (
+            ) : !isSearchMode ? (
               <div className="space-y-4 mt-4">
                 {visibleExplorePlaces.map(place => (
                   <PlaceCard 
@@ -1873,7 +1930,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
                   </div>
                 )}
               </div>
-            )}
+            ) : null}
           </>
         )}
 

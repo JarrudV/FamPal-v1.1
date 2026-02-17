@@ -1650,7 +1650,7 @@ export async function textSearchPlaces(
           'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.types,places.priceLevel,places.location,places.photos,places.primaryTypeDisplayName'
         },
         body: JSON.stringify({
-          textQuery: `${query} family friendly`,
+          textQuery: query,
           locationBias: {
             circle: {
               center: { latitude: lat, longitude: lng },
