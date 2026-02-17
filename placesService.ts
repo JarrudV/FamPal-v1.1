@@ -708,6 +708,135 @@ function facetSnapshotFromPlace(place: Place, requestedCategory: ActivityType): 
   };
 }
 
+function inferKidSignalsFromDetails(details: PlaceDetails): { tokens: string[]; confidence: Record<string, number> } {
+  const name = details.name || '';
+  const address = details.address || '';
+  const reviews = Array.isArray(details.reviews)
+    ? details.reviews.map((review) => review?.text || '').join(' ')
+    : '';
+  const blob = `${name} ${address} ${reviews}`.toLowerCase();
+
+  const positivePhrases = [
+    'jungle gym',
+    'playground',
+    'play area',
+    'kids play',
+    'soft play',
+    'play zone',
+    'kids corner',
+    'climbing frame',
+    'jumping castle',
+    'playpark',
+  ];
+  const negativePhrases = [
+    'no play area',
+    'no playground',
+    'nothing for kids',
+    'not kid friendly',
+    'no kids play',
+  ];
+
+  let score = 0;
+  let positiveHits = 0;
+  positivePhrases.forEach((phrase) => {
+    if (blob.includes(phrase)) {
+      positiveHits += 1;
+    }
+  });
+  score += Math.min(6, positiveHits * 2);
+  if (negativePhrases.some((phrase) => blob.includes(phrase))) {
+    score -= 3;
+  }
+
+  const tokens = new Set<string>();
+  const confidence: Record<string, number> = {};
+
+  if (details.goodForChildren) {
+    tokens.add('child_friendly_space');
+    confidence.child_friendly_space = Math.max(confidence.child_friendly_space || 0, 0.7);
+  }
+  if (details.menuForChildren) {
+    tokens.add('kids_menu');
+    confidence.kids_menu = Math.max(confidence.kids_menu || 0, 0.75);
+  }
+  if (score >= 2) {
+    tokens.add('play_area_jungle_gym');
+    confidence.play_area_jungle_gym = score >= 4 ? 0.9 : 0.75;
+  }
+
+  return {
+    tokens: Array.from(tokens),
+    confidence,
+  };
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  if (items.length === 0) return [];
+  const normalizedLimit = Math.max(1, Math.min(limit, items.length));
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  const runWorker = async () => {
+    while (true) {
+      const index = nextIndex;
+      if (index >= items.length) return;
+      nextIndex += 1;
+      results[index] = await worker(items[index], index);
+    }
+  };
+
+  await Promise.all(Array.from({ length: normalizedLimit }, () => runWorker()));
+  return results;
+}
+
+async function enrichPlacesForStrictKidPrefs(
+  candidates: Place[],
+  selectedKidPrefs: string[],
+  requestedCategory: ActivityType
+): Promise<Place[]> {
+  const normalizedPrefs = (selectedKidPrefs || []).map(normalizeFacetToken);
+  if (!normalizedPrefs.includes('play_area_jungle_gym')) {
+    return candidates;
+  }
+
+  const batch = candidates.slice(0, 25);
+  let upgradedCount = 0;
+  await mapWithConcurrency(batch, 3, async (place) => {
+    const existingSnapshot = (place as any).facetSnapshot as FacetSnapshot | undefined;
+    if (existingSnapshot?.kidFriendlySignals?.map(normalizeFacetToken).includes('play_area_jungle_gym')) {
+      return place;
+    }
+
+    const details = await getPlaceDetails(place.googlePlaceId || place.id);
+    if (!details) return place;
+    const inferred = inferKidSignalsFromDetails(details);
+    if (!inferred.tokens.map(normalizeFacetToken).includes('play_area_jungle_gym')) return place;
+
+    const snapshot = facetSnapshotFromPlace(place, requestedCategory);
+    const kidFriendlySignals = new Set((snapshot.kidFriendlySignals || []).map(normalizeFacetToken));
+    inferred.tokens.forEach((token) => kidFriendlySignals.add(normalizeFacetToken(token)));
+    const reportConfidence: Record<string, number> = { ...(snapshot.reportConfidence || {}) };
+    Object.entries(inferred.confidence).forEach(([token, value]) => {
+      const normalizedToken = normalizeFacetToken(token);
+      reportConfidence[normalizedToken] = Math.max(reportConfidence[normalizedToken] || 0, value);
+    });
+    (place as any).facetSnapshot = {
+      ...snapshot,
+      kidFriendlySignals: Array.from(kidFriendlySignals),
+      reportConfidence,
+    } as FacetSnapshot;
+    upgradedCount += 1;
+    return place;
+  });
+  intentLog(`[FamPals] strict kidPrefs enrichment complete: scanned=${batch.length}, upgraded=${upgradedCount}`);
+
+  return candidates;
+}
+
 function facetMatchesLens(snapshot: FacetSnapshot, lensKey: keyof ExploreFilters, chipId: string): boolean {
   const token = normalizeFacetToken(chipId);
   const reportSupports = (snapshot.reportConfidence[token] || 0) >= 0.55;
@@ -1072,7 +1201,24 @@ export async function searchExploreIntent(
   const cacheRecords = await getPlacesByGeoBoundsAndCategory(bounds, requestedCategory, PIPELINE_TARGET_RESULTS * 2);
   const cachePlaces = dedupePlacesById(cacheRecords.map((record) => placeRecordToPlace(record, lat, lng, requestedCategory)));
   const cacheIntentFiltered = filterPlacesForIntent(cachePlaces, definition);
-  const cacheFacetRanked = rankAndFilterByComputedFacets(cacheIntentFiltered, requestedCategory, options?.exploreFilters);
+  const strictKidPrefsEnabled = !!options?.exploreFilters?.strict?.kidPrefs;
+  const selectedKidPrefs = (options?.exploreFilters?.kidPrefs || []).map(normalizeFacetToken);
+  const requiresStrictKidPlay = strictKidPrefsEnabled && selectedKidPrefs.includes('play_area_jungle_gym');
+  const cacheHasMissingKidSignal = requiresStrictKidPlay && cacheIntentFiltered
+    .slice(0, 25)
+    .some((place) => !facetSnapshotFromPlace(place, requestedCategory).kidFriendlySignals.includes('play_area_jungle_gym'));
+  let cacheFacetRanked = rankAndFilterByComputedFacets(cacheIntentFiltered, requestedCategory, options?.exploreFilters);
+  if (requiresStrictKidPlay && (cacheFacetRanked.afterFilterCount === 0 || cacheHasMissingKidSignal)) {
+    intentLog('[FamPals] strict kidPrefs enrichment running on cache candidates', {
+      reason: cacheFacetRanked.afterFilterCount === 0 ? 'zero_after_strict' : 'missing_play_area_signal',
+      candidates: cacheIntentFiltered.length,
+    });
+    await enrichPlacesForStrictKidPrefs(cacheIntentFiltered, selectedKidPrefs, requestedCategory);
+    cacheFacetRanked = rankAndFilterByComputedFacets(cacheIntentFiltered, requestedCategory, options?.exploreFilters);
+    intentLog('[FamPals] strict kidPrefs enrichment cache rerank', {
+      afterFilterCount: cacheFacetRanked.afterFilterCount,
+    });
+  }
   merged = dedupePlacesById([...merged, ...cacheFacetRanked.places]);
   debug.totalBeforeFilter = cacheIntentFiltered.length;
   debug.totalAfterFilter = cacheFacetRanked.afterFilterCount;
@@ -1213,7 +1359,21 @@ export async function searchExploreIntent(
   }
 
   const finalIntentFiltered = filterPlacesForIntent(merged, definition);
-  const finalFacetRanked = rankAndFilterByComputedFacets(finalIntentFiltered, requestedCategory, options?.exploreFilters);
+  let finalFacetRanked = rankAndFilterByComputedFacets(finalIntentFiltered, requestedCategory, options?.exploreFilters);
+  const finalHasMissingKidSignal = requiresStrictKidPlay && finalIntentFiltered
+    .slice(0, 25)
+    .some((place) => !facetSnapshotFromPlace(place, requestedCategory).kidFriendlySignals.includes('play_area_jungle_gym'));
+  if (requiresStrictKidPlay && (finalFacetRanked.afterFilterCount === 0 || finalHasMissingKidSignal)) {
+    intentLog('[FamPals] strict kidPrefs enrichment running on final candidates', {
+      reason: finalFacetRanked.afterFilterCount === 0 ? 'zero_after_strict' : 'missing_play_area_signal',
+      candidates: finalIntentFiltered.length,
+    });
+    await enrichPlacesForStrictKidPrefs(finalIntentFiltered, selectedKidPrefs, requestedCategory);
+    finalFacetRanked = rankAndFilterByComputedFacets(finalIntentFiltered, requestedCategory, options?.exploreFilters);
+    intentLog('[FamPals] strict kidPrefs enrichment final rerank', {
+      afterFilterCount: finalFacetRanked.afterFilterCount,
+    });
+  }
   const finalPlaces = finalFacetRanked.places;
   debug.totalBeforeFilter = merged.length;
   debug.totalAfterFilter = finalFacetRanked.afterFilterCount;
