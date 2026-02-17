@@ -85,6 +85,7 @@ export async function submitAccessibilityReport(input: SubmitAccessibilityReport
   const summary = generateAccessibilitySummary(normalized);
 
   import('./placeCache').then(m => m.markPlaceAsCommunityEnriched(input.placeId)).catch(() => {});
+  import('../src/services/gamification').then(m => { m.awardPoints('accessibility_report'); m.invalidateGamificationCache(); }).catch(() => {});
 
   return {
     accessibility: normalized,

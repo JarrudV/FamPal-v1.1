@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AppState, Child, PartnerLink, Preferences, UserAccessibilityNeeds, FOOD_PREFERENCES, ALLERGY_OPTIONS, ACCESSIBILITY_OPTIONS, ACTIVITY_PREFERENCES, PLAN_LIMITS } from '../types';
 import PlanBilling from './PlanBilling';
+import ExplorerLevel from './ExplorerLevel';
 import { getLimits, getPlanDisplayName, canUseAI, isPaidTier } from '../lib/entitlements';
 import { storage, auth, db, collection, query, where, getDocs, getDoc, doc, setDoc, ref, uploadBytes, getDownloadURL, writeBatch, deleteField, serverTimestamp } from '../lib/firebase';
 import type { AppAccessContext } from '../lib/access';
@@ -1159,6 +1160,13 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {!isGuest && (
+          <div className="space-y-4">
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Explorer Level</h3>
+            <ExplorerLevel uid={state.user?.uid || undefined} />
           </div>
         )}
 

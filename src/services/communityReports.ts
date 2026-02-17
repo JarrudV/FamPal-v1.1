@@ -169,6 +169,7 @@ export async function createReport(
   );
 
   import('../../lib/placeCache').then(m => m.markPlaceAsCommunityEnriched(placeId)).catch(() => {});
+  import('./gamification').then(m => { m.awardPoints('community_report'); m.invalidateGamificationCache(); }).catch(() => {});
 
   return {
     id: ref.id,

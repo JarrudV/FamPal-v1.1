@@ -63,5 +63,6 @@ export async function submitFamilyFacilitiesReport(input: SubmitFamilyFacilities
   });
 
   import('./placeCache').then(m => m.markPlaceAsCommunityEnriched(input.placeId)).catch(() => {});
+  import('../src/services/gamification').then(m => { m.awardPoints('family_facilities_report'); m.invalidateGamificationCache(); }).catch(() => {});
 }
 

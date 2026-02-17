@@ -1308,12 +1308,14 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
         isFavorite: state.favorites.includes(place.id),
       };
       onUpdateState('visitedPlaces', [...visitedPlaces, newVisit]);
+      import('../src/services/gamification').then(m => { m.awardPoints('mark_visited'); m.invalidateGamificationCache(); }).catch(() => {});
     }
   };
 
   const handleAddMemory = useCallback((memory: Omit<Memory, 'id'>) => {
     const newMemory: Memory = { ...memory, id: Date.now().toString() };
     onUpdateState('memories', [...state.memories, newMemory]);
+    import('../src/services/gamification').then(m => { m.awardPoints('save_memory'); m.invalidateGamificationCache(); }).catch(() => {});
     if (canSyncCloud && db && state.partnerLink?.status === 'accepted' && state.partnerLink.partnerUserId && memory.sharedWithPartner && state.user?.uid) {
       const threadId = getPartnerThreadId(state.user.uid, state.partnerLink.partnerUserId);
       const sharedRef = doc(db, 'partnerThreads', threadId, 'sharedMemories', newMemory.id);

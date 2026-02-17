@@ -38,6 +38,7 @@ import {
   getDoc,
   updateDoc,
   writeBatch,
+  runTransaction,
   serverTimestamp,
   Timestamp
 } from 'firebase/firestore';
@@ -161,6 +162,7 @@ export {
   deleteField,
   updateDoc,
   writeBatch,
+  runTransaction,
   serverTimestamp,
   Timestamp,
   ref,
