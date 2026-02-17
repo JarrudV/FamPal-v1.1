@@ -22,6 +22,7 @@ The application is built with React 19, TypeScript, Vite 7, and Tailwind CSS v4.
 -   **Activity Tracking**: "My Activity" dashboard for tracking visited places, notes, and past outings.
 -   **Accessibility & Family Facilities**: Community-contributed and verified data for accessibility features and family facilities, influencing ranking and filtering.
 -   **Gamification**: FamPals Explorer system awards points and badges for user contributions (e.g., reports, reviews), tracked via levels and an activity dashboard. Weekly contribution streaks (currentStreakWeeks, bestStreakWeeks) with ISO week calculation. In-app nudge banner prompts inactive users (30+ days) to contribute, with 7-day dismissal cooldown.
+-   **Place Owner Claim & Verification**: Two-sided marketplace allowing business owners to claim venues, submit verification evidence, and manage profiles. Admin review interface for approving/rejecting claims. Owner Dashboard with dynamic templates per ActivityType (restaurant, outdoor, kids, wine, etc.). Business Pro tier (R149/month) unlocks photo gallery, special offers, events, verified badge, and ranking boost.
 -   **PWA Support**: Installable as a web app on iOS and Android.
 
 **Backend Components:**

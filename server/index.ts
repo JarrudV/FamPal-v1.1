@@ -596,6 +596,13 @@ const PLANS: Record<string, PlanConfig> = {
     interval: 'monthly',
     plan_code: process.env.PAYSTACK_PRO_PLAN_CODE || '',
   },
+  business_pro: {
+    name: 'Business Pro',
+    amount: 14900,
+    currency: 'ZAR',
+    interval: 'monthly',
+    plan_code: process.env.PAYSTACK_BUSINESS_PRO_PLAN_CODE || '',
+  },
 };
 
 function verifyPaystackSignature(rawBody: Buffer, signature: string): boolean {
@@ -1323,6 +1330,410 @@ app.post('/api/partner/link', requireAuth, async (req: AuthenticatedRequest, res
   } catch (err: any) {
     console.error('[FamPals API] Partner link failed:', err?.message || err);
     res.status(500).json({ error: 'Failed to link partner', details: err?.message });
+  }
+});
+
+// ─── Place Owner Claim & Management ─────────────────────────────────────
+
+app.post('/api/place-claims', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.uid!;
+    const { placeId, placeName, businessRole, businessEmail, businessPhone, verificationMethod, verificationEvidence } = req.body;
+
+    if (!placeId || !placeName || !businessRole || !verificationEvidence) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const existing = await db.collection('placeClaims')
+      .where('placeId', '==', placeId)
+      .where('userId', '==', userId)
+      .where('status', '==', 'pending')
+      .get();
+
+    if (!existing.empty) {
+      return res.status(409).json({ error: 'You already have a pending claim for this place' });
+    }
+
+    const verifiedExisting = await db.collection('placeClaims')
+      .where('placeId', '==', placeId)
+      .where('status', '==', 'verified')
+      .get();
+
+    if (!verifiedExisting.empty) {
+      return res.status(409).json({ error: 'This place already has a verified owner' });
+    }
+
+    const userRecord = await adminAuth.getUser(userId);
+
+    const claim = {
+      placeId,
+      placeName,
+      userId,
+      userEmail: userRecord.email || '',
+      userDisplayName: userRecord.displayName || '',
+      status: 'pending',
+      businessRole,
+      businessEmail: businessEmail || null,
+      businessPhone: businessPhone || null,
+      verificationMethod: verificationMethod || 'manual',
+      verificationEvidence,
+      createdAt: FieldValue.serverTimestamp(),
+    };
+
+    const docRef = await db.collection('placeClaims').add(claim);
+
+    await db.collection('places').doc(placeId).set({
+      ownerStatus: 'pending',
+    }, { merge: true });
+
+    console.log(`[FamPals API] Place claim submitted: ${docRef.id} for place ${placeId} by ${userId}`);
+    res.json({ success: true, claimId: docRef.id });
+  } catch (err: any) {
+    console.error('[FamPals API] Place claim submission failed:', err?.message || err);
+    res.status(500).json({ error: 'Failed to submit claim' });
+  }
+});
+
+app.get('/api/place-claims/my-claims', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.uid!;
+    const snapshot = await db.collection('placeClaims')
+      .where('userId', '==', userId)
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const claims = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate?.()?.toISOString?.() || data.createdAt,
+        reviewedAt: data.reviewedAt?.toDate?.()?.toISOString?.() || data.reviewedAt,
+      };
+    });
+    res.json({ claims });
+  } catch (err: any) {
+    console.error('[FamPals API] Fetch my claims failed:', err?.message || err);
+    res.status(500).json({ error: 'Failed to fetch claims' });
+  }
+});
+
+app.get('/api/place-claims/place/:placeId', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { placeId } = req.params;
+    const userId = req.uid!;
+
+    const snapshot = await db.collection('placeClaims')
+      .where('placeId', '==', placeId)
+      .where('userId', '==', userId)
+      .orderBy('createdAt', 'desc')
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) {
+      return res.json({ claim: null });
+    }
+
+    const doc = snapshot.docs[0];
+    res.json({ claim: { id: doc.id, ...doc.data() } });
+  } catch (err: any) {
+    console.error('[FamPals API] Fetch place claim failed:', err?.message || err);
+    res.status(500).json({ error: 'Failed to fetch claim' });
+  }
+});
+
+app.get('/api/admin/place-claims', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.uid!;
+    const userDoc = await db.collection('users').doc(userId).get();
+    const userData = userDoc.data();
+    if (!userData?.isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const status = (req.query.status as string) || 'pending';
+    const snapshot = await db.collection('placeClaims')
+      .where('status', '==', status)
+      .orderBy('createdAt', 'desc')
+      .limit(50)
+      .get();
+
+    const claims = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate?.()?.toISOString?.() || data.createdAt,
+        reviewedAt: data.reviewedAt?.toDate?.()?.toISOString?.() || data.reviewedAt,
+      };
+    });
+    res.json({ claims });
+  } catch (err: any) {
+    console.error('[FamPals API] Admin fetch claims failed:', err?.message || err);
+    res.status(500).json({ error: 'Failed to fetch claims' });
+  }
+});
+
+app.post('/api/admin/place-claims/:claimId/verify', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const adminUserId = req.uid!;
+    const userDoc = await db.collection('users').doc(adminUserId).get();
+    const userData = userDoc.data();
+    if (!userData?.isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const claimId = req.params.claimId as string;
+    const { action, rejectionReason } = req.body;
+
+    if (!['verify', 'reject'].includes(action)) {
+      return res.status(400).json({ error: 'Invalid action' });
+    }
+
+    const claimRef = db.collection('placeClaims').doc(claimId);
+    const claimDoc = await claimRef.get();
+
+    if (!claimDoc.exists) {
+      return res.status(404).json({ error: 'Claim not found' });
+    }
+
+    const claimData = claimDoc.data()!;
+    const batch = db.batch();
+
+    if (action === 'verify') {
+      batch.update(claimRef, {
+        status: 'verified',
+        reviewedAt: FieldValue.serverTimestamp(),
+        reviewedBy: adminUserId,
+      });
+
+      const placeRef = db.collection('places').doc(claimData.placeId);
+      batch.set(placeRef, {
+        ownerStatus: 'verified',
+        ownerTier: 'free',
+        ownerIds: FieldValue.arrayUnion(claimData.userId),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      const ownerProfileRef = db.collection('placeOwnerProfiles').doc(`${claimData.placeId}_${claimData.userId}`);
+      batch.set(ownerProfileRef, {
+        placeId: claimData.placeId,
+        userId: claimData.userId,
+        tier: 'free',
+        verifiedAt: new Date().toISOString(),
+        ownerContent: {},
+        lastUpdatedAt: new Date().toISOString(),
+      });
+
+      console.log(`[FamPals API] Claim ${claimId} verified for place ${claimData.placeId}`);
+    } else {
+      batch.update(claimRef, {
+        status: 'rejected',
+        rejectionReason: rejectionReason || 'Insufficient evidence',
+        reviewedAt: FieldValue.serverTimestamp(),
+        reviewedBy: adminUserId,
+      });
+
+      batch.set(db.collection('places').doc(claimData.placeId), {
+        ownerStatus: 'none',
+      }, { merge: true });
+
+      console.log(`[FamPals API] Claim ${claimId} rejected for place ${claimData.placeId}`);
+    }
+
+    await batch.commit();
+    res.json({ success: true, status: action === 'verify' ? 'verified' : 'rejected' });
+  } catch (err: any) {
+    console.error('[FamPals API] Admin claim verification failed:', err?.message || err);
+    res.status(500).json({ error: 'Failed to process claim' });
+  }
+});
+
+app.get('/api/place-owner/:placeId', async (req: Request, res: Response) => {
+  try {
+    const placeId = req.params.placeId as string;
+    const placeDoc = await db.collection('places').doc(placeId).get();
+
+    if (!placeDoc.exists) {
+      return res.json({ ownerStatus: 'none', ownerContent: null });
+    }
+
+    const data = placeDoc.data()!;
+    res.json({
+      ownerStatus: data.ownerStatus || 'none',
+      ownerTier: data.ownerTier || null,
+      ownerContent: data.ownerContent || null,
+      promotedUntil: data.promotedUntil || null,
+    });
+  } catch (err: any) {
+    console.error('[FamPals API] Fetch place owner info failed:', err?.message || err);
+    res.status(500).json({ error: 'Failed to fetch owner info' });
+  }
+});
+
+app.put('/api/place-owner/:placeId/content', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.uid!;
+    const placeId = req.params.placeId as string;
+    const { ownerContent } = req.body;
+
+    const placeDoc = await db.collection('places').doc(placeId).get();
+    if (!placeDoc.exists) {
+      return res.status(404).json({ error: 'Place not found' });
+    }
+
+    const placeData = placeDoc.data()!;
+    if (!placeData.ownerIds?.includes(userId)) {
+      return res.status(403).json({ error: 'You are not a verified owner of this place' });
+    }
+
+    const tier = placeData.ownerTier || 'free';
+    const sanitized = { ...ownerContent };
+    if (tier === 'free') {
+      delete sanitized.specialOffers;
+      delete sanitized.events;
+      delete sanitized.photos;
+    }
+
+    await db.collection('places').doc(placeId).set({
+      ownerContent: sanitized,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    const profileId = `${placeId}_${userId}`;
+    await db.collection('placeOwnerProfiles').doc(profileId).set({
+      ownerContent: sanitized,
+      lastUpdatedAt: new Date().toISOString(),
+    }, { merge: true });
+
+    console.log(`[FamPals API] Owner content updated for place ${placeId} by ${userId}`);
+    res.json({ success: true, ownerContent: sanitized });
+  } catch (err: any) {
+    console.error('[FamPals API] Owner content update failed:', err?.message || err);
+    res.status(500).json({ error: 'Failed to update content' });
+  }
+});
+
+app.post('/api/paystack/init-business-payment', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.uid!;
+    const { placeId, email } = req.body;
+
+    if (!placeId || !email) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    if (!PAYSTACK_SECRET_KEY) {
+      return res.status(500).json({ error: 'Payment system not configured' });
+    }
+
+    const placeDoc = await db.collection('places').doc(placeId).get();
+    if (!placeDoc.exists || !placeDoc.data()?.ownerIds?.includes(userId)) {
+      return res.status(403).json({ error: 'You must be a verified owner' });
+    }
+
+    const planConfig = PLANS['business_pro'];
+    const reference = `fampals_business_pro_${placeId}_${userId}_${Date.now()}`;
+    const callbackUrl = `${APP_URL}?payment_callback=true&ref=${reference}&type=business`;
+
+    const paystackPayload: any = {
+      email,
+      amount: planConfig.amount,
+      currency: planConfig.currency,
+      reference,
+      callback_url: callbackUrl,
+      metadata: {
+        userId,
+        placeId,
+        plan: 'business_pro',
+        custom_fields: [
+          { display_name: 'Plan', variable_name: 'plan', value: 'Business Pro' },
+          { display_name: 'Place ID', variable_name: 'place_id', value: placeId },
+        ],
+      },
+    };
+
+    if (planConfig.plan_code) {
+      paystackPayload.plan = planConfig.plan_code;
+    }
+
+    const response = await fetch('https://api.paystack.co/transaction/initialize', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(paystackPayload),
+    });
+
+    const data = await response.json();
+
+    if (!data.status) {
+      console.error('[FamPals API] Paystack init failed:', data);
+      return res.status(500).json({ error: 'Payment initialization failed' });
+    }
+
+    console.log(`[FamPals API] Business payment initialized: ${reference}`);
+    res.json({
+      authorization_url: data.data.authorization_url,
+      reference: data.data.reference,
+    });
+  } catch (err: any) {
+    console.error('[FamPals API] Business payment init failed:', err?.message || err);
+    res.status(500).json({ error: 'Failed to initialize payment' });
+  }
+});
+
+app.post('/api/paystack/verify-business', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { reference } = req.body;
+
+    if (!reference || !PAYSTACK_SECRET_KEY) {
+      return res.status(400).json({ error: 'Invalid request' });
+    }
+
+    const response = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+      headers: {
+        Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+      },
+    });
+
+    const data = await response.json();
+
+    if (!data.status || data.data.status !== 'success') {
+      return res.status(400).json({ error: 'Payment not verified' });
+    }
+
+    const metadata = data.data.metadata;
+    const placeId = metadata?.placeId;
+    const userId = metadata?.userId;
+
+    if (placeId && userId) {
+      const now = new Date();
+      const endDate = new Date(now);
+      endDate.setMonth(endDate.getMonth() + 1);
+
+      await db.collection('places').doc(placeId).set({
+        ownerTier: 'business_pro',
+        promotedUntil: endDate.toISOString(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      const profileId = `${placeId}_${userId}`;
+      await db.collection('placeOwnerProfiles').doc(profileId).set({
+        tier: 'business_pro',
+        lastUpdatedAt: new Date().toISOString(),
+        paystack_reference: reference,
+        paystack_subscription_code: data.data.subscription_code || null,
+      }, { merge: true });
+
+      console.log(`[FamPals API] Business Pro activated for place ${placeId}`);
+    }
+
+    res.json({ success: true, status: 'active' });
+  } catch (err: any) {
+    console.error('[FamPals API] Business payment verification failed:', err?.message || err);
+    res.status(500).json({ error: 'Failed to verify payment' });
   }
 });
 

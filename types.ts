@@ -1,6 +1,7 @@
 
 import type { Timestamp } from 'firebase/firestore';
 import type { AccessibilityFeatureValue, FamilyFacilityValue, UserAccessibilityNeeds } from './src/types/place';
+import type { ClaimStatus, OwnerTier, OwnerContent, PlaceClaim, PlaceOwnerProfile } from './src/types/placeOwner';
 export type {
   AccessibilityFeature,
   AccessibilityConfidence,
@@ -10,6 +11,7 @@ export type {
   FamilyFacilityValue,
   UserAccessibilityNeeds,
 } from './src/types/place';
+export type { ClaimStatus, OwnerTier, OwnerContent, PlaceClaim, PlaceOwnerProfile } from './src/types/placeOwner';
 
 export interface Place {
   id: string;
@@ -44,6 +46,11 @@ export interface Place {
     indoorOutdoorSignals: string[];
     reportConfidence: Record<string, number>;
   };
+  ownerStatus?: 'none' | 'pending' | 'verified';
+  ownerTier?: OwnerTier;
+  ownerIds?: string[];
+  ownerContent?: OwnerContent;
+  promotedUntil?: string;
 }
 
 export type ActivityType = 'restaurant' | 'outdoor' | 'indoor' | 'active' | 'hike' | 'wine' | 'golf' | 'kids' | 'all';

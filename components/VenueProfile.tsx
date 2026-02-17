@@ -18,6 +18,10 @@ import { fetchOsmVenueData, OsmVenueData } from '../src/utils/osmService';
 
 import { formatPriceLevel } from '../src/utils/priceLevel';
 import type { AggregatedReportSignals, AggregatedSignal } from '../src/services/communityReports';
+import ClaimPlaceModal from '../src/components/ClaimPlaceModal';
+import OwnerDashboard from '../src/components/OwnerDashboard';
+import { fetchPlaceClaim } from '../lib/placeOwner';
+import type { PlaceClaim } from '../src/types/placeOwner';
 
 function getNavigationUrls(place: Place, placeDetails?: PlaceDetails | null) {
   const lat = (place as any).lat || placeDetails?.lat;
@@ -141,6 +145,21 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   const [osmData, setOsmData] = useState<OsmVenueData | null>(null);
   const [activitiesExpanded, setActivitiesExpanded] = useState(false);
   const [costExpanded, setCostExpanded] = useState(false);
+  const [showClaimModal, setShowClaimModal] = useState(false);
+  const [showOwnerDashboard, setShowOwnerDashboard] = useState(false);
+  const [myClaim, setMyClaim] = useState<PlaceClaim | null>(null);
+  const [claimLoaded, setClaimLoaded] = useState(false);
+
+  useEffect(() => {
+    if (userId && place.id) {
+      fetchPlaceClaim(place.id).then(claim => {
+        setMyClaim(claim);
+        setClaimLoaded(true);
+      }).catch(() => setClaimLoaded(true));
+    } else {
+      setClaimLoaded(true);
+    }
+  }, [userId, place.id]);
   
   useEffect(() => {
     let cancelled = false;
@@ -381,7 +400,15 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
            <div className="flex gap-1.5 mb-2 flex-wrap">
              {place.tags.slice(0, 3).map(t => <span key={t} className="px-2 py-0.5 bg-white/80 backdrop-blur rounded-lg text-[8px] font-bold text-sky-900 uppercase tracking-wide">{t}</span>)}
            </div>
-           <h1 className="text-xl sm:text-2xl font-black text-[#1E293B] tracking-tight leading-tight break-words drop-shadow-[0_2px_4px_rgba(255,255,255,0.9)]" style={{ textShadow: '0 1px 3px rgba(255,255,255,0.9), 0 2px 8px rgba(255,255,255,0.7)' }}>{place.name}</h1>
+           <h1 className="text-xl sm:text-2xl font-black text-[#1E293B] tracking-tight leading-tight break-words drop-shadow-[0_2px_4px_rgba(255,255,255,0.9)] flex items-center gap-1.5 flex-wrap" style={{ textShadow: '0 1px 3px rgba(255,255,255,0.9), 0 2px 8px rgba(255,255,255,0.7)' }}>
+             {place.name}
+             {place.ownerStatus === 'verified' && (
+               <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-600 text-white text-[9px] font-bold rounded-full shadow-sm whitespace-nowrap" title="Verified Owner">
+                 <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+                 Verified
+               </span>
+             )}
+           </h1>
            <p className="text-xs font-bold text-slate-600 mt-1 drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)]" style={{ textShadow: '0 1px 2px rgba(255,255,255,0.9), 0 1px 4px rgba(255,255,255,0.7)' }}>{place.address}</p>
         </div>
       </div>
@@ -516,6 +543,103 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                     <p className="text-[10px] text-slate-400">Based on {placeDetails?.userRatingsTotal || 'visitor'} reviews</p>
                   </div>
                 )}
+              </section>
+            )}
+
+            {place.ownerContent && Object.keys(place.ownerContent).length > 0 && (
+              <section className="space-y-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                  <span className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide">From the Owner</span>
+                  {place.ownerTier === 'business_pro' && (
+                    <span className="px-1.5 py-0.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[8px] font-bold rounded-full">PRO</span>
+                  )}
+                </div>
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl border border-blue-100 dark:border-blue-800 p-4 space-y-3">
+                  {place.ownerContent.headline && (
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">{place.ownerContent.headline}</p>
+                  )}
+                  {place.ownerContent.aboutUs && (
+                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{place.ownerContent.aboutUs}</p>
+                  )}
+                  {place.ownerContent.operatingHours && Object.values(place.ownerContent.operatingHours).some(v => v) && (
+                    <div>
+                      <p className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase mb-1">Hours</p>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-gray-600 dark:text-gray-400">
+                        {(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const).map(day => 
+                          place.ownerContent?.operatingHours?.[day] ? (
+                            <div key={day} className="flex justify-between">
+                              <span className="capitalize font-medium">{day.slice(0, 3)}</span>
+                              <span>{place.ownerContent.operatingHours[day]}</span>
+                            </div>
+                          ) : null
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {place.ownerContent.amenities && place.ownerContent.amenities.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {place.ownerContent.amenities.map((a, i) => (
+                        <span key={i} className="px-2 py-0.5 bg-blue-100 dark:bg-blue-800/40 text-blue-800 dark:text-blue-200 text-[10px] font-semibold rounded-full">{a}</span>
+                      ))}
+                    </div>
+                  )}
+                  {place.ownerContent.specialOffers && place.ownerContent.specialOffers.length > 0 && (
+                    <div>
+                      <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase mb-1">Special Offers</p>
+                      {place.ownerContent.specialOffers.filter(o => o.isActive).map(offer => (
+                        <div key={offer.id} className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-2 mb-1">
+                          <p className="text-xs font-semibold text-gray-900 dark:text-white">{offer.title}</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">{offer.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {place.ownerContent.bookingUrl && (
+                    <a href={place.ownerContent.bookingUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                      Book Now
+                    </a>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {!isGuest && claimLoaded && (
+              <section>
+                {place.ownerStatus === 'verified' && place.ownerIds?.includes(userId) ? (
+                  <button
+                    onClick={() => setShowOwnerDashboard(true)}
+                    className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 dark:text-blue-300 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                    Manage Your Place
+                  </button>
+                ) : myClaim?.status === 'pending' ? (
+                  <div className="py-2.5 px-4 rounded-xl text-sm font-medium text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 text-center">
+                    Ownership claim under review
+                  </div>
+                ) : myClaim?.status === 'rejected' ? (
+                  <div className="space-y-2">
+                    <div className="py-2 px-4 rounded-xl text-sm text-red-700 bg-red-50 dark:text-red-300 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-center">
+                      Claim was not approved{myClaim.rejectionReason ? `: ${myClaim.rejectionReason}` : ''}
+                    </div>
+                    <button
+                      onClick={() => setShowClaimModal(true)}
+                      className="w-full py-2 px-4 rounded-xl text-xs font-medium text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                    >
+                      Submit new claim
+                    </button>
+                  </div>
+                ) : place.ownerStatus !== 'verified' ? (
+                  <button
+                    onClick={() => setShowClaimModal(true)}
+                    className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 dark:text-gray-400 dark:bg-gray-800/50 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                    Own this place? Claim it
+                  </button>
+                ) : null}
               </section>
             )}
 
@@ -1175,6 +1299,26 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
             {familyToast.message}
           </div>
         </div>
+      )}
+
+      {showClaimModal && (
+        <ClaimPlaceModal
+          place={place}
+          onClose={() => setShowClaimModal(false)}
+          onSuccess={() => {
+            setShowClaimModal(false);
+            setMyClaim({ status: 'pending' } as PlaceClaim);
+          }}
+        />
+      )}
+
+      {showOwnerDashboard && (
+        <OwnerDashboard
+          place={place}
+          userId={userId}
+          userEmail={(place as any).userEmail || ''}
+          onClose={() => setShowOwnerDashboard(false)}
+        />
       )}
 
       {photoViewerOpen && (() => {
