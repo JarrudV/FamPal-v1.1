@@ -195,7 +195,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
           profileAge={profileAge}
           setProfileAge={setProfileAge}
         />}
-        {step === 1 && <StepFeatures />}
+        {step === 1 && <StepExplorer />}
         {step === 2 && <StepFamily
           children={children}
           childName={childName}
@@ -304,52 +304,102 @@ const FeatureCard: React.FC<{ icon: React.ReactNode; title: string; description:
   </div>
 );
 
-const StepFeatures: React.FC = () => (
-  <div className="flex-1 flex flex-col px-6 pt-4 pb-2">
-    <div className="flex flex-col items-center text-center mb-6">
-      <div className="w-28 h-28 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-600 flex items-center justify-center mb-6 shadow-xl shadow-emerald-200/50">
-        <svg className="w-12 h-12 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" /><line x1="8" y1="2" x2="8" y2="18" /><line x1="16" y1="6" x2="16" y2="22" /></svg>
-      </div>
-      <h1 className="text-2xl font-black text-slate-900 mb-2">
-        Here's what you can do
-      </h1>
-      <p className="text-sm text-slate-500 max-w-xs">
-        Everything you need for family adventures, in one place.
-      </p>
-    </div>
+const StepExplorer: React.FC = () => {
+  const [notifStatus, setNotifStatus] = React.useState<'default' | 'granted' | 'denied'>(
+    typeof Notification !== 'undefined' ? Notification.permission : 'default'
+  );
 
-    <div className="space-y-3 flex-1">
-      <FeatureCard
-        icon={<svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" /></svg>}
-        title="Discover Places"
-        description="Find family-friendly restaurants, parks, trails and more nearby."
-        gradient="from-sky-400 to-blue-500"
-        delay={0}
-      />
-      <FeatureCard
-        icon={<svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>}
-        title="Save & Track"
-        description="Bookmark favourites and log your family adventures."
-        gradient="from-rose-400 to-pink-500"
-        delay={100}
-      />
-      <FeatureCard
-        icon={<svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" /></svg>}
-        title="Circles & Sharing"
-        description="Create groups with friends and family to share recommendations."
-        gradient="from-amber-400 to-orange-500"
-        delay={200}
-      />
-      <FeatureCard
-        icon={<svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>}
-        title="Smart Suggestions"
-        description="Get personalised activity ideas tailored to your family."
-        gradient="from-violet-400 to-purple-500"
-        delay={300}
-      />
+  const handleEnableNotifications = async () => {
+    if (typeof Notification === 'undefined') return;
+    try {
+      const result = await Notification.requestPermission();
+      setNotifStatus(result);
+    } catch {
+      setNotifStatus('denied');
+    }
+  };
+
+  return (
+    <div className="flex-1 flex flex-col px-6 pt-4 pb-2 overflow-y-auto">
+      <div className="flex flex-col items-center text-center mb-5">
+        <div className="w-28 h-28 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-600 flex items-center justify-center mb-5 shadow-xl shadow-emerald-200/50">
+          <span className="text-5xl">🌟</span>
+        </div>
+        <h1 className="text-2xl font-black text-slate-900 mb-2">
+          You're an Explorer
+        </h1>
+        <p className="text-sm text-slate-500 max-w-xs leading-relaxed">
+          Your family knows the best spots. Share what you know and help other families discover amazing places.
+        </p>
+      </div>
+
+      <div className="space-y-3 flex-1">
+        <div className="bg-gradient-to-br from-sky-50 to-emerald-50 rounded-2xl p-4 border border-sky-100">
+          <h3 className="text-sm font-black text-slate-800 mb-1">Earn Points for Every Contribution</h3>
+          <p className="text-xs text-slate-600 leading-relaxed">
+            Visited a great cafe? Found a hidden playground? Share it! Every time you mark a place, leave a review, or report family facilities, you earn explorer points and level up.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-white rounded-xl p-3 border border-slate-100 text-center">
+            <span className="text-xl">📍</span>
+            <p className="text-[10px] font-bold text-slate-600 mt-1">Visit & Track</p>
+            <p className="text-[10px] text-sky-600 font-black">+5 pts</p>
+          </div>
+          <div className="bg-white rounded-xl p-3 border border-slate-100 text-center">
+            <span className="text-xl">📝</span>
+            <p className="text-[10px] font-bold text-slate-600 mt-1">Share Reviews</p>
+            <p className="text-[10px] text-sky-600 font-black">+15 pts</p>
+          </div>
+          <div className="bg-white rounded-xl p-3 border border-slate-100 text-center">
+            <span className="text-xl">📸</span>
+            <p className="text-[10px] font-bold text-slate-600 mt-1">Save Memories</p>
+            <p className="text-[10px] text-sky-600 font-black">+5 pts</p>
+          </div>
+        </div>
+
+        <FeatureCard
+          icon={<span className="text-lg">🔥</span>}
+          title="Keep Your Streak Going"
+          description="Contribute every week to build a streak. The longer you go, the more you grow as an explorer!"
+          gradient="from-amber-400 to-orange-500"
+          delay={0}
+        />
+
+        <FeatureCard
+          icon={<span className="text-lg">👨‍👩‍👧‍👦</span>}
+          title="Help Families Like Yours"
+          description="Is the place wheelchair-friendly? Do they have a kids' menu? Your insights make a real difference for other parents."
+          gradient="from-violet-400 to-purple-500"
+          delay={100}
+        />
+
+        {notifStatus === 'default' && typeof Notification !== 'undefined' && (
+          <button
+            onClick={handleEnableNotifications}
+            className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white border-2 border-dashed border-sky-200 active:scale-[0.98] transition-all"
+          >
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-400 to-blue-500 flex items-center justify-center flex-shrink-0 shadow-md">
+              <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 01-3.46 0" /></svg>
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-bold text-slate-800">Enable Reminders</p>
+              <p className="text-xs text-slate-500">We'll nudge you once a month to share your latest adventures</p>
+            </div>
+          </button>
+        )}
+
+        {notifStatus === 'granted' && (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-100">
+            <svg className="w-5 h-5 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+            <p className="text-xs font-semibold text-emerald-700">Reminders enabled! We'll check in once a month.</p>
+          </div>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const StepFamily: React.FC<{
   children: Child[];

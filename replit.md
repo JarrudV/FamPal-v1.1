@@ -21,7 +21,7 @@ The application is built with React 19, TypeScript, Vite 7, and Tailwind CSS v4.
 -   **Social Features**: Friend Circles for private groups and shared places; Partner Space for shared favorites and memories.
 -   **Activity Tracking**: "My Activity" dashboard for tracking visited places, notes, and past outings.
 -   **Accessibility & Family Facilities**: Community-contributed and verified data for accessibility features and family facilities, influencing ranking and filtering.
--   **Gamification**: FamPals Explorer system awards points and badges for user contributions (e.g., reports, reviews), tracked via levels and an activity dashboard.
+-   **Gamification**: FamPals Explorer system awards points and badges for user contributions (e.g., reports, reviews), tracked via levels and an activity dashboard. Weekly contribution streaks (currentStreakWeeks, bestStreakWeeks) with ISO week calculation. In-app nudge banner prompts inactive users (30+ days) to contribute, with 7-day dismissal cooldown.
 -   **PWA Support**: Installable as a web app on iOS and Android.
 
 **Backend Components:**

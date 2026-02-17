@@ -16,17 +16,42 @@ interface ActivityDashboardProps {
   savedPlaces: SavedPlace[];
   userId?: string;
   onOpenPlace: (visit: VisitedPlace) => void;
+  onGoToExplore?: () => void;
 }
 
-const CONTRIBUTION_LABELS: Record<ContributionType, { label: string; icon: string }> = {
-  community_report: { label: 'Community Reports', icon: '📝' },
-  accessibility_report: { label: 'Accessibility Reports', icon: '♿' },
-  family_facilities_report: { label: 'Facility Reports', icon: '👶' },
-  mark_visited: { label: 'Places Visited', icon: '📍' },
-  save_memory: { label: 'Memories Saved', icon: '📸' },
-  add_notes: { label: 'Notes Added', icon: '✏️' },
-  helpful_vote_received: { label: 'Helpful Votes', icon: '👍' },
+const CONTRIBUTION_LABELS: Record<ContributionType, { label: string; icon: string; verb: string }> = {
+  community_report: { label: 'Community Reports', icon: '📝', verb: 'reviews shared' },
+  accessibility_report: { label: 'Accessibility Reports', icon: '♿', verb: 'accessibility insights' },
+  family_facilities_report: { label: 'Facility Reports', icon: '👶', verb: 'facility reports' },
+  mark_visited: { label: 'Places Visited', icon: '📍', verb: 'places explored' },
+  save_memory: { label: 'Memories Saved', icon: '📸', verb: 'memories captured' },
+  add_notes: { label: 'Notes Added', icon: '✏️', verb: 'notes left' },
+  helpful_vote_received: { label: 'Helpful Votes', icon: '👍', verb: 'times you helped others' },
 };
+
+const NUDGE_DISMISS_KEY = 'fampals_nudge_dismissed_at';
+const NUDGE_COOLDOWN_DAYS = 7;
+const INACTIVE_THRESHOLD_DAYS = 30;
+
+function shouldShowNudge(lastContributionAt?: string): boolean {
+  if (!lastContributionAt) return true;
+  const lastContrib = new Date(lastContributionAt).getTime();
+  const daysSinceContrib = (Date.now() - lastContrib) / (1000 * 60 * 60 * 24);
+  if (daysSinceContrib < INACTIVE_THRESHOLD_DAYS) return false;
+  try {
+    const dismissed = localStorage.getItem(NUDGE_DISMISS_KEY);
+    if (dismissed) {
+      const daysSinceDismiss = (Date.now() - Number(dismissed)) / (1000 * 60 * 60 * 24);
+      if (daysSinceDismiss < NUDGE_COOLDOWN_DAYS) return false;
+    }
+  } catch {}
+  return true;
+}
+
+function getDaysSinceContribution(lastContributionAt?: string): number | null {
+  if (!lastContributionAt) return null;
+  return Math.floor((Date.now() - new Date(lastContributionAt).getTime()) / (1000 * 60 * 60 * 24));
+}
 
 const ActivityDashboard: React.FC<ActivityDashboardProps> = ({
   isGuest,
@@ -35,10 +60,12 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({
   savedPlaces,
   userId,
   onOpenPlace,
+  onGoToExplore,
 }) => {
   const [gamProfile, setGamProfile] = useState<GamificationProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState<'overview' | 'visited' | 'points'>('overview');
+  const [nudgeDismissed, setNudgeDismissed] = useState(false);
 
   useEffect(() => {
     if (isGuest) { setLoading(false); return; }
@@ -55,32 +82,26 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({
     + (contributions.family_facilities_report || 0);
   const totalContributions = (Object.values(contributions) as number[]).reduce((a, b) => a + b, 0);
   const badges = gamProfile?.badges || [];
+  const currentStreak = gamProfile?.currentStreakWeeks || 0;
+  const bestStreak = gamProfile?.bestStreakWeeks || 0;
+  const daysSince = getDaysSinceContribution(gamProfile?.lastContributionAt);
+  const showNudge = !nudgeDismissed && shouldShowNudge(gamProfile?.lastContributionAt);
+
+  const handleDismissNudge = () => {
+    setNudgeDismissed(true);
+    try { localStorage.setItem(NUDGE_DISMISS_KEY, String(Date.now())); } catch {}
+  };
 
   const recentActivity = useMemo(() => {
     const items: { type: string; label: string; date: Date; icon: string; detail?: string }[] = [];
-
     visitedPlaces.forEach(v => {
-      items.push({
-        type: 'visited',
-        label: v.placeName,
-        date: new Date(v.visitedAt),
-        icon: '📍',
-        detail: v.notes || undefined,
-      });
+      items.push({ type: 'visited', label: v.placeName, date: new Date(v.visitedAt), icon: '📍', detail: v.notes || undefined });
     });
-
     memories.forEach(m => {
       if (m.date) {
-        items.push({
-          type: 'memory',
-          label: m.placeName || 'Memory',
-          date: new Date(m.date),
-          icon: '📸',
-          detail: m.caption || undefined,
-        });
+        items.push({ type: 'memory', label: m.placeName || 'Memory', date: new Date(m.date), icon: '📸', detail: m.caption || undefined });
       }
     });
-
     items.sort((a, b) => b.date.getTime() - a.date.getTime());
     return items.slice(0, 10);
   }, [visitedPlaces, memories]);
@@ -88,14 +109,28 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({
   if (isGuest) {
     return (
       <div className="space-y-4 mt-4">
-        <div className="py-16 text-center bg-white rounded-3xl border border-slate-100">
-          <div className="w-20 h-20 bg-gradient-to-br from-sky-100 to-violet-100 rounded-full flex items-center justify-center mb-4 mx-auto">
-            <svg className="w-10 h-10 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+        <div className="bg-gradient-to-br from-sky-50 via-violet-50 to-amber-50 rounded-3xl p-6 text-center border border-sky-100">
+          <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-4 mx-auto shadow-sm">
+            <span className="text-4xl">🌟</span>
           </div>
-          <h3 className="text-lg font-bold text-slate-800 mb-2">Your Contribution Dashboard</h3>
-          <p className="text-sm text-slate-500 max-w-xs mx-auto">
-            Sign in to track your visits, earn explorer points, and see your impact on the FamPals community.
+          <h3 className="text-xl font-black text-slate-800 mb-2">Join the Explorer Community</h3>
+          <p className="text-sm text-slate-600 max-w-xs mx-auto leading-relaxed">
+            Sign in to track your family adventures, earn explorer points, and help other parents discover the best local spots.
           </p>
+          <div className="mt-4 flex justify-center gap-3">
+            <div className="text-center">
+              <p className="text-lg font-black text-sky-600">📍</p>
+              <p className="text-[10px] font-semibold text-slate-500">Track Visits</p>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-black text-sky-600">🔥</p>
+              <p className="text-[10px] font-semibold text-slate-500">Build Streaks</p>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-black text-sky-600">🏅</p>
+              <p className="text-[10px] font-semibold text-slate-500">Earn Badges</p>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -115,13 +150,57 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({
 
   return (
     <div className="space-y-4 mt-4">
+      {showNudge && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl p-4 border border-amber-200 relative">
+          <button onClick={handleDismissNudge} className="absolute top-3 right-3 w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
+            <svg className="w-3 h-3 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6L6 18M6 6l12 12" /></svg>
+          </button>
+          <div className="flex items-start gap-3 pr-6">
+            <span className="text-2xl mt-0.5">👋</span>
+            <div>
+              <h4 className="text-sm font-bold text-amber-800">Been on any adventures lately?</h4>
+              <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+                {daysSince !== null && daysSince > 0
+                  ? `It's been ${daysSince} days since your last contribution. `
+                  : ''}
+                Your family knows great spots — share them so other parents can discover them too!
+              </p>
+              {onGoToExplore && (
+                <button
+                  onClick={onGoToExplore}
+                  className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-amber-800 bg-amber-100 px-3 py-1.5 rounded-full active:scale-95 transition-all"
+                >
+                  Find & Review a Place
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <ExplorerLevel uid={userId} />
 
-      <div className="grid grid-cols-4 gap-2">
-        <StatCard value={visitedPlaces.length} label="Visited" icon="📍" color="bg-amber-50 text-amber-700" />
-        <StatCard value={totalReports} label="Reports" icon="📝" color="bg-sky-50 text-sky-700" />
-        <StatCard value={memories.length} label="Memories" icon="📸" color="bg-violet-50 text-violet-700" />
-        <StatCard value={badges.length} label="Badges" icon="🏅" color="bg-emerald-50 text-emerald-700" />
+      <div className="grid grid-cols-2 gap-2">
+        <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-3 border border-orange-100">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-lg">🔥</span>
+            <span className="text-xs font-bold text-amber-700 uppercase tracking-wider">Streak</span>
+          </div>
+          <p className="text-2xl font-black text-amber-800">{currentStreak} <span className="text-sm font-bold">week{currentStreak !== 1 ? 's' : ''}</span></p>
+          {bestStreak > currentStreak && (
+            <p className="text-[10px] text-amber-600 font-semibold mt-0.5">Best: {bestStreak} weeks</p>
+          )}
+          {currentStreak === 0 && (
+            <p className="text-[10px] text-amber-600 mt-0.5">Contribute this week to start!</p>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <StatCard value={visitedPlaces.length} label="Visited" icon="📍" color="bg-sky-50 text-sky-700" />
+          <StatCard value={totalReports} label="Reports" icon="📝" color="bg-violet-50 text-violet-700" />
+          <StatCard value={memories.length} label="Memories" icon="📸" color="bg-emerald-50 text-emerald-700" />
+          <StatCard value={badges.length} label="Badges" icon="🏅" color="bg-amber-50 text-amber-700" />
+        </div>
       </div>
 
       <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
@@ -144,21 +223,31 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({
 
       {activeSection === 'overview' && (
         <div className="space-y-3">
+          {totalContributions > 0 && (
+            <div className="bg-gradient-to-r from-sky-50 to-emerald-50 rounded-2xl p-4 border border-sky-100">
+              <p className="text-sm text-slate-700 leading-relaxed">
+                <span className="font-black text-sky-700">{totalContributions} contributions</span> and counting!
+                You've helped families discover {contributions.mark_visited || 0} places, shared {contributions.community_report || 0} reviews,
+                and captured {contributions.save_memory || 0} memories. Keep it up — every contribution makes FamPals better for everyone.
+              </p>
+            </div>
+          )}
+
           <div className="bg-white rounded-2xl border border-slate-100 p-4">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Your Contributions</h4>
-            <div className="space-y-2">
-              {(Object.entries(CONTRIBUTION_LABELS) as [ContributionType, { label: string; icon: string }][]).map(([type, meta]) => {
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Your Impact</h4>
+            <div className="space-y-2.5">
+              {(Object.entries(CONTRIBUTION_LABELS) as [ContributionType, { label: string; icon: string; verb: string }][]).map(([type, meta]) => {
                 const count = contributions[type] || 0;
                 const pts = POINTS_MAP[type];
                 return (
                   <div key={type} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2.5">
                       <span className="text-sm">{meta.icon}</span>
-                      <span className="text-sm text-slate-700">{meta.label}</span>
+                      <span className="text-sm text-slate-700">{count > 0 ? `${count} ${meta.verb}` : meta.label}</span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-bold text-slate-800">{count}</span>
-                      <span className="text-[10px] text-slate-400 w-12 text-right">+{pts} pts ea</span>
+                    <div className="flex items-center gap-2">
+                      {count > 0 && <span className="text-xs font-black text-sky-600">{count * pts} pts</span>}
+                      {count === 0 && <span className="text-[10px] text-slate-400">+{pts} pts each</span>}
                     </div>
                   </div>
                 );
@@ -166,8 +255,8 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({
             </div>
             {totalContributions > 0 && (
               <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-500">Total Contributions</span>
-                <span className="text-sm font-black text-sky-600">{totalContributions}</span>
+                <span className="text-xs font-semibold text-slate-500">Total Impact Score</span>
+                <span className="text-sm font-black text-sky-600">{gamProfile?.totalPoints || 0} pts</span>
               </div>
             )}
           </div>
@@ -192,7 +281,7 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({
 
           {ALL_BADGES.filter(b => !(badges as string[]).includes(b.id)).length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-100 p-4">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Badges to Unlock</h4>
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Next Badges to Unlock</h4>
               <div className="space-y-2">
                 {ALL_BADGES.filter(b => !badges.includes(b.id)).map(badge => (
                   <div key={badge.id} className="flex items-center gap-2 text-sm">
@@ -234,10 +323,20 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({
               <div className="w-14 h-14 bg-sky-50 rounded-full flex items-center justify-center mx-auto mb-3">
                 <span className="text-2xl">🌟</span>
               </div>
-              <h4 className="text-base font-bold text-slate-800 mb-1">Start Contributing</h4>
-              <p className="text-sm text-slate-500 max-w-xs mx-auto">
-                Visit places, submit reports, and save memories to earn points and climb the explorer ranks!
+              <h4 className="text-base font-bold text-slate-800 mb-1">Your Explorer Journey Starts Here</h4>
+              <p className="text-sm text-slate-500 max-w-xs mx-auto leading-relaxed">
+                Every family outing is a chance to help others. Visit a place, share your experience,
+                and watch your impact grow. Your first contribution earns you 5+ points!
               </p>
+              {onGoToExplore && (
+                <button
+                  onClick={onGoToExplore}
+                  className="mt-4 inline-flex items-center gap-1.5 text-sm font-bold text-white bg-gradient-to-r from-sky-500 to-blue-600 px-5 py-2.5 rounded-full shadow-lg shadow-sky-200 active:scale-95 transition-all"
+                >
+                  Explore Places Nearby
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -293,8 +392,17 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({
               </div>
               <h4 className="text-base font-semibold text-slate-700 mb-1">No places visited yet</h4>
               <p className="text-sm text-slate-500 max-w-xs mx-auto">
-                Open any place and tap "Mark as visited" to start tracking your family adventures.
+                Open any place and tap "Mark as visited" to start building your adventure map.
               </p>
+              {onGoToExplore && (
+                <button
+                  onClick={onGoToExplore}
+                  className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-sky-600 active:text-sky-800"
+                >
+                  Browse places nearby
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -305,15 +413,16 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({
           <div className="bg-gradient-to-br from-sky-50 to-violet-50 rounded-2xl p-5 border border-sky-100">
             <h4 className="text-base font-bold text-slate-800 mb-2">FamPals Explorer Program</h4>
             <p className="text-sm text-slate-600 leading-relaxed">
-              Every time you contribute to the FamPals community, you earn explorer points. As you level up,
-              you unlock badges and help other families discover great places.
+              Every contribution makes FamPals better for families everywhere. Share your experiences,
+              report on facilities, and help other parents make informed decisions. The more you contribute,
+              the higher you climb!
             </p>
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-100 p-4">
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">How to Earn Points</h4>
             <div className="space-y-3">
-              {(Object.entries(CONTRIBUTION_LABELS) as [ContributionType, { label: string; icon: string }][]).map(([type, meta]) => (
+              {(Object.entries(CONTRIBUTION_LABELS) as [ContributionType, { label: string; icon: string; verb: string }][]).map(([type, meta]) => (
                 <div key={type} className="flex items-start gap-3">
                   <div className="w-9 h-9 rounded-lg bg-sky-50 flex items-center justify-center shrink-0 text-base">
                     {meta.icon}
@@ -327,6 +436,27 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-100 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-lg">🔥</span>
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Weekly Streaks</h4>
+            </div>
+            <p className="text-sm text-slate-600 leading-relaxed mb-3">
+              Contribute at least once per week to build your streak. Whether it's marking a place as visited,
+              leaving a review, or reporting facilities — any contribution counts toward your weekly streak.
+            </p>
+            <div className="flex gap-3">
+              <div className="flex-1 bg-amber-50 rounded-xl p-3 text-center">
+                <p className="text-lg font-black text-amber-800">{currentStreak}</p>
+                <p className="text-[10px] font-semibold text-amber-600">Current</p>
+              </div>
+              <div className="flex-1 bg-amber-50 rounded-xl p-3 text-center">
+                <p className="text-lg font-black text-amber-800">{bestStreak}</p>
+                <p className="text-[10px] font-semibold text-amber-600">Best Ever</p>
+              </div>
             </div>
           </div>
 
@@ -358,23 +488,23 @@ const ActivityDashboard: React.FC<ActivityDashboardProps> = ({
 
 function StatCard({ value, label, icon, color }: { value: number; label: string; icon: string; color: string }) {
   return (
-    <div className={`rounded-2xl p-3 text-center ${color}`}>
-      <span className="text-base">{icon}</span>
-      <p className="text-xl font-black mt-0.5">{value}</p>
-      <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70">{label}</p>
+    <div className={`rounded-2xl p-2.5 text-center ${color}`}>
+      <span className="text-sm">{icon}</span>
+      <p className="text-lg font-black">{value}</p>
+      <p className="text-[9px] font-semibold uppercase tracking-wider opacity-70">{label}</p>
     </div>
   );
 }
 
 function getPointDescription(type: ContributionType): string {
   switch (type) {
-    case 'community_report': return 'Share your experience at a place';
-    case 'accessibility_report': return 'Report wheelchair & accessibility info';
-    case 'family_facilities_report': return 'Report family-friendly facilities';
-    case 'mark_visited': return 'Mark a place as visited';
-    case 'save_memory': return 'Save a photo memory of your visit';
-    case 'add_notes': return 'Add notes about your experience';
-    case 'helpful_vote_received': return 'When someone finds your report helpful';
+    case 'community_report': return 'Share your family\'s experience to help others decide';
+    case 'accessibility_report': return 'Report wheelchair access, step-free entry & more';
+    case 'family_facilities_report': return 'Kids\' menu? Play area? Let families know';
+    case 'mark_visited': return 'Been there! Mark your family adventures';
+    case 'save_memory': return 'Capture the moment with a photo memory';
+    case 'add_notes': return 'Leave tips and notes for other families';
+    case 'helpful_vote_received': return 'Earned when other parents find your info useful';
   }
 }
 

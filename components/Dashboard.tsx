@@ -2115,6 +2115,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
                 setSelectedPlace(placeFromVisit);
               }
             }}
+            onGoToExplore={() => setActiveTab('explore')}
           />
         )}
 

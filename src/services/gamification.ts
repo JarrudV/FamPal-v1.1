@@ -77,6 +77,9 @@ export interface GamificationProfile {
   level: number;
   contributions: Record<ContributionType, number>;
   badges: BadgeId[];
+  currentStreakWeeks: number;
+  bestStreakWeeks: number;
+  lastContributionAt?: string;
   lastUpdated?: unknown;
 }
 
@@ -145,6 +148,52 @@ export async function getGamificationProfile(uid?: string): Promise<Gamification
   }
 }
 
+function getISOWeekAndYear(date: Date): { week: number; year: number } {
+  const d = new Date(date.getTime());
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+  const isoYear = d.getFullYear();
+  const yearStart = new Date(isoYear, 0, 4);
+  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + yearStart.getDay() + 1) / 7);
+  return { week, year: isoYear };
+}
+
+function getWeekKey(date: Date): string {
+  const { week, year } = getISOWeekAndYear(date);
+  return `${year}-W${String(week).padStart(2, '0')}`;
+}
+
+function computeStreak(lastContributionAt: string | undefined, existingStreak: number): { currentStreakWeeks: number; isNewWeek: boolean } {
+  const now = new Date();
+  const currentWeek = getWeekKey(now);
+
+  if (!lastContributionAt) {
+    return { currentStreakWeeks: 1, isNewWeek: true };
+  }
+
+  const lastDate = new Date(lastContributionAt);
+  const lastWeek = getWeekKey(lastDate);
+
+  if (currentWeek === lastWeek) {
+    return { currentStreakWeeks: existingStreak || 1, isNewWeek: false };
+  }
+
+  const lastMonday = new Date(Date.UTC(lastDate.getFullYear(), lastDate.getMonth(), lastDate.getDate()));
+  lastMonday.setUTCDate(lastMonday.getUTCDate() - ((lastMonday.getUTCDay() + 6) % 7));
+
+  const thisMonday = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  thisMonday.setUTCDate(thisMonday.getUTCDate() - ((thisMonday.getUTCDay() + 6) % 7));
+
+  const diffMs = thisMonday.getTime() - lastMonday.getTime();
+  const weeksDiff = Math.round(diffMs / (7 * 86400000));
+
+  if (weeksDiff === 1) {
+    return { currentStreakWeeks: (existingStreak || 0) + 1, isNewWeek: true };
+  }
+
+  return { currentStreakWeeks: 1, isNewWeek: true };
+}
+
 export async function awardPoints(type: ContributionType): Promise<GamificationProfile | null> {
   if (!db) return null;
   const user = auth?.currentUser;
@@ -158,7 +207,7 @@ export async function awardPoints(type: ContributionType): Promise<GamificationP
       const snap = await transaction.get(profileRef);
       const existing: GamificationProfile = snap.exists()
         ? (snap.data() as GamificationProfile)
-        : { totalPoints: 0, level: 1, contributions: { ...DEFAULT_CONTRIBUTIONS }, badges: [] };
+        : { totalPoints: 0, level: 1, contributions: { ...DEFAULT_CONTRIBUTIONS }, badges: [], currentStreakWeeks: 0, bestStreakWeeks: 0 };
 
       const contributions = { ...DEFAULT_CONTRIBUTIONS, ...existing.contributions };
       contributions[type] = (contributions[type] || 0) + 1;
@@ -171,11 +220,18 @@ export async function awardPoints(type: ContributionType): Promise<GamificationP
       const levelInfo = getLevelForPoints(totalPoints);
       const badges = checkBadges(contributions);
 
+      const nowISO = new Date().toISOString();
+      const { currentStreakWeeks } = computeStreak(existing.lastContributionAt, existing.currentStreakWeeks || 0);
+      const bestStreakWeeks = Math.max(currentStreakWeeks, existing.bestStreakWeeks || 0);
+
       const profile: GamificationProfile = {
         totalPoints,
         level: levelInfo.level,
         contributions,
         badges,
+        currentStreakWeeks,
+        bestStreakWeeks,
+        lastContributionAt: nowISO,
         lastUpdated: serverTimestamp(),
       };
 
