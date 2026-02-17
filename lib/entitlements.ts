@@ -2,6 +2,11 @@ import { Entitlement, PlanTier, PLAN_LIMITS, getDefaultEntitlement } from '../ty
 
 const FREE_CREDITS_PER_MONTH = 5;
 const PRO_CREDITS_PER_MONTH = 100;
+const ADMIN_UIDS = (import.meta.env.VITE_ADMIN_UIDS || '').split(',').filter(Boolean);
+
+export function isAdminUser(uid: string | undefined): boolean {
+  return !!uid && ADMIN_UIDS.includes(uid);
+}
 
 export function getCurrentUsageMonth(): string {
   const now = new Date();
@@ -105,8 +110,12 @@ export function canCreateCircle(entitlement: Entitlement | undefined, currentCou
 
 export function canUseAI(
   entitlement: Entitlement | undefined,
-  poolUsage?: { ai_requests_this_month?: number; ai_requests_reset_date?: string } | null
+  poolUsage?: { ai_requests_this_month?: number; ai_requests_reset_date?: string } | null,
+  uid?: string
 ): { allowed: boolean; remaining: number; limit: number } {
+  if (uid && isAdminUser(uid)) {
+    return { allowed: true, remaining: -1, limit: -1 };
+  }
   const limit = getEffectiveCreditLimit(entitlement);
   const used = getEffectiveCreditsUsed(entitlement, poolUsage);
   const remaining = Math.max(0, limit - used);

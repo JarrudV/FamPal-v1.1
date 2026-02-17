@@ -109,7 +109,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   isSubmittingFamilyFacilitiesContribution = false,
   communityTrust
 }) => {
-  const aiInfo = canUseAI(entitlement, familyPool);
+  const aiInfo = canUseAI(entitlement, familyPool, userId);
   const venueMemories = memories.filter(m => m.placeId === place.id);
   const [activeTab, setActiveTab] = useState<'info' | 'parent'>('info');
   const [aiQuestion, setAiQuestion] = useState('');

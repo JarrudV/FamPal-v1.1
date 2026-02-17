@@ -71,7 +71,7 @@ export const EXPLORE_INTENT_DEFINITIONS: Record<ExploreIntentId, ExploreIntentDe
     id: 'all',
     label: 'All',
     subtitle: 'Showing diverse nearby spots for families',
-    queries: ['restaurant', 'park', 'museum', 'playground', 'hiking', 'market', 'cafe', 'family activity', 'things to do'],
+    queries: ['family friendly things to do', 'restaurant park cafe', 'playground museum market'],
     includeTypes: [],
     excludeTypes: COMMON_EXCLUDE_TYPES,
     keywordInclude: [],
@@ -81,7 +81,7 @@ export const EXPLORE_INTENT_DEFINITIONS: Record<ExploreIntentId, ExploreIntentDe
     id: 'eat_drink',
     label: 'Eat and Drink',
     subtitle: 'Showing restaurants, cafes, bars, and bakeries',
-    queries: ['restaurant', 'cafe', 'bar', 'bakery', 'takeaway', 'pizza', 'sushi', 'family restaurant', 'wine farm', 'winery', 'farm stall', 'food market', 'ice cream'],
+    queries: ['family restaurant cafe', 'bakery bar wine farm', 'food market farm stall ice cream'],
     includeTypes: ['restaurant', 'cafe', 'bar', 'bakery', 'meal_takeaway', 'meal_delivery', 'food', 'winery'],
     excludeTypes: COMMON_EXCLUDE_TYPES,
     keywordInclude: [
@@ -98,9 +98,7 @@ export const EXPLORE_INTENT_DEFINITIONS: Record<ExploreIntentId, ExploreIntentDe
     label: 'Play and Kids',
     subtitle: 'Showing playgrounds, family venues, and kid-friendly activities',
     queries: [
-      'playground', 'kids play area', 'family restaurant', 'soft play', 'indoor play centre',
-      'park', 'zoo', 'aquarium', 'water park', 'petting zoo', 'mini golf', 'kids party venue',
-      'trampoline park', 'family fun',
+      'playground kids play area', 'zoo aquarium water park', 'family fun trampoline park mini golf',
     ],
     includeTypes: ['playground', 'amusement_park', 'park', 'zoo', 'aquarium', 'tourist_attraction'],
     excludeTypes: [...COMMON_EXCLUDE_TYPES, 'night_club', 'winery', 'vineyard', 'bar'],
@@ -118,8 +116,7 @@ export const EXPLORE_INTENT_DEFINITIONS: Record<ExploreIntentId, ExploreIntentDe
     label: 'Outdoors',
     subtitle: 'Showing trails, nature spots, and open-air venues',
     queries: [
-      'hiking trail', 'nature reserve', 'park', 'beach', 'garden', 'viewpoint', 'lake', 'camping',
-      'botanical garden', 'picnic spot', 'farm visit', 'horse riding', 'rock pool',
+      'hiking trail nature reserve park', 'beach garden botanical picnic', 'camping farm visit horse riding',
     ],
     includeTypes: ['park', 'tourist_attraction', 'campground', 'hiking_area', 'national_park', 'state_park', 'beach'],
     excludeTypes: [...COMMON_EXCLUDE_TYPES, 'winery', 'vineyard'],
@@ -138,8 +135,7 @@ export const EXPLORE_INTENT_DEFINITIONS: Record<ExploreIntentId, ExploreIntentDe
     label: 'Things to Do',
     subtitle: 'Showing attractions, culture, and day-out activities',
     queries: [
-      'museum', 'art gallery', 'attraction', 'market', 'theatre', 'cinema', 'tour',
-      'historical landmark', 'craft market', 'food market', 'botanical garden', 'wine route',
+      'museum art gallery attraction', 'market theatre cinema tour', 'historical landmark botanical garden',
     ],
     includeTypes: ['tourist_attraction', 'museum', 'art_gallery', 'movie_theater', 'amusement_park'],
     excludeTypes: [...COMMON_EXCLUDE_TYPES],
@@ -158,8 +154,7 @@ export const EXPLORE_INTENT_DEFINITIONS: Record<ExploreIntentId, ExploreIntentDe
     label: 'Sport and Active',
     subtitle: 'Showing gyms, sports venues, pools, and active fun',
     queries: [
-      'gym', 'sports complex', 'swimming pool', 'tennis', 'padel', 'climbing gym', 'cycling',
-      'skate park', 'horse riding', 'go karting', 'paintball', 'mini golf', 'surfing',
+      'gym sports complex swimming pool', 'climbing cycling skate park adventure', 'go karting mini golf surfing',
     ],
     includeTypes: ['gym', 'sports_complex', 'stadium', 'swimming_pool'],
     excludeTypes: [...COMMON_EXCLUDE_TYPES, 'winery', 'vineyard'],
@@ -180,8 +175,7 @@ export const EXPLORE_INTENT_DEFINITIONS: Record<ExploreIntentId, ExploreIntentDe
     label: 'Indoor',
     subtitle: 'Showing indoor activities and weather-safe options',
     queries: [
-      'indoor playground', 'museum', 'library', 'aquarium', 'art gallery', 'cinema', 'bowling',
-      'trampoline park', 'escape room', 'arcade', 'ice skating', 'cooking class',
+      'indoor playground museum library', 'aquarium cinema bowling arcade', 'trampoline park escape room ice skating',
     ],
     includeTypes: ['museum', 'library', 'aquarium', 'art_gallery', 'movie_theater', 'bowling_alley', 'amusement_park'],
     excludeTypes: [...COMMON_EXCLUDE_TYPES, 'winery', 'vineyard'],

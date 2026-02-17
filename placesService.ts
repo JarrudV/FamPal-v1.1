@@ -99,8 +99,8 @@ if (!PLACES_API_KEY) {
 const PLACES_CACHE_KEY = 'fampals_google_places_cache';
 const DETAILS_CACHE_KEY = 'fampals_place_details_cache';
 const INTENT_CACHE_KEY = 'fampals_intent_places_cache';
-const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
-const INTENT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 60 * 60 * 1000; // 60 minutes
+const INTENT_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 const SHOULD_LOG_INTENT = import.meta.env.DEV;
 
 interface CacheEntry<T> {
@@ -594,9 +594,9 @@ type FacetSnapshot = {
   reportConfidence: Record<string, number>;
 };
 
-const PIPELINE_MIN_RESULTS = 18;
-const PIPELINE_TARGET_RESULTS = 30;
-const PIPELINE_MAX_GOOGLE_PAGES = 3;
+const PIPELINE_MIN_RESULTS = 10;
+const PIPELINE_TARGET_RESULTS = 20;
+const PIPELINE_MAX_GOOGLE_PAGES = 1;
 const PIPELINE_LOGS_ENABLED = import.meta.env.DEV || import.meta.env.VITE_SEARCH_PIPELINE_DEBUG === 'true';
 
 function normalizeFacetToken(value: string): string {
@@ -821,9 +821,9 @@ async function enrichPlacesForStrictKidPrefs(
     return candidates;
   }
 
-  const batch = candidates.slice(0, 25);
+  const batch = candidates.slice(0, 10);
   let upgradedCount = 0;
-  await mapWithConcurrency(batch, 3, async (place) => {
+  await mapWithConcurrency(batch, 2, async (place) => {
     const existingSnapshot = (place as any).facetSnapshot as FacetSnapshot | undefined;
     if (existingSnapshot?.kidFriendlySignals?.map(normalizeFacetToken).includes('play_area_jungle_gym')) {
       return place;
@@ -1196,8 +1196,8 @@ export async function searchExploreIntent(
   const boosterQueries = buildBoosterQueriesFromFilters(options?.exploreFilters);
   const prefQueries = buildPreferenceBoosterQueries(options?.userPreferences);
   const queries = uniqueQueries([...baselineQueries, ...boosterQueries, ...prefQueries]);
-  const coreQueries = queries.slice(0, Math.min(3, queries.length));
-  const optionalQueries = queries.slice(coreQueries.length);
+  const coreQueries = queries.slice(0, Math.min(2, queries.length));
+  const optionalQueries = queries.slice(coreQueries.length, coreQueries.length + 1);
   const filtersSignature = options?.exploreFilters
     ? JSON.stringify({
       f: options.exploreFilters.foodTypes,
@@ -1546,7 +1546,7 @@ export async function searchNearbyPlacesTextApi(
         headers: {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': PLACES_API_KEY,
-          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.types,places.priceLevel,places.location,places.photos,places.primaryTypeDisplayName,places.regularOpeningHours,nextPageToken'
+          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.types,places.location,places.photos,places.primaryTypeDisplayName,places.rating,places.userRatingCount,places.priceLevel,nextPageToken'
         },
         body: JSON.stringify(requestBody),
         signal: options?.signal,
@@ -1686,7 +1686,7 @@ export async function textSearchPlaces(
         headers: {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': PLACES_API_KEY,
-          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.types,places.priceLevel,places.location,places.photos,places.primaryTypeDisplayName'
+          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.types,places.location,places.photos,places.primaryTypeDisplayName,places.rating,places.userRatingCount,places.priceLevel'
         },
         body: JSON.stringify({
           textQuery: query,
