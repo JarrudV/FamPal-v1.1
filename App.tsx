@@ -35,7 +35,7 @@ import { buildAccessContext, type AppAccessContext } from './lib/access';
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const AUTH_REDIRECT_PENDING_KEY = 'fampals_auth_redirect_pending';
 const BILLING_ENABLED = import.meta.env.VITE_BILLING_ENABLED === 'true';
-const AUTH_DEBUG = import.meta.env.DEV && import.meta.env.VITE_AUTH_DEBUG === 'true';
+const AUTH_DEBUG = import.meta.env.VITE_AUTH_DEBUG === 'true';
 
 const authDebugLog = (message: string, payload?: Record<string, unknown>) => {
   if (!AUTH_DEBUG) return;
@@ -142,6 +142,8 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState('login');
+  const [redirectChecked, setRedirectChecked] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [pendingJoinCircleId, setPendingJoinCircleId] = useState<string | null>(null);
@@ -423,6 +425,8 @@ const App: React.FC = () => {
       lastAuthUidRef.current = mockBypassUser.uid;
       setNeedsOnboarding(false);
       setOnboardingChecked(true);
+      setRedirectChecked(true);
+      setAuthChecked(true);
       setPendingJoinCircleId(null);
       setState(prev => ({
         ...getInitialState(mockBypassUser),
@@ -435,17 +439,21 @@ const App: React.FC = () => {
       return;
     }
     if (isGuest) {
+      setRedirectChecked(true);
+      setAuthChecked(true);
       setLoading(false);
       return;
     }
 
     if (!isFirebaseConfigured || !auth) {
+      setAuthChecked(true);
       setLoading(false);
       return;
     }
 
     let unsubProfile: (() => void) | null = null;
     const unsubscribe = onAuthStateChanged(auth, (userAuth) => {
+      setAuthChecked(true);
       authDebugLog('onAuthStateChanged fired', summarizeAuthUser(userAuth));
       console.time('auth:resolved');
       if (userAuth) {
@@ -656,23 +664,24 @@ const App: React.FC = () => {
   }, [state.user?.uid, state.profileInfo, state.partnerLink, handleUpdateState, accessContext.canSyncCloud]);
 
   useEffect(() => {
-    if (!isFirebaseConfigured || !auth || redirectHandledRef.current) return;
+    if (redirectHandledRef.current) return;
     redirectHandledRef.current = true;
     (async () => {
       try {
-        authDebugLog('Checking redirect result on app load');
+        authDebugLog('Checking redirect result on app load', {
+          href: typeof window !== 'undefined' ? window.location.href : '',
+          pathname: typeof window !== 'undefined' ? window.location.pathname : '',
+        });
+        if (!isFirebaseConfigured || !auth) {
+          return;
+        }
         const redirectResult = await getRedirectResult(auth);
-        if (import.meta.env.DEV) {
-          console.log('[FamPals Auth] Redirect result uid:', redirectResult?.user?.uid ?? null);
-          console.log('[FamPals Auth] auth.currentUser after redirect:', auth.currentUser ? {
-            uid: auth.currentUser.uid,
-            email: auth.currentUser.email,
-            providers: (auth.currentUser.providerData || []).map((p) => p.providerId),
-          } : null);
-        }
-        if (redirectResult && import.meta.env.DEV) {
-          console.log('[FamPals Auth] Redirect result completed successfully');
-        }
+        authDebugLog('Redirect result resolved', {
+          redirectUid: redirectResult?.user?.uid ?? null,
+          currentUserUid: auth.currentUser?.uid ?? null,
+          href: typeof window !== 'undefined' ? window.location.href : '',
+          pathname: typeof window !== 'undefined' ? window.location.pathname : '',
+        });
         if (redirectResult) {
           authDebugLog('Redirect result received', {
             uid: redirectResult.user.uid,
@@ -691,14 +700,22 @@ const App: React.FC = () => {
           setError(`Login failed: ${err.message || 'Unknown error'}`);
         }
         console.warn('Redirect result error:', err);
-        setLoading(false);
       } finally {
+        setRedirectChecked(true);
         if (typeof window !== 'undefined') {
           window.sessionStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
         }
       }
     })();
   }, [navigate]);
+
+  useEffect(() => {
+    authDebugLog('Chosen view', {
+      chosenView: view,
+      href: typeof window !== 'undefined' ? window.location.href : '',
+      pathname: typeof window !== 'undefined' ? window.location.pathname : '',
+    });
+  }, [view]);
 
   useEffect(() => {
     if (!BILLING_ENABLED) return;
@@ -731,17 +748,20 @@ const App: React.FC = () => {
     if (loading) return;
     if (isGuest) return;
     if (!state.user) return;
+    if (!redirectChecked || !authChecked) return;
     if (!onboardingChecked) return;
     if (needsOnboarding) return;
-    if (view === 'login' || view === 'onboarding') {
+    const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
+    if (view === 'login' || view === 'onboarding' || pathname === '/login') {
       authDebugLog('Authenticated user ready; forcing home navigation', {
         fromView: view,
+        pathname,
         reason: 'auth_confirmed',
       });
       setView('dashboard');
       navigate('/', { replace: true });
     }
-  }, [loading, isGuest, state.user, onboardingChecked, needsOnboarding, view, navigate]);
+  }, [loading, isGuest, state.user, redirectChecked, authChecked, onboardingChecked, needsOnboarding, view, navigate]);
 
   useEffect(() => {
     if (!accessContext.canSyncCloud) return;
@@ -883,14 +903,23 @@ const App: React.FC = () => {
     authDebugLog('renderView', {
       loading,
       view,
+      redirectChecked,
+      authChecked,
       onboardingChecked,
       needsOnboarding,
       hasUser: !!state.user,
       isGuest,
+      href: typeof window !== 'undefined' ? window.location.href : '',
+      pathname: typeof window !== 'undefined' ? window.location.pathname : '',
     });
     
     // Show loading while waiting for auth or onboarding status check
     if (loading) {
+      return <div className="flex items-center justify-center h-screen bg-gradient-to-br from-sky-50 to-white"><div className="text-sky-500 text-lg">Loading...</div></div>;
+    }
+
+    // Never hold login view until both redirect and auth state checks complete.
+    if (!isGuest && (!redirectChecked || !authChecked)) {
       return <div className="flex items-center justify-center h-screen bg-gradient-to-br from-sky-50 to-white"><div className="text-sky-500 text-lg">Loading...</div></div>;
     }
 
