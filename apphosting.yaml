@@ -49,3 +49,11 @@ env:
     availability:
       - BUILD
       - RUNTIME
+  - variable: VITE_ADMIN_UIDS
+    value: mDITQMVhKccMLEuPExmsLRCNfhK2
+    availability:
+      - BUILD
+  - variable: VITE_BILLING_ENABLED
+    value: "true"
+    availability:
+      - BUILD
