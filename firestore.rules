@@ -152,7 +152,10 @@ service cloud.firestore {
       match /reports/{reportId} {
         allow read: if true;
         allow create: if signedIn() && validPlaceReportCreate();
-        allow update, delete: if false;
+        allow update: if signedIn()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['moderatorVerified', 'helpfulVotes'])
+          && request.resource.data.moderatorVerified is bool;
+        allow delete: if false;
       }
 
       // Canonical proposed edits stream.

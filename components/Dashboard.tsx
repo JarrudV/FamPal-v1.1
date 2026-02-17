@@ -27,6 +27,7 @@ import { upsertSavedPlace, deleteSavedPlace } from '../lib/userData';
 import { loadPlaceAccessibilityByIds, rankPlacesWithAccessibilityNeeds, submitAccessibilityReport } from '../lib/placeAccessibility';
 import { generateAccessibilitySummary } from '../src/utils/accessibility';
 import { loadPlaceFamilyFacilitiesByIds, submitFamilyFacilitiesReport } from '../lib/placeFamilyFacilities';
+import { createReport as createCommunityReport, aggregateReportSignals, type CommunityReportPayload } from '../src/services/communityReports';
 import { generateFamilyFacilitiesSummary } from '../src/utils/familyFacilities';
 import MemoryCreate from './MemoryCreate';
 import {
@@ -148,6 +149,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
   const [exploreResultState, setExploreResultState] = useState<'none' | 'exhausted' | 'filters_strict'>('none');
   const [placesServerConfigured, setPlacesServerConfigured] = useState<boolean | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
+  const [selectedPlaceTrust, setSelectedPlaceTrust] = useState<import('../src/services/communityReports').AggregatedReportSignals | null>(null);
   // Location state - hydrate from saved preferences
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(
     userPrefs.lastLocation ? { lat: userPrefs.lastLocation.lat, lng: userPrefs.lastLocation.lng } : null
@@ -694,6 +696,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
             searchKey,
             cacheContext: `${prefFilterMode}:${hideSavedPlaces ? 'discover' : 'all'}`,
             exploreFilters,
+            userPreferences: combinedPreferences,
             signal: controller.signal,
             isCancelled: () =>
               placesSearchKeyRef.current !== searchKey || placesRequestIdRef.current !== requestId,
@@ -1086,6 +1089,45 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
     }
   };
 
+  const mapToCommunityReport = (
+    accessibilityFeatures: AccessibilityFeatureValue[],
+    familyFeatures: FamilyFacilityValue[],
+    comment?: string
+  ): CommunityReportPayload => {
+    const accessibilityMap: Record<string, string> = {
+      step_free_entry: 'step_free',
+      ramp_access: 'step_free',
+      accessible_toilet: 'accessible_toilets',
+      wide_doorways: 'wheelchair_friendly',
+      accessible_parking: 'wheelchair_friendly',
+    };
+    const kidPrefsMap: Record<string, string> = {
+      kids_menu: 'kids_menu',
+      high_chairs: 'high_chair',
+      playground: 'play_area_jungle_gym',
+      child_friendly_space: 'outdoor_space',
+      stroller_friendly: 'stroller_friendly',
+    };
+
+    const accessibility: Partial<Record<string, boolean>> = {};
+    accessibilityFeatures.forEach((f) => {
+      const mapped = accessibilityMap[f.feature];
+      if (mapped) accessibility[mapped] = f.value;
+    });
+
+    const kidPrefs: Partial<Record<string, boolean>> = {};
+    familyFeatures.forEach((f) => {
+      const mapped = kidPrefsMap[f.feature];
+      if (mapped) kidPrefs[mapped] = f.value;
+    });
+
+    return {
+      kidPrefs: kidPrefs as CommunityReportPayload['kidPrefs'],
+      accessibility: accessibility as CommunityReportPayload['accessibility'],
+      notes: comment,
+    };
+  };
+
   const handleSubmitAccessibilityContribution = async (
     placeId: string,
     payload: { features: AccessibilityFeatureValue[]; comment?: string }
@@ -1122,6 +1164,13 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
           ? { ...prev, accessibility: updated.accessibility, accessibilitySummary: updated.accessibilitySummary }
           : prev
       );
+
+      try {
+        const communityPayload = mapToCommunityReport(payload.features, [], payload.comment);
+        await createCommunityReport(placeId, communityPayload);
+      } catch (crErr) {
+        console.warn('Community report creation failed (non-blocking):', crErr);
+      }
     } catch (err) {
       console.warn('Failed to submit accessibility contribution', err);
       throw err;
@@ -1152,6 +1201,13 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
         features: payload.features,
         comment: payload.comment,
       });
+
+      try {
+        const communityPayload = mapToCommunityReport([], payload.features, payload.comment);
+        await createCommunityReport(placeId, communityPayload);
+      } catch (crErr) {
+        console.warn('Community report creation failed (non-blocking):', crErr);
+      }
     } catch (err) {
       console.warn('Failed to submit family facilities contribution', err);
       throw err;
@@ -1638,6 +1694,18 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
     }
   };
 
+  useEffect(() => {
+    if (!selectedPlace) {
+      setSelectedPlaceTrust(null);
+      return;
+    }
+    let cancelled = false;
+    aggregateReportSignals(selectedPlace.id).then((signals) => {
+      if (!cancelled) setSelectedPlaceTrust(signals);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [selectedPlace?.id]);
+
   const showCircleDetail = !!selectedCircle;
   const showPlaceDetail = !!selectedPlaceWithAccessibility;
 
@@ -1682,6 +1750,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
           isSubmittingAccessibilityContribution={submittingAccessibilityForPlaceId === selectedPlaceWithAccessibility.id}
           onSubmitFamilyFacilitiesContribution={(votes) => handleSubmitFamilyFacilitiesContribution(selectedPlaceWithAccessibility.id, votes)}
           isSubmittingFamilyFacilitiesContribution={submittingFamilyFacilitiesForPlaceId === selectedPlaceWithAccessibility.id}
+          communityTrust={selectedPlaceTrust}
           onTagMemoryToCircle={handleTagMemoryToCircle}
           onAddToCircle={(circleId, groupPlace) => {
             if (circleId === 'partner') {
@@ -1937,18 +2006,23 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
         {activeTab === 'favorites' && (
           <div className="space-y-4 mt-4">
             {favoritePlaces.length > 0 ? (
-              favoritePlaces.map(place => (
-                <PlaceCard 
-                  key={place.id} 
-                  place={place}
-                  variant="list"
-                  isFavorite={true}
-                  onToggleFavorite={() => toggleFavorite(place)}
-                  onClick={() => setSelectedPlace(place)}
-                  showAddToGroup={canSyncCloud && circles.length > 0}
-                  onAddToGroup={() => setAddToCirclePlace(place)}
-                />
-              ))
+              favoritePlaces.map(place => {
+                const details = state.favoriteDetails[place.id];
+                return (
+                  <PlaceCard 
+                    key={place.id} 
+                    place={place}
+                    variant="list"
+                    isFavorite={true}
+                    onToggleFavorite={() => toggleFavorite(place)}
+                    onClick={() => setSelectedPlace(place)}
+                    showAddToGroup={canSyncCloud && circles.length > 0}
+                    onAddToGroup={() => setAddToCirclePlace(place)}
+                    hasNotes={!!details?.notes}
+                    isVisited={!!details?.visited}
+                  />
+                );
+              })
             ) : (
               <div className="py-24 text-center text-slate-300 font-black text-xs uppercase tracking-widest bg-white rounded-[40px] border border-slate-50">
                 No saved spots yet.

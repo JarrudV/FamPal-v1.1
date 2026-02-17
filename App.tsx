@@ -18,6 +18,7 @@ import {
   sendPasswordResetEmail,
   updateProfile,
 } from './lib/firebase';
+import AdminReports from './components/AdminReports';
 import { listenToUserDoc, upsertUserProfile, saveUserField, listenToSavedPlaces, upsertSavedPlace } from './lib/userData';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
@@ -976,6 +977,8 @@ const App: React.FC = () => {
         );
       case 'profile':
         return <Profile state={state} isGuest={isGuest} accessContext={accessContext} onSignOut={handleSignOut} setView={setView} onUpdateState={handleUpdateState} onResetOnboarding={() => setNeedsOnboarding(true)} darkMode={darkMode} onToggleDarkMode={() => { const next = !darkMode; setDarkMode(next); try { localStorage.setItem('fampals_dark_mode', next ? 'true' : 'false'); } catch {} }} />;
+      case 'admin':
+        return <AdminReports userId={state.user?.uid || ''} onBack={() => setView('dashboard')} />;
       default:
         return <Login onLogin={handleSignIn} onEmailSignIn={handleEmailSignIn} onEmailSignUp={handleEmailSignUp} onForgotPassword={handleForgotPassword} onGuestLogin={handleGuestLogin} error={error} />;
     }

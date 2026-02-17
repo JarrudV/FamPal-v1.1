@@ -1361,9 +1361,18 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
               Data controls: your profile, memories, and saved places are stored in Firebase. You can self-serve account deletion from the Delete Account section above.
             </div>
           )}
+          {!isGuest && (import.meta.env.VITE_ADMIN_UIDS || '').split(',').includes(state.user?.uid || '') && (
+            <button
+              onClick={() => setView('admin')}
+              className="w-full flex items-center justify-between p-6 text-violet-500 font-black text-xs uppercase tracking-widest hover:bg-violet-50 transition-colors border-b border-slate-100 min-h-[52px]"
+            >
+              <span>Admin: Review Reports</span>
+              <span>→</span>
+            </button>
+          )}
           <button 
             onClick={onSignOut}
-            className="w-full flex items-center justify-between p-6 text-slate-400 font-black text-xs uppercase tracking-widest hover:bg-rose-50 hover:text-rose-500 transition-colors"
+            className="w-full flex items-center justify-between p-6 text-slate-400 font-black text-xs uppercase tracking-widest hover:bg-rose-50 hover:text-rose-500 transition-colors min-h-[52px]"
           >
             <span>Sign Out</span>
             <span>→</span>

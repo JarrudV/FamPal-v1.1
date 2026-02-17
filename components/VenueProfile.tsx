@@ -17,6 +17,7 @@ import { getPublicHints } from '../src/utils/publicHints';
 import { fetchOsmVenueData, OsmVenueData } from '../src/utils/osmService';
 
 import { formatPriceLevel } from '../src/utils/priceLevel';
+import type { AggregatedReportSignals, AggregatedSignal } from '../src/services/communityReports';
 
 function getNavigationUrls(place: Place, placeDetails?: PlaceDetails | null) {
   const lat = (place as any).lat || placeDetails?.lat;
@@ -75,6 +76,7 @@ interface VenueProfileProps {
   isSubmittingAccessibilityContribution?: boolean;
   onSubmitFamilyFacilitiesContribution?: (payload: { features: FamilyFacilityValue[]; comment?: string }) => void | Promise<void>;
   isSubmittingFamilyFacilitiesContribution?: boolean;
+  communityTrust?: AggregatedReportSignals | null;
 }
 
 const VenueProfile: React.FC<VenueProfileProps> = ({ 
@@ -104,7 +106,8 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   onSubmitAccessibilityContribution,
   isSubmittingAccessibilityContribution = false,
   onSubmitFamilyFacilitiesContribution,
-  isSubmittingFamilyFacilitiesContribution = false
+  isSubmittingFamilyFacilitiesContribution = false,
+  communityTrust
 }) => {
   const aiInfo = canUseAI(entitlement, familyPool);
   const venueMemories = memories.filter(m => m.placeId === place.id);
@@ -539,6 +542,32 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                 </p>
               )}
             </section>
+
+            {communityTrust && communityTrust.reportCount > 0 && (
+              <section className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-violet-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  <h3 className="font-bold text-sm text-slate-800">Family Verdict</h3>
+                  <span className="text-[10px] font-semibold bg-violet-100 text-violet-600 px-2 py-0.5 rounded-full">
+                    {communityTrust.reportCount} {communityTrust.reportCount === 1 ? 'family' : 'families'} reported
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(communityTrust.kidPrefs).filter(([, v]) => (v as AggregatedSignal).positive).map(([key, signal]) => (
+                    <span key={key} className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-green-50 text-green-700 border border-green-200 min-h-[32px] flex items-center gap-1">
+                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                      {key.replace(/_/g, ' ')}
+                    </span>
+                  ))}
+                  {Object.entries(communityTrust.accessibility).filter(([, v]) => (v as AggregatedSignal).positive).map(([key, signal]) => (
+                    <span key={key} className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-sky-50 text-sky-700 border border-sky-200 min-h-[32px] flex items-center gap-1">
+                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                      {key.replace(/_/g, ' ')}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            )}
 
             <PlaceFamilyFacilitiesSection
               familyFacilities={place.familyFacilities}

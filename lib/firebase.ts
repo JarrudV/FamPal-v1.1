@@ -36,6 +36,7 @@ import {
   deleteField,
   getDocs,
   getDoc,
+  updateDoc,
   writeBatch,
   serverTimestamp,
   Timestamp
@@ -158,6 +159,7 @@ export {
   documentId,
   deleteDoc,
   deleteField,
+  updateDoc,
   writeBatch,
   serverTimestamp,
   Timestamp,

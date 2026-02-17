@@ -1132,6 +1132,43 @@ export async function textSearchPlacesPaged(
   return response;
 }
 
+export interface UserPreferencesForSearch {
+  foodPreferences?: string[];
+  activityPreferences?: string[];
+  accessibility?: string[];
+  allergies?: string[];
+}
+
+function buildPreferenceBoosterQueries(prefs?: UserPreferencesForSearch): string[] {
+  if (!prefs) return [];
+  const queries: string[] = [];
+  const foodMap: Record<string, string> = {
+    'Vegetarian': 'vegetarian restaurant',
+    'Vegan': 'vegan restaurant',
+    'Halal': 'halal restaurant',
+    'Kosher': 'kosher restaurant',
+    'Gluten-free': 'gluten free options',
+    'Organic preferred': 'organic food',
+  };
+  const activityMap: Record<string, string> = {
+    'Nature/outdoors': 'nature outdoor trails',
+    'Water activities': 'water park swimming pool',
+    'Animals': 'animal farm petting zoo',
+    'Educational': 'educational museum science center',
+    'Creative/arts': 'art workshop creative studio',
+    'Indoor play': 'indoor play area kids entertainment',
+    'Sports': 'sports facility family sports',
+    'Active/energetic': 'adventure park active family',
+  };
+  (prefs.foodPreferences || []).forEach((f) => {
+    if (foodMap[f]) queries.push(foodMap[f]);
+  });
+  (prefs.activityPreferences || []).forEach((a) => {
+    if (activityMap[a]) queries.push(activityMap[a]);
+  });
+  return queries.slice(0, 3);
+}
+
 export async function searchExploreIntent(
   intent: ExploreIntent,
   lat: number,
@@ -1142,6 +1179,7 @@ export async function searchExploreIntent(
     searchKey?: string;
     cacheContext?: string;
     exploreFilters?: ExploreFilters;
+    userPreferences?: UserPreferencesForSearch;
     onProgress?: (update: IntentProgressUpdate) => void;
     isCancelled?: () => boolean;
     signal?: AbortSignal;
@@ -1156,7 +1194,8 @@ export async function searchExploreIntent(
   const qKey = normalizeQueryForCache(searchQuery);
   const baselineQueries = uniqueQueries(searchQuery ? [searchQuery, ...definition.queries.slice(0, 2)] : definition.queries);
   const boosterQueries = buildBoosterQueriesFromFilters(options?.exploreFilters);
-  const queries = uniqueQueries([...baselineQueries, ...boosterQueries]);
+  const prefQueries = buildPreferenceBoosterQueries(options?.userPreferences);
+  const queries = uniqueQueries([...baselineQueries, ...boosterQueries, ...prefQueries]);
   const coreQueries = queries.slice(0, Math.min(3, queries.length));
   const optionalQueries = queries.slice(coreQueries.length);
   const filtersSignature = options?.exploreFilters
