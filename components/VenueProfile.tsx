@@ -16,6 +16,8 @@ import { getFamilyFacilitiesHintsFromGoogle } from '../src/utils/familyFacilitie
 import { getPublicHints } from '../src/utils/publicHints';
 import { fetchOsmVenueData, OsmVenueData } from '../src/utils/osmService';
 
+import { formatPriceLevel } from '../src/utils/priceLevel';
+
 function getNavigationUrls(place: Place, placeDetails?: PlaceDetails | null) {
   const lat = (place as any).lat || placeDetails?.lat;
   const lng = (place as any).lng || placeDetails?.lng;
@@ -513,9 +515,19 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
 
             <section className="space-y-4">
               <h3 className="text-base font-bold text-[#1E293B]">Family Review</h3>
-              <p className="text-slate-500 leading-relaxed text-sm font-medium">
-                {place.fullSummary || place.description}
-              </p>
+              {place.fullSummary ? (
+                <p className="text-slate-500 leading-relaxed text-sm font-medium">{place.fullSummary}</p>
+              ) : placeDetails?.editorialSummary ? (
+                <p className="text-slate-500 leading-relaxed text-sm font-medium">{placeDetails.editorialSummary}</p>
+              ) : placeDetails?.reviews && placeDetails.reviews.length > 0 ? (
+                <p className="text-slate-500 leading-relaxed text-sm font-medium">
+                  Based on {placeDetails.userRatingsTotal || placeDetails.reviews.length} reviews, this {place.description || 'place'} has a {place.rating ? `${place.rating}/5 rating` : 'solid reputation'}. Check the visitor insights above for family-relevant details.
+                </p>
+              ) : (
+                <p className="text-slate-400 leading-relaxed text-sm italic">
+                  No family review yet. Visit this place and share your experience!
+                </p>
+              )}
               {strollerFriendlyConfirmed && (
                 <p className="text-xs font-medium text-slate-500">
                   Reported by the FamPal community: stroller friendly access.
@@ -551,7 +563,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
             />
 
             <section className="grid grid-cols-2 gap-4">
-              <InfoTile label="Pricing" value={place.priceLevel || '—'} icon={<svg className="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" /></svg>} />
+              <InfoTile label="Pricing" value={formatPriceLevel(place.priceLevel)} icon={<svg className="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" /></svg>} />
               <InfoTile label="Age Group" value={place.ageAppropriate || 'All ages'} icon={<svg className="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /></svg>} />
               <InfoTile label="Distance" value={place.distance || '—'} icon={<svg className="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" /></svg>} />
               <InfoTile label="Rating" value={place.rating ? `${place.rating} / 5` : '—'} icon={<svg className="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>} />

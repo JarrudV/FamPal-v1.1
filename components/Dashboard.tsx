@@ -42,6 +42,7 @@ import {
 import { getPartnerThreadId, ensurePartnerThread } from '../lib/partnerThreads';
 import { Timestamp } from 'firebase/firestore';
 import type { AppAccessContext } from '../lib/access';
+import { formatPriceLevel as formatPriceLevelUtil } from '../src/utils/priceLevel';
 
 interface DashboardProps {
   state: AppState;
@@ -1024,15 +1025,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
     savedAt: Timestamp.now(),
   });
 
-  const priceLevelToString = (level?: number): '$' | '$$' | '$$$' | '$$$$' | undefined => {
-    switch (level) {
-      case 0: return '$';
-      case 1: return '$';
-      case 2: return '$$';
-      case 3: return '$$$';
-      case 4: return '$$$$';
-      default: return undefined;
-    }
+  const priceLevelToString = (level?: number | string): string | undefined => {
+    const result = formatPriceLevelUtil(level);
+    return result === '—' ? undefined : result;
   };
 
   const toggleFavorite = (place: Place) => {

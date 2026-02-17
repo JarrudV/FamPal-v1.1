@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { AppState, Place, ExploreIntent, SavedPlace } from '../types';
+import { formatPriceLevel } from '../src/utils/priceLevel';
 import Header from './Header';
 import PlaceCard from './PlaceCard';
 import VenueProfile from './VenueProfile';
@@ -123,7 +124,7 @@ const NetflixPlaceCard: React.FC<{
       <h3 className="font-bold text-[13px] text-slate-800 leading-tight line-clamp-2">{place.name}</h3>
       <div className="flex items-center gap-1.5 mt-1">
         <span className="text-amber-500 text-[11px] font-bold flex items-center gap-0.5"><svg className="w-3 h-3 text-amber-400" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg> {place.rating ?? '—'}</span>
-        {place.priceLevel && <span className="text-slate-300 text-[11px]">{place.priceLevel}</span>}
+        {place.priceLevel && <span className="text-slate-300 text-[11px]">{formatPriceLevel(place.priceLevel)}</span>}
       </div>
       {place.tags?.length > 0 && (
         <span className="inline-block mt-1.5 px-1.5 py-0.5 bg-sky-50 text-sky-600 text-[9px] font-bold uppercase tracking-wider rounded">

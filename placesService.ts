@@ -650,7 +650,7 @@ function placeRecordToPlace(record: PlaceRecord, lat: number, lng: number, fallb
     tags: (record.types || []).slice(0, 8).map((t) => t.replace(/_/g, ' ')),
     mapsUrl: record.mapsUrl || `https://www.google.com/maps/place/?q=place_id:${record.googlePlaceId}`,
     type: placeType,
-    priceLevel: (record.priceLevel as '$' | '$$' | '$$$' | '$$$$') || '$$',
+    priceLevel: priceLevelToString(record.priceLevel),
     imageUrl: record.imageUrl || undefined,
     distance: calculateDistance(lat, lng, record.geo.lat, record.geo.lng),
     ageAppropriate: 'All ages',

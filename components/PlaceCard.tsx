@@ -1,6 +1,7 @@
 ﻿import React from 'react';
 import { Place } from '../types';
 import AccessibilityBadges from '../src/components/AccessibilityBadges';
+import { formatPriceLevel } from '../src/utils/priceLevel';
 
 interface PlaceCardProps {
   place: Place;
@@ -64,7 +65,7 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place, variant, isFavorite, onTog
         <p className="text-slate-400 text-xs font-medium truncate">{place.description}</p>
         <div className="flex items-center gap-2 mt-1.5">
           <span className="text-amber-500 text-xs font-bold flex items-center gap-0.5"><svg className="w-3 h-3 text-amber-400" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg> {place.rating ?? '—'}</span>
-          <span className="text-slate-300 text-xs">{place.priceLevel || ''}</span>
+          <span className="text-slate-300 text-xs">{formatPriceLevel(place.priceLevel)}</span>
         </div>
         <div className="flex flex-wrap gap-1 mt-1.5">
           <AccessibilityBadges accessibility={place.accessibility} />
