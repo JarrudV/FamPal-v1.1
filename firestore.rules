@@ -5,7 +5,74 @@ service cloud.firestore {
     function signedIn() {
       return request.auth != null;
     }
-    
+
+    function validPlaceDoc(placeId) {
+      return request.resource.data.placeId == placeId
+        && request.resource.data.googlePlaceId is string
+        && request.resource.data.name is string
+        && request.resource.data.geo is map
+        && request.resource.data.geo.lat is number
+        && request.resource.data.geo.lng is number
+        && request.resource.data.facets is map
+        && request.resource.data.facetsConfidence is number;
+    }
+
+    function validKidPrefsMap(m) {
+      return m is map
+        && m.keys().hasOnly(['kids_menu', 'high_chair', 'play_area_jungle_gym', 'outdoor_space', 'stroller_friendly'])
+        && (!('kids_menu' in m) || m.kids_menu is bool)
+        && (!('high_chair' in m) || m.high_chair is bool)
+        && (!('play_area_jungle_gym' in m) || m.play_area_jungle_gym is bool)
+        && (!('outdoor_space' in m) || m.outdoor_space is bool)
+        && (!('stroller_friendly' in m) || m.stroller_friendly is bool);
+    }
+
+    function validAccessibilityMap(m) {
+      return m is map
+        && m.keys().hasOnly(['wheelchair_friendly', 'accessible_toilets', 'step_free', 'quiet_friendly'])
+        && (!('wheelchair_friendly' in m) || m.wheelchair_friendly is bool)
+        && (!('accessible_toilets' in m) || m.accessible_toilets is bool)
+        && (!('step_free' in m) || m.step_free is bool)
+        && (!('quiet_friendly' in m) || m.quiet_friendly is bool);
+    }
+
+    function validPhotoRefs(refs) {
+      return refs is list
+        && refs.size() <= 6
+        && (refs.size() < 1 || (refs[0] is string && refs[0].size() <= 300))
+        && (refs.size() < 2 || (refs[1] is string && refs[1].size() <= 300))
+        && (refs.size() < 3 || (refs[2] is string && refs[2].size() <= 300))
+        && (refs.size() < 4 || (refs[3] is string && refs[3].size() <= 300))
+        && (refs.size() < 5 || (refs[4] is string && refs[4].size() <= 300))
+        && (refs.size() < 6 || (refs[5] is string && refs[5].size() <= 300));
+    }
+
+    function validPlaceReportCreate() {
+      return request.resource.data.keys().hasOnly(['placeId', 'userId', 'userDisplayName', 'status', 'helpfulVotes', 'moderatorVerified', 'kidPrefs', 'accessibility', 'notes', 'photoRefs', 'createdAt', 'updatedAt'])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.placeId is string
+        && request.resource.data.status == 'published'
+        && request.resource.data.helpfulVotes is number
+        && request.resource.data.helpfulVotes == 0
+        && request.resource.data.moderatorVerified == false
+        && request.resource.data.kidPrefs is map
+        && request.resource.data.accessibility is map
+        && validKidPrefsMap(request.resource.data.kidPrefs)
+        && validAccessibilityMap(request.resource.data.accessibility)
+        && (!('notes' in request.resource.data) || (request.resource.data.notes is string && request.resource.data.notes.size() <= 1000))
+        && (!('photoRefs' in request.resource.data) || validPhotoRefs(request.resource.data.photoRefs))
+        && request.resource.data.createdAt is timestamp;
+    }
+
+    function validPlaceEditWrite() {
+      return request.resource.data.keys().hasOnly(['userId', 'patch', 'reason', 'status', 'createdAt', 'updatedAt'])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.patch is map
+        && request.resource.data.reason is string
+        && request.resource.data.status is string
+        && request.resource.data.createdAt is timestamp;
+    }
+
     // User Data
     // Allow the owner to read/write their root user doc
     // Allow authenticated users to query for partner invite codes
@@ -66,23 +133,53 @@ service cloud.firestore {
     // Public place data (root docs are read-only from clients)
     match /places/{placeId} {
       allow read: if true;
-      allow create, update, delete: if false;
+      allow create, update: if signedIn() && validPlaceDoc(placeId);
+      allow delete: if false;
 
-      // Community reports (raw)
+      // Cached source snapshots. Current writer uses sources/google.
+      match /sources/{sourceId} {
+        allow read: if true;
+        allow create, update: if signedIn()
+          && sourceId == 'google'
+          && request.resource.data.keys().hasOnly(['googlePlaceId', 'versionHash', 'fetchedAt', 'requestedCategory', 'searchQuery', 'ingestionSource', 'source'])
+          && request.resource.data.googlePlaceId is string
+          && request.resource.data.versionHash is string
+          && request.resource.data.fetchedAt is timestamp;
+        allow delete: if false;
+      }
+
+      // Canonical user-submitted reports summary stream.
+      match /reports/{reportId} {
+        allow read: if true;
+        allow create: if signedIn() && validPlaceReportCreate();
+        allow update, delete: if false;
+      }
+
+      // Canonical proposed edits stream.
+      match /edits/{editId} {
+        allow read: if true;
+        allow create, update: if signedIn() && validPlaceEditWrite();
+        allow delete: if false;
+      }
+
+      // Legacy untrusted collection (backward compatibility only).
+      // Do not use for trust-scored aggregation.
       match /accessibilityReports/{reportId} {
         allow read: if true;
         allow create: if signedIn();
         allow update, delete: if false;
       }
 
-      // Main collection name used by current client + functions
+      // Legacy untrusted collection (backward compatibility only).
+      // Do not use for trust-scored aggregation.
       match /familyFacilitiesReports/{reportId} {
         allow read: if true;
         allow create: if signedIn();
         allow update, delete: if false;
       }
 
-      // Compatibility alias (if any client still points to singular name)
+      // Legacy untrusted alias (backward compatibility only).
+      // Do not use for trust-scored aggregation.
       match /familyFacilityReports/{reportId} {
         allow read: if true;
         allow create: if signedIn();

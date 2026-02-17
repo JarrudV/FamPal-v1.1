@@ -1,5 +1,13 @@
 import { Place, ActivityType, ExploreIntent, AccessibilityFeature, FamilyFacility } from "./types";
 import { getExploreIntentDefinition, type ExploreIntentDefinition } from './server/exploreIntentConfig';
+import type { ExploreFilters } from './lib/exploreFilters';
+import {
+  upsertPlaceFromGoogle,
+  getPlacesByGeoBoundsAndCategory,
+  computeFacetsFromGoogleSource,
+  type PlaceSourceGoogle,
+  type PlaceRecord,
+} from './src/services/placeStore';
 
 const PLACES_API_KEY = import.meta.env.VITE_GOOGLE_PLACES_API_KEY || "";
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
@@ -128,6 +136,17 @@ export interface IntentSearchDebug {
   perQueryCounts: Record<string, IntentQueryDebugCount>;
   totalBeforeFilter: number;
   totalAfterFilter: number;
+  pipeline?: {
+    cacheCount: number;
+    afterFilterCount: number;
+    googleFetchedCount: number;
+    ingestedCount: number;
+    mergedCount: number;
+    cacheLow: boolean;
+    googleLow: boolean;
+    hardFiltersApplied: boolean;
+    hardFilteredOut: boolean;
+  };
 }
 
 export interface IntentSearchResponse {
@@ -547,6 +566,245 @@ function uniqueQueries(queries: string[]): string[] {
   return output;
 }
 
+type FacetSnapshot = {
+  categories: string[];
+  venueTypes: string[];
+  foodTypes: string[];
+  kidFriendlySignals: string[];
+  accessibilitySignals: string[];
+  indoorOutdoorSignals: string[];
+  reportConfidence: Record<string, number>;
+};
+
+const PIPELINE_MIN_RESULTS = 18;
+const PIPELINE_TARGET_RESULTS = 30;
+const PIPELINE_MAX_GOOGLE_PAGES = 3;
+const PIPELINE_LOGS_ENABLED = import.meta.env.DEV || import.meta.env.VITE_SEARCH_PIPELINE_DEBUG === 'true';
+
+function normalizeFacetToken(value: string): string {
+  return value.toLowerCase().trim().replace(/\s+/g, '_');
+}
+
+function mapIntentToCategory(intent: ExploreIntent): ActivityType {
+  switch (intent) {
+    case 'eat_drink':
+      return 'restaurant';
+    case 'play_kids':
+      return 'kids';
+    case 'outdoors':
+      return 'outdoor';
+    case 'things_to_do':
+      return 'all';
+    case 'sport_active':
+      return 'active';
+    case 'indoor':
+      return 'indoor';
+    case 'all':
+    default:
+      return 'all';
+  }
+}
+
+function getGeoBounds(lat: number, lng: number, radiusKm: number): { north: number; south: number; east: number; west: number } {
+  const latDelta = radiusKm / 111;
+  const lngDelta = radiusKm / (111 * Math.max(Math.cos((lat * Math.PI) / 180), 0.15));
+  return {
+    north: lat + latDelta,
+    south: lat - latDelta,
+    east: lng + lngDelta,
+    west: lng - lngDelta,
+  };
+}
+
+function placeRecordToPlace(record: PlaceRecord, lat: number, lng: number, fallbackType: ActivityType): Place {
+  const categoryCandidates = record.facets?.categories || [];
+  const derivedType = mapGoogleTypeToCategory(record.types || []);
+  const effectiveType = categoryCandidates[0] as ActivityType | undefined;
+  const placeType = (effectiveType && effectiveType !== 'all')
+    ? effectiveType
+    : (derivedType === 'all' && fallbackType !== 'all' ? fallbackType : derivedType);
+  return {
+    id: record.placeId,
+    name: record.name,
+    description: record.primaryType || 'Family-friendly venue',
+    address: record.address || '',
+    rating: record.rating || 4.0,
+    tags: (record.types || []).slice(0, 8).map((t) => t.replace(/_/g, ' ')),
+    mapsUrl: record.mapsUrl || `https://www.google.com/maps/place/?q=place_id:${record.googlePlaceId}`,
+    type: placeType,
+    priceLevel: (record.priceLevel as '$' | '$$' | '$$$' | '$$$$') || '$$',
+    imageUrl: record.imageUrl || undefined,
+    distance: calculateDistance(lat, lng, record.geo.lat, record.geo.lng),
+    ageAppropriate: 'All ages',
+    googlePlaceId: record.googlePlaceId,
+    userRatingsTotal: record.userRatingsTotal || undefined,
+    lat: record.geo.lat,
+    lng: record.geo.lng,
+    facetSnapshot: facetSnapshotFromRecord(record),
+  };
+}
+
+function facetSnapshotFromRecord(record: PlaceRecord): FacetSnapshot {
+  const facets = record.facets || ({} as FacetSnapshot);
+  const reportConfidence: Record<string, number> = {};
+  const kidPrefsTrust = record.reportTrust?.kidPrefs || {};
+  const accessibilityTrust = record.reportTrust?.accessibility || {};
+  Object.entries(kidPrefsTrust).forEach(([key, value]) => {
+    const confidence = Number((value as any)?.confidence || 0);
+    if (confidence > 0) reportConfidence[normalizeFacetToken(key)] = confidence;
+  });
+  Object.entries(accessibilityTrust).forEach(([key, value]) => {
+    const confidence = Number((value as any)?.confidence || 0);
+    if (confidence > 0) reportConfidence[normalizeFacetToken(key)] = confidence;
+  });
+  return {
+    categories: (facets.categories || []).map(normalizeFacetToken),
+    venueTypes: (facets.venueTypes || []).map(normalizeFacetToken),
+    foodTypes: (facets.foodTypes || []).map(normalizeFacetToken),
+    kidFriendlySignals: (facets.kidFriendlySignals || []).map(normalizeFacetToken),
+    accessibilitySignals: (facets.accessibilitySignals || []).map(normalizeFacetToken),
+    indoorOutdoorSignals: (facets.indoorOutdoorSignals || []).map(normalizeFacetToken),
+    reportConfidence,
+  };
+}
+
+function facetSnapshotFromPlace(place: Place, requestedCategory: ActivityType): FacetSnapshot {
+  const cachedSnapshot = (place as any).facetSnapshot as FacetSnapshot | undefined;
+  if (cachedSnapshot) {
+    return {
+      categories: (cachedSnapshot.categories || []).map(normalizeFacetToken),
+      venueTypes: (cachedSnapshot.venueTypes || []).map(normalizeFacetToken),
+      foodTypes: (cachedSnapshot.foodTypes || []).map(normalizeFacetToken),
+      kidFriendlySignals: (cachedSnapshot.kidFriendlySignals || []).map(normalizeFacetToken),
+      accessibilitySignals: (cachedSnapshot.accessibilitySignals || []).map(normalizeFacetToken),
+      indoorOutdoorSignals: (cachedSnapshot.indoorOutdoorSignals || []).map(normalizeFacetToken),
+      reportConfidence: ((cachedSnapshot as any).reportConfidence || {}) as Record<string, number>,
+    };
+  }
+  const source: PlaceSourceGoogle = {
+    googlePlaceId: (place as any).googlePlaceId || place.id,
+    name: place.name,
+    address: place.address,
+    lat: (place as any).lat || 0,
+    lng: (place as any).lng || 0,
+    types: (place.tags || []).map((tag) => normalizeFacetToken(tag)),
+    primaryType: place.type,
+    primaryTypeDisplayName: place.description,
+    rating: place.rating,
+    userRatingsTotal: (place as any).userRatingsTotal,
+    priceLevel: place.priceLevel,
+    mapsUrl: place.mapsUrl,
+    photoUrl: place.imageUrl,
+  };
+  const computed = computeFacetsFromGoogleSource(source, requestedCategory);
+  return {
+    categories: computed.categories.map(normalizeFacetToken),
+    venueTypes: computed.venueTypes.map(normalizeFacetToken),
+    foodTypes: computed.foodTypes.map(normalizeFacetToken),
+    kidFriendlySignals: computed.kidFriendlySignals.map(normalizeFacetToken),
+    accessibilitySignals: computed.accessibilitySignals.map(normalizeFacetToken),
+    indoorOutdoorSignals: computed.indoorOutdoorSignals.map(normalizeFacetToken),
+    reportConfidence: {},
+  };
+}
+
+function facetMatchesLens(snapshot: FacetSnapshot, lensKey: keyof ExploreFilters, chipId: string): boolean {
+  const token = normalizeFacetToken(chipId);
+  const reportSupports = (snapshot.reportConfidence[token] || 0) >= 0.55;
+  switch (lensKey) {
+    case 'foodTypes':
+      return snapshot.foodTypes.includes(token) || snapshot.venueTypes.includes(token) || reportSupports;
+    case 'venueTypes':
+      return snapshot.venueTypes.includes(token) || reportSupports;
+    case 'kidPrefs':
+      return snapshot.kidFriendlySignals.includes(token) || reportSupports;
+    case 'accessibility':
+      return snapshot.accessibilitySignals.includes(token) || reportSupports;
+    case 'indoorOutdoor':
+      return snapshot.indoorOutdoorSignals.includes(token);
+    default:
+      return false;
+  }
+}
+
+function rankAndFilterByComputedFacets(
+  candidates: Place[],
+  requestedCategory: ActivityType,
+  exploreFilters?: ExploreFilters
+): { places: Place[]; hardFiltersApplied: boolean; hardFilteredOut: boolean; afterFilterCount: number } {
+  if (!exploreFilters) {
+    return { places: candidates, hardFiltersApplied: false, hardFilteredOut: false, afterFilterCount: candidates.length };
+  }
+
+  type FilterLensKey = 'foodTypes' | 'venueTypes' | 'kidPrefs' | 'accessibility' | 'indoorOutdoor';
+  const lensKeys: FilterLensKey[] = ['foodTypes', 'venueTypes', 'kidPrefs', 'accessibility', 'indoorOutdoor'];
+  const hasStrict = lensKeys.some((lensKey) => exploreFilters.strict[lensKey] && (exploreFilters[lensKey] as string[]).length > 0);
+  const scored = candidates
+    .map((place) => {
+      const snapshot = facetSnapshotFromPlace(place, requestedCategory);
+      let droppedByStrict = false;
+      let score = 0;
+
+      lensKeys.forEach((lensKey) => {
+        const selected = (exploreFilters[lensKey] as string[]) || [];
+        if (selected.length === 0) return;
+        const matches = selected.filter((chipId) => facetMatchesLens(snapshot, lensKey, chipId)).length;
+        const trustBoost = selected.reduce((sum, chipId) => sum + (snapshot.reportConfidence[normalizeFacetToken(chipId)] || 0), 0);
+        if (exploreFilters.strict[lensKey] && matches === 0) {
+          droppedByStrict = true;
+        }
+        if (matches > 0) {
+          score += matches * 10;
+          score += Math.round(trustBoost * 4);
+        }
+      });
+
+      if (requestedCategory !== 'all' && !snapshot.categories.includes(normalizeFacetToken(requestedCategory))) {
+        score -= 8;
+      }
+
+      return { place, score, droppedByStrict };
+    })
+    .filter((entry) => !entry.droppedByStrict)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return (b.place.rating || 0) - (a.place.rating || 0);
+    });
+
+  const filtered = scored.map((entry) => entry.place);
+  return {
+    places: filtered,
+    hardFiltersApplied: hasStrict,
+    hardFilteredOut: hasStrict && candidates.length > 0 && filtered.length === 0,
+    afterFilterCount: filtered.length,
+  };
+}
+
+function buildBoosterQueriesFromFilters(filters?: ExploreFilters): string[] {
+  if (!filters) return [];
+  const mapping: Record<string, string[]> = {
+    wine_farm: ['wine estate winery vineyard wine tasting'],
+    kids_menu: ['kids menu family restaurant child friendly'],
+    play_area_jungle_gym: ['play area jungle gym playground kids activities'],
+    stroller_friendly: ['stroller friendly pram friendly'],
+    wheelchair_friendly: ['wheelchair friendly step free accessible entrance'],
+    accessible_toilets: ['accessible toilets family restroom'],
+    indoor: ['indoor activities family'],
+    outdoor: ['outdoor activities park trail family'],
+    both: ['indoor and outdoor family activities'],
+  };
+  const chips = new Set<string>();
+  (['foodTypes', 'venueTypes', 'kidPrefs', 'accessibility', 'indoorOutdoor'] as const).forEach((lensKey) => {
+    (filters[lensKey] || []).forEach((chip) => chips.add(chip));
+  });
+  const queries: string[] = [];
+  chips.forEach((chip) => {
+    const options = mapping[normalizeFacetToken(chip)];
+    if (options) queries.push(...options);
+  });
+  return uniqueQueries(queries);
+}
+
 export function getExploreIntentSubtitle(intent: ExploreIntent): string {
   const definition = getExploreIntentDefinition(intent);
   return definition.subtitle;
@@ -570,6 +828,33 @@ function mapLegacyPlaceToPlace(
     ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=600&photo_reference=${photoRef}&key=${PLACES_API_KEY}`
     : getPlaceholderImage(placeType, name, index);
   const placeId = raw?.place_id || raw?.id || `gp-${Date.now()}-${index}`;
+  const sourceGoogle: PlaceSourceGoogle | null = placeId
+    ? {
+      googlePlaceId: placeId,
+      name,
+      address: raw?.vicinity || raw?.formatted_address || '',
+      lat: placeLat,
+      lng: placeLng,
+      types: rawTypes,
+      primaryType: rawTypes[0],
+      rating: raw?.rating,
+      userRatingsTotal: raw?.user_ratings_total,
+      priceLevel: raw?.price_level,
+      mapsUrl: `https://www.google.com/maps/place/?q=place_id:${placeId}`,
+      photoUrl: imageUrl,
+      raw,
+    }
+    : null;
+  if (sourceGoogle) {
+    void upsertPlaceFromGoogle(sourceGoogle, {
+      requestedCategory: fallbackType,
+      ingestionSource: 'legacyPlacesApi',
+    }).catch((err) => {
+      if (import.meta.env.DEV) {
+        console.warn('[FamPals] Legacy place cache upsert failed', err);
+      }
+    });
+  }
   return {
     id: placeId,
     name,
@@ -709,6 +994,7 @@ export async function searchExploreIntent(
     searchQuery?: string;
     searchKey?: string;
     cacheContext?: string;
+    exploreFilters?: ExploreFilters;
     onProgress?: (update: IntentProgressUpdate) => void;
     isCancelled?: () => boolean;
     signal?: AbortSignal;
@@ -718,13 +1004,26 @@ export async function searchExploreIntent(
   let firstRenderAt: number | null = null;
   let reached25At: number | null = null;
   const definition = getExploreIntentDefinition(intent);
+  const requestedCategory = mapIntentToCategory(intent);
   const searchQuery = options?.searchQuery?.trim() || '';
-  const queries = uniqueQueries(searchQuery ? [searchQuery, ...definition.queries.slice(0, 2)] : definition.queries);
+  const baselineQueries = uniqueQueries(searchQuery ? [searchQuery, ...definition.queries.slice(0, 2)] : definition.queries);
+  const boosterQueries = buildBoosterQueriesFromFilters(options?.exploreFilters);
+  const queries = uniqueQueries([...baselineQueries, ...boosterQueries]);
   const coreQueries = queries.slice(0, Math.min(3, queries.length));
   const optionalQueries = queries.slice(coreQueries.length);
+  const filtersSignature = options?.exploreFilters
+    ? JSON.stringify({
+      f: options.exploreFilters.foodTypes,
+      v: options.exploreFilters.venueTypes,
+      k: options.exploreFilters.kidPrefs,
+      a: options.exploreFilters.accessibility,
+      io: options.exploreFilters.indoorOutdoor,
+      s: options.exploreFilters.strict,
+    })
+    : '';
   const searchKey =
     options?.searchKey ||
-    `intent:${intent}:${lat.toFixed(3)}:${lng.toFixed(3)}:${radiusKm}:${searchQuery.toLowerCase()}:${options?.cacheContext || ''}`;
+    `intent:${intent}:${lat.toFixed(3)}:${lng.toFixed(3)}:${radiusKm}:${searchQuery.toLowerCase()}:${options?.cacheContext || ''}:${filtersSignature}`;
   const runWithLimit = createRequestLimiter(3);
   const debug: IntentSearchDebug = {
     intent,
@@ -733,9 +1032,22 @@ export async function searchExploreIntent(
     perQueryCounts: {},
     totalBeforeFilter: 0,
     totalAfterFilter: 0,
+    pipeline: {
+      cacheCount: 0,
+      afterFilterCount: 0,
+      googleFetchedCount: 0,
+      ingestedCount: 0,
+      mergedCount: 0,
+      cacheLow: true,
+      googleLow: true,
+      hardFiltersApplied: false,
+      hardFilteredOut: false,
+    },
   };
 
   let merged: Place[] = [];
+  let googleFetchedCount = 0;
+  let ingestedCount = 0;
   const queryState = new Map<string, { nextPageToken?: string; hasMore: boolean; pagesFetched: number; fetchedResults: number; beforeUnique: number }>();
 
   const cached = getIntentCached(searchKey);
@@ -756,35 +1068,88 @@ export async function searchExploreIntent(
     });
   }
 
+  const bounds = getGeoBounds(lat, lng, radiusKm);
+  const cacheRecords = await getPlacesByGeoBoundsAndCategory(bounds, requestedCategory, PIPELINE_TARGET_RESULTS * 2);
+  const cachePlaces = dedupePlacesById(cacheRecords.map((record) => placeRecordToPlace(record, lat, lng, requestedCategory)));
+  const cacheIntentFiltered = filterPlacesForIntent(cachePlaces, definition);
+  const cacheFacetRanked = rankAndFilterByComputedFacets(cacheIntentFiltered, requestedCategory, options?.exploreFilters);
+  merged = dedupePlacesById([...merged, ...cacheFacetRanked.places]);
+  debug.totalBeforeFilter = cacheIntentFiltered.length;
+  debug.totalAfterFilter = cacheFacetRanked.afterFilterCount;
+  debug.pipeline = {
+    ...debug.pipeline!,
+    cacheCount: cacheIntentFiltered.length,
+    afterFilterCount: cacheFacetRanked.afterFilterCount,
+    mergedCount: merged.length,
+    hardFiltersApplied: cacheFacetRanked.hardFiltersApplied,
+    hardFilteredOut: cacheFacetRanked.hardFilteredOut,
+    cacheLow: cacheFacetRanked.afterFilterCount < PIPELINE_MIN_RESULTS,
+  };
+
+  if (PIPELINE_LOGS_ENABLED) {
+    console.log('[FamPals Pipeline] cache stage', {
+      cacheCount: debug.pipeline.cacheCount,
+      afterFilterCount: debug.pipeline.afterFilterCount,
+      hardFiltersApplied: debug.pipeline.hardFiltersApplied,
+      hardFilteredOut: debug.pipeline.hardFilteredOut,
+    });
+  }
+
+  if (!options?.isCancelled?.()) {
+    options?.onProgress?.({
+      places: merged,
+      debug,
+      query: 'cache',
+      page: 0,
+      isBackgroundLoading: true,
+      fromCache: true,
+    });
+  }
+
   intentLog(`[FamPals] Explore intent selected: ${intent}`);
-  intentLog(`[FamPals] Intent queries executed: core=${coreQueries.join(', ')} optional=${optionalQueries.join(', ')}`);
+  intentLog(`[FamPals] Intent queries executed: baseline=${baselineQueries.join(', ')} boosters=${boosterQueries.join(', ')}`);
 
   const applyMerge = (query: string, page: number, response: PlacesSearchResponse) => {
     const state = queryState.get(query);
     if (!state) return;
+    const previousMergedCount = merged.length;
     state.pagesFetched = Math.max(state.pagesFetched, page);
     state.fetchedResults += response.places.length;
     state.nextPageToken = response.nextPageToken || undefined;
     state.hasMore = response.hasMore && !!state.nextPageToken;
+    googleFetchedCount += response.places.length;
+    ingestedCount += response.places.length;
     merged = dedupePlacesById([...merged, ...response.places]);
-    const filtered = filterPlacesForIntent(merged, definition);
-    if (firstRenderAt === null && filtered.length > 0) {
+    const intentFiltered = filterPlacesForIntent(merged, definition);
+    const facetRanked = rankAndFilterByComputedFacets(intentFiltered, requestedCategory, options?.exploreFilters);
+    const uniqueAdded = Math.max(0, merged.length - previousMergedCount);
+    if (firstRenderAt === null && facetRanked.places.length > 0) {
       firstRenderAt = performance.now();
     }
-    if (reached25At === null && filtered.length >= 25) {
+    if (reached25At === null && facetRanked.places.length >= 25) {
       reached25At = performance.now();
     }
     debug.totalBeforeFilter = merged.length;
-    debug.totalAfterFilter = filtered.length;
+    debug.totalAfterFilter = facetRanked.afterFilterCount;
     debug.perQueryCounts[query] = {
       pagesFetched: state.pagesFetched,
       fetchedResults: state.fetchedResults,
       uniqueAdded: merged.length - state.beforeUnique,
     };
-    intentLog(`[FamPals] Query "${query}" page ${page}: ${response.places.length} results, hasMore: ${response.hasMore}`);
-    intentLog(`[FamPals] Merge count after "${query}" page ${page}: ${merged.length} before filter, ${filtered.length} after filter`);
+    debug.pipeline = {
+      ...debug.pipeline!,
+      googleFetchedCount,
+      ingestedCount,
+      mergedCount: merged.length,
+      afterFilterCount: facetRanked.afterFilterCount,
+      hardFiltersApplied: facetRanked.hardFiltersApplied,
+      hardFilteredOut: facetRanked.hardFilteredOut,
+      googleLow: facetRanked.afterFilterCount < PIPELINE_MIN_RESULTS,
+    };
+    intentLog(`[FamPals] Query "${query}" page ${page}: ${response.places.length} results, uniqueAdded=${uniqueAdded}, hasMore: ${response.hasMore}`);
+    intentLog(`[FamPals] Merge count after "${query}" page ${page}: ${merged.length} before filter, ${facetRanked.afterFilterCount} after filter`);
     options?.onProgress?.({
-      places: filtered,
+      places: facetRanked.places,
       debug,
       query,
       page,
@@ -799,48 +1164,70 @@ export async function searchExploreIntent(
     );
   };
 
-  for (const query of coreQueries) {
-    queryState.set(query, { nextPageToken: undefined, hasMore: true, pagesFetched: 0, fetchedResults: 0, beforeUnique: merged.length });
-    debug.queriesRun.push(query);
-  }
-
-  const coreFirstPageTasks = coreQueries.map(async (query) => {
-    const response = await fetchPage(query, 1);
-    if (!response) return;
-    applyMerge(query, 1, response);
-  });
-  await Promise.allSettled(coreFirstPageTasks);
-
-  if (!options?.isCancelled?.() && merged.length < 25 && optionalQueries.length > 0) {
-    for (const query of optionalQueries) {
+  const shouldFetchGoogle = !options?.isCancelled?.() && !options?.signal?.aborted && (merged.length < PIPELINE_MIN_RESULTS);
+  if (shouldFetchGoogle) {
+    for (const query of coreQueries) {
       queryState.set(query, { nextPageToken: undefined, hasMore: true, pagesFetched: 0, fetchedResults: 0, beforeUnique: merged.length });
       debug.queriesRun.push(query);
     }
-    const optionalFirstPageTasks = optionalQueries.map(async (query) => {
+    const coreFirstPageTasks = coreQueries.map(async (query) => {
       const response = await fetchPage(query, 1);
       if (!response) return;
       applyMerge(query, 1, response);
     });
-    await Promise.allSettled(optionalFirstPageTasks);
+    await Promise.allSettled(coreFirstPageTasks);
+
+    const interimIntentFiltered = filterPlacesForIntent(merged, definition);
+    const interimFacetRanked = rankAndFilterByComputedFacets(interimIntentFiltered, requestedCategory, options?.exploreFilters);
+    if (!options?.isCancelled?.() && interimFacetRanked.afterFilterCount < PIPELINE_TARGET_RESULTS && optionalQueries.length > 0) {
+      for (const query of optionalQueries) {
+        queryState.set(query, { nextPageToken: undefined, hasMore: true, pagesFetched: 0, fetchedResults: 0, beforeUnique: merged.length });
+        debug.queriesRun.push(query);
+      }
+      const optionalFirstPageTasks = optionalQueries.map(async (query) => {
+        const response = await fetchPage(query, 1);
+        if (!response) return;
+        applyMerge(query, 1, response);
+      });
+      await Promise.allSettled(optionalFirstPageTasks);
+    }
+
+    const activeQueries = [...debug.queriesRun];
+    for (let page = 2; page <= PIPELINE_MAX_GOOGLE_PAGES; page += 1) {
+      const latestIntentFiltered = filterPlacesForIntent(merged, definition);
+      const latestFacetRanked = rankAndFilterByComputedFacets(latestIntentFiltered, requestedCategory, options?.exploreFilters);
+      if (latestFacetRanked.afterFilterCount >= PIPELINE_TARGET_RESULTS) {
+        break;
+      }
+      const tasks = activeQueries.map(async (query) => {
+        const state = queryState.get(query);
+        if (!state || !state.hasMore || !state.nextPageToken) return;
+        if (options?.isCancelled?.() || options?.signal?.aborted) return;
+        await sleepWithAbort(2000, options?.signal);
+        const response = await fetchPage(query, page, state.nextPageToken);
+        if (!response) return;
+        applyMerge(query, page, response);
+      });
+      await Promise.allSettled(tasks);
+    }
   }
 
-  const activeQueries = [...debug.queriesRun];
-  for (const page of [2, 3]) {
-    const tasks = activeQueries.map(async (query) => {
-      const state = queryState.get(query);
-      if (!state || !state.hasMore || !state.nextPageToken) return;
-      if (options?.isCancelled?.() || options?.signal?.aborted) return;
-      await sleepWithAbort(2000, options?.signal);
-      const response = await fetchPage(query, page, state.nextPageToken);
-      if (!response) return;
-      applyMerge(query, page, response);
-    });
-    await Promise.allSettled(tasks);
-  }
-
-  const finalPlaces = filterPlacesForIntent(merged, definition);
+  const finalIntentFiltered = filterPlacesForIntent(merged, definition);
+  const finalFacetRanked = rankAndFilterByComputedFacets(finalIntentFiltered, requestedCategory, options?.exploreFilters);
+  const finalPlaces = finalFacetRanked.places;
   debug.totalBeforeFilter = merged.length;
-  debug.totalAfterFilter = finalPlaces.length;
+  debug.totalAfterFilter = finalFacetRanked.afterFilterCount;
+  debug.pipeline = {
+    ...debug.pipeline!,
+    cacheLow: (debug.pipeline?.cacheCount || 0) < PIPELINE_MIN_RESULTS,
+    googleLow: finalPlaces.length < PIPELINE_MIN_RESULTS,
+    hardFiltersApplied: finalFacetRanked.hardFiltersApplied,
+    hardFilteredOut: finalFacetRanked.hardFilteredOut,
+    afterFilterCount: finalFacetRanked.afterFilterCount,
+    googleFetchedCount,
+    ingestedCount,
+    mergedCount: merged.length,
+  };
   if (!options?.isCancelled?.()) {
     setIntentCached(searchKey, { places: finalPlaces, debug });
   }
@@ -849,6 +1236,19 @@ export async function searchExploreIntent(
   const timeTo25Results = reached25At ? Math.round(reached25At - startedAt) : -1;
   intentLog(`[FamPals] Intent "${intent}" filter counts: before=${debug.totalBeforeFilter}, after=${debug.totalAfterFilter}`);
   intentLog(`[FamPals] Timing metrics: timeToFirstRenderMs=${timeToFirstRender}, timeTo25ResultsMs=${timeTo25Results}, timeToCompleteMs=${Math.round(completedAt - startedAt)}`);
+  if (PIPELINE_LOGS_ENABLED) {
+    console.log('[FamPals Pipeline]', {
+      cacheCount: debug.pipeline?.cacheCount || 0,
+      afterFilterCount: debug.pipeline?.afterFilterCount || 0,
+      googleFetchedCount: debug.pipeline?.googleFetchedCount || 0,
+      ingestedCount: debug.pipeline?.ingestedCount || 0,
+      mergedCount: debug.pipeline?.mergedCount || 0,
+      cacheLow: debug.pipeline?.cacheLow || false,
+      googleLow: debug.pipeline?.googleLow || false,
+      hardFiltersApplied: debug.pipeline?.hardFiltersApplied || false,
+      hardFilteredOut: debug.pipeline?.hardFilteredOut || false,
+    });
+  }
 
   return {
     places: finalPlaces,
@@ -956,25 +1356,57 @@ export async function searchNearbyPlacesTextApi(
       const placeType = mapGoogleTypeToCategory(p.types || []);
       const placeLat = p.location?.latitude || lat;
       const placeLng = p.location?.longitude || lng;
+      const placeId = p.id || `gp-${Date.now()}-${index}`;
+      const imageUrl = p.photos?.[0]
+        ? `https://places.googleapis.com/v1/${p.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${PLACES_API_KEY}`
+        : getPlaceholderImage(placeType, p.displayName?.text || '', index);
+      const sourceGoogle: PlaceSourceGoogle = {
+        googlePlaceId: placeId,
+        name: p.displayName?.text || 'Unknown Place',
+        address: p.formattedAddress || '',
+        lat: placeLat,
+        lng: placeLng,
+        types: p.types || [],
+        primaryType: p.primaryType || p.types?.[0],
+        primaryTypeDisplayName: p.primaryTypeDisplayName?.text,
+        rating: p.rating,
+        userRatingsTotal: p.userRatingCount,
+        priceLevel: p.priceLevel,
+        mapsUrl: `https://www.google.com/maps/place/?q=place_id:${placeId}`,
+        photoUrl: imageUrl,
+        goodForChildren: p.goodForChildren === true,
+        menuForChildren: p.menuForChildren === true,
+        restroom: p.restroom === true,
+        accessibilityOptions: p.accessibilityOptions,
+        parkingOptions: p.parkingOptions,
+        raw: p,
+      };
+      void upsertPlaceFromGoogle(sourceGoogle, {
+        requestedCategory: type,
+        searchQuery,
+        ingestionSource: 'searchNearbyPlacesTextApi',
+      }).catch((err) => {
+        if (import.meta.env.DEV) {
+          console.warn('[FamPals] Text API place cache upsert failed', err);
+        }
+      });
 
       return {
-        id: p.id || `gp-${Date.now()}-${index}`,
+        id: placeId,
         name: p.displayName?.text || 'Unknown Place',
         description: p.primaryTypeDisplayName?.text || 'Family-friendly venue',
         address: p.formattedAddress || '',
         rating: p.rating || 4.0,
         tags: (p.types || []).slice(0, 8).map((t: string) => t.replace(/_/g, ' ')),
-        mapsUrl: `https://www.google.com/maps/place/?q=place_id:${p.id}`,
+        mapsUrl: `https://www.google.com/maps/place/?q=place_id:${placeId}`,
         type: placeType,
         priceLevel: priceLevelToString(p.priceLevel),
-        imageUrl: p.photos?.[0]
-          ? `https://places.googleapis.com/v1/${p.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${PLACES_API_KEY}`
-          : getPlaceholderImage(placeType, p.displayName?.text || '', index),
+        imageUrl,
         distance: calculateDistance(lat, lng, placeLat, placeLng),
         ageAppropriate: 'All ages',
         phone: undefined,
         website: undefined,
-        googlePlaceId: p.id,
+        googlePlaceId: placeId,
         userRatingsTotal: p.userRatingCount,
         lat: placeLat,
         lng: placeLng
@@ -1068,23 +1500,50 @@ export async function textSearchPlaces(
       const placeType = mapGoogleTypeToCategory(p.types || []);
       const placeLat = p.location?.latitude || lat;
       const placeLng = p.location?.longitude || lng;
+      const placeId = p.id || `gp-${Date.now()}-${index}`;
+      const imageUrl = p.photos?.[0]
+        ? `https://places.googleapis.com/v1/${p.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${PLACES_API_KEY}`
+        : getPlaceholderImage(placeType, p.displayName?.text || '', index);
+      const sourceGoogle: PlaceSourceGoogle = {
+        googlePlaceId: placeId,
+        name: p.displayName?.text || 'Unknown Place',
+        address: p.formattedAddress || '',
+        lat: placeLat,
+        lng: placeLng,
+        types: p.types || [],
+        primaryType: p.primaryType || p.types?.[0],
+        primaryTypeDisplayName: p.primaryTypeDisplayName?.text,
+        rating: p.rating,
+        userRatingsTotal: p.userRatingCount,
+        priceLevel: p.priceLevel,
+        mapsUrl: `https://www.google.com/maps/place/?q=place_id:${placeId}`,
+        photoUrl: imageUrl,
+        raw: p,
+      };
+      void upsertPlaceFromGoogle(sourceGoogle, {
+        requestedCategory: 'all',
+        searchQuery: query,
+        ingestionSource: 'textSearchPlaces',
+      }).catch((err) => {
+        if (import.meta.env.DEV) {
+          console.warn('[FamPals] Text search cache upsert failed', err);
+        }
+      });
       
       return {
-        id: p.id || `gp-${Date.now()}-${index}`,
+        id: placeId,
         name: p.displayName?.text || 'Unknown Place',
         description: p.primaryTypeDisplayName?.text || 'Family-friendly venue',
         address: p.formattedAddress || '',
         rating: p.rating || 4.0,
         tags: (p.types || []).slice(0, 8).map((t: string) => t.replace(/_/g, ' ')),
-        mapsUrl: `https://www.google.com/maps/place/?q=place_id:${p.id}`,
+        mapsUrl: `https://www.google.com/maps/place/?q=place_id:${placeId}`,
         type: placeType,
         priceLevel: priceLevelToString(p.priceLevel),
-        imageUrl: p.photos?.[0]
-          ? `https://places.googleapis.com/v1/${p.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${PLACES_API_KEY}`
-          : getPlaceholderImage(placeType, p.displayName?.text || '', index),
+        imageUrl,
         distance: calculateDistance(lat, lng, placeLat, placeLng),
         ageAppropriate: 'All ages',
-        googlePlaceId: p.id,
+        googlePlaceId: placeId,
         userRatingsTotal: p.userRatingCount,
         lat: placeLat,
         lng: placeLng

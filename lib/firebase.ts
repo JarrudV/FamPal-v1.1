@@ -24,6 +24,9 @@ import {
   collectionGroup,
   query,
   where,
+  orderBy,
+  startAt,
+  endAt,
   limit,
   addDoc,
   increment,
@@ -89,6 +92,7 @@ let auth: ReturnType<typeof getAuth> | null = null;
 let db: ReturnType<typeof getFirestore> | null = null;
 let storage: ReturnType<typeof getStorage> | null = null;
 let googleProvider: GoogleAuthProvider | null = null;
+let authPersistenceReady: Promise<void> = Promise.resolve();
 
 if (isConfigValid) {
   app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
@@ -99,12 +103,19 @@ if (isConfigValid) {
     : getStorage(app);
   googleProvider = new GoogleAuthProvider();
 
-  setPersistence(auth, browserLocalPersistence).catch((localErr) => {
-    console.warn("Auth local persistence failed, falling back to session persistence", localErr);
-    return setPersistence(auth!, browserSessionPersistence).catch((sessionErr) => {
-      console.warn("Auth session persistence failed", sessionErr);
-    });
-  });
+  authPersistenceReady = setPersistence(auth, browserLocalPersistence)
+    .catch((localErr) => {
+      if (import.meta.env.DEV) {
+        console.warn("Auth local persistence failed, falling back to session persistence", localErr);
+      }
+      return setPersistence(auth!, browserSessionPersistence);
+    })
+    .catch((sessionErr) => {
+      if (import.meta.env.DEV) {
+        console.warn("Auth session persistence failed", sessionErr);
+      }
+    })
+    .then(() => undefined);
 }
 
 export const isFirebaseConfigured = isConfigValid && !!app;
@@ -118,6 +129,7 @@ export {
   db,
   storage,
   googleProvider,
+  authPersistenceReady,
   onAuthStateChanged,
   signInWithPopup,
   signInWithRedirect,
@@ -136,6 +148,9 @@ export {
   collectionGroup,
   query,
   where,
+  orderBy,
+  startAt,
+  endAt,
   limit,
   addDoc,
   increment,

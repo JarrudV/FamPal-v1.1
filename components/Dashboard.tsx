@@ -19,7 +19,6 @@ import {
   getLensDefinitions,
   getFilterButtonLabel,
   getSelectedChipItems,
-  applyExploreLensRanking,
 } from '../lib/exploreFilters';
 import { ShareMemoryModal } from './ShareMemory';
 import { db, doc, getDoc, collection, onSnapshot, setDoc, auth, serverTimestamp, increment, storage, ref, uploadBytesResumable, getDownloadURL } from '../lib/firebase';
@@ -142,6 +141,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [pagingComplete, setPagingComplete] = useState(false);
+  const [exploreResultState, setExploreResultState] = useState<'none' | 'exhausted' | 'filters_strict'>('none');
   const [placesServerConfigured, setPlacesServerConfigured] = useState<boolean | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   // Location state - hydrate from saved preferences
@@ -675,6 +675,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
       setLoading(true);
       setLoadingMore(false);
       setPagingComplete(false);
+      setExploreResultState('none');
       cacheSeededRef.current = false;
       try {
         const result = await searchExploreIntent(
@@ -686,6 +687,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
             searchQuery: searchQuery.trim() || undefined,
             searchKey,
             cacheContext: `${prefFilterMode}:${hideSavedPlaces ? 'discover' : 'all'}`,
+            exploreFilters,
             signal: controller.signal,
             isCancelled: () =>
               placesSearchKeyRef.current !== searchKey || placesRequestIdRef.current !== requestId,
@@ -709,12 +711,21 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
             console.log('[FamPals] Intent debug summary:', result.debug);
           }
         }
+        const pipeline = result.debug?.pipeline;
+        if (pipeline?.hardFilteredOut) {
+          setExploreResultState('filters_strict');
+        } else if (pipeline?.cacheLow && pipeline?.googleLow) {
+          setExploreResultState('exhausted');
+        } else {
+          setExploreResultState('none');
+        }
         setPagingComplete(true);
       } catch (error) {
         if ((error as any)?.name === 'AbortError') {
           return;
         }
         console.error('Error fetching places:', error);
+        setExploreResultState('none');
       } finally {
         if (placesSearchKeyRef.current === searchKey && placesRequestIdRef.current === requestId) {
           setLoading(false);
@@ -727,7 +738,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
     return () => {
       controller.abort();
     };
-  }, [selectedFilter, activeTab, userLocation, radiusKm, searchQuery, applyFlickerGuard]);
+  }, [selectedFilter, activeTab, userLocation, radiusKm, searchQuery, applyFlickerGuard, exploreFilters, prefFilterMode, hideSavedPlaces]);
 
   useEffect(() => {
     if (!canSyncCloud) return;
@@ -1407,11 +1418,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
     () => rankPlacesWithAccessibilityNeeds(placesWithAccessibility, accessibilityNeeds),
     [placesWithAccessibility, accessibilityNeeds]
   );
-  const lensRankedResult = useMemo(
-    () => applyExploreLensRanking(rankedPlaces, exploreFilters, lensDefinitions),
-    [rankedPlaces, exploreFilters, lensDefinitions]
+  const visibleExplorePlaces = useMemo(
+    () => rankedPlaces.filter(place => !hideSavedPlaces || !state.favorites.includes(place.id)),
+    [rankedPlaces, hideSavedPlaces, state.favorites]
   );
-  const intentAndRequirementFilteredPlaces = lensRankedResult.places;
   const selectedLensChipItems = useMemo(
     () => getSelectedChipItems(exploreFilters, lensDefinitions),
     [exploreFilters, lensDefinitions]
@@ -1423,18 +1433,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
   useEffect(() => {
     if (shouldLogDev) {
       console.log('[FamPals] Explore lens filters changed:', exploreFilters);
-      console.log(`[FamPals] Lens scoring counts: before=${lensRankedResult.beforeCount}, afterStrict=${lensRankedResult.afterStrictCount}`);
-      console.log(
-        '[FamPals] Top 5 lens scores:',
-        lensRankedResult.scored.slice(0, 5).map((entry) => ({
-          id: entry.place.id,
-          name: entry.place.name,
-          score: entry.score,
-          matched: entry.matchedChips,
-        }))
-      );
+      console.log(`[FamPals] Explore list count from pipeline output: ${visibleExplorePlaces.length}`);
     }
-  }, [exploreFilters, lensRankedResult, shouldLogDev]);
+  }, [exploreFilters, visibleExplorePlaces.length, shouldLogDev]);
 
   const selectedPlaceWithAccessibility = selectedPlace
     ? {
@@ -1906,9 +1907,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
               </div>
             ) : (
               <div className="space-y-4 mt-4">
-                {intentAndRequirementFilteredPlaces
-                  .filter(place => !hideSavedPlaces || !state.favorites.includes(place.id))
-                  .map(place => (
+                {visibleExplorePlaces.map(place => (
                   <PlaceCard 
                     key={place.id} 
                     place={place}
@@ -1918,7 +1917,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
                     onClick={() => setSelectedPlace(place)}
                   />
                 ))}
-                {hideSavedPlaces && intentAndRequirementFilteredPlaces.filter(p => !state.favorites.includes(p.id)).length === 0 && intentAndRequirementFilteredPlaces.length > 0 && (
+                {hideSavedPlaces && visibleExplorePlaces.length === 0 && rankedPlaces.length > 0 && (
                   <div className="py-12 text-center bg-white rounded-2xl border border-slate-100">
                     <span className="mb-3 block"><svg className="w-10 h-10 mx-auto text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg></span>
                     <p className="text-slate-600 font-semibold">You've saved them all!</p>
@@ -1933,13 +1932,28 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
                     </div>
                   </div>
                 )}
-                {pagingComplete && !loadingMore && intentAndRequirementFilteredPlaces.length > 0 && (
+                {pagingComplete && !loadingMore && visibleExplorePlaces.length > 0 && exploreResultState === 'exhausted' && (
                   <div className="pt-6 pb-8 text-center">
                     <div className="inline-flex items-center gap-2 px-6 py-3 bg-slate-100 rounded-2xl">
                       <svg className="w-5 h-5 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
                       <span className="text-sm font-semibold text-slate-500">You've seen all the places nearby!</span>
                     </div>
                     <p className="text-xs text-slate-400 mt-2">Try changing your search radius or category</p>
+                  </div>
+                )}
+                {pagingComplete && !loadingMore && visibleExplorePlaces.length === 0 && exploreResultState !== 'none' && (
+                  <div className="pt-6 pb-8 text-center">
+                    <div className="inline-flex items-center gap-2 px-6 py-3 bg-slate-100 rounded-2xl">
+                      <svg className="w-5 h-5 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+                      <span className="text-sm font-semibold text-slate-500">
+                        {exploreResultState === 'filters_strict' ? 'Filters too strict, try relaxing.' : "You've seen all the places nearby!"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-2">
+                      {exploreResultState === 'filters_strict'
+                        ? 'Turn off strict toggles or remove a few must-haves.'
+                        : 'Try changing your search radius or category'}
+                    </p>
                   </div>
                 )}
               </div>

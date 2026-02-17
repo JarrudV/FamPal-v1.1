@@ -12,6 +12,7 @@ import {
   signOut as firebaseSignOut,
   isFirebaseConfigured,
   firebaseConfigError,
+  authPersistenceReady,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
@@ -34,6 +35,16 @@ import { buildAccessContext, type AppAccessContext } from './lib/access';
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const AUTH_REDIRECT_PENDING_KEY = 'fampals_auth_redirect_pending';
 const BILLING_ENABLED = import.meta.env.VITE_BILLING_ENABLED === 'true';
+const AUTH_DEBUG = import.meta.env.DEV && import.meta.env.VITE_AUTH_DEBUG === 'true';
+
+const authDebugLog = (message: string, payload?: Record<string, unknown>) => {
+  if (!AUTH_DEBUG) return;
+  if (payload) {
+    console.log(`[FamPals Auth] ${message}`, payload);
+    return;
+  }
+  console.log(`[FamPals Auth] ${message}`);
+};
 
 const isLikelyInAppBrowser = (): boolean => {
   if (typeof navigator === 'undefined') return false;
@@ -58,6 +69,12 @@ const canUsePopupFlowSafely = (): boolean => {
   return !isMobileUa() && !isLikelyInAppBrowser() && !isStandaloneDisplayMode();
 };
 
+const isLocalhost = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname;
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+};
+
 // Convert Firebase Auth User to plain serializable object
 const serializeUser = (firebaseUser: FirebaseUser): User => ({
   uid: firebaseUser.uid,
@@ -65,6 +82,18 @@ const serializeUser = (firebaseUser: FirebaseUser): User => ({
   displayName: firebaseUser.displayName,
   photoURL: firebaseUser.photoURL,
 });
+
+const summarizeAuthUser = (userAuth: FirebaseUser | null) => {
+  if (!userAuth) {
+    return { isNull: true };
+  }
+  return {
+    isNull: false,
+    uid: userAuth.uid,
+    email: userAuth.email,
+    providers: (userAuth.providerData || []).map((provider) => provider.providerId),
+  };
+};
 
 // Returns a state object with all arrays guaranteed to be non-null
 const getInitialState = (user: User | null, guestPrefs?: UserPreferences): AppState => ({
@@ -179,9 +208,19 @@ const App: React.FC = () => {
     }
     const isDev = import.meta.env.DEV;
     const popupSafe = canUsePopupFlowSafely();
+    const localhost = isLocalhost();
     setError(null);
     setLoading(true);
     try {
+      await authPersistenceReady;
+      authDebugLog('Google sign-in start', { flow: localhost ? 'popup(localhost)' : 'redirect', popupSafe, localhost });
+      if (localhost) {
+        if (isDev) {
+          console.log('[FamPals Auth] Localhost detected, using popup flow for Google sign-in');
+        }
+        await signInWithPopup(auth, googleProvider);
+        return;
+      }
       if (typeof window !== 'undefined') {
         window.sessionStorage.setItem(AUTH_REDIRECT_PENDING_KEY, '1');
       }
@@ -196,6 +235,8 @@ const App: React.FC = () => {
       }
       if (popupSafe) {
         try {
+          await authPersistenceReady;
+          authDebugLog('Redirect failed, trying popup fallback');
           if (isDev) {
             console.log('[FamPals Auth] Redirect failed, falling back to popup flow');
           }
@@ -405,6 +446,7 @@ const App: React.FC = () => {
 
     let unsubProfile: (() => void) | null = null;
     const unsubscribe = onAuthStateChanged(auth, (userAuth) => {
+      authDebugLog('onAuthStateChanged fired', summarizeAuthUser(userAuth));
       console.time('auth:resolved');
       if (userAuth) {
         if (lastAuthUidRef.current !== userAuth.uid) {
@@ -414,6 +456,8 @@ const App: React.FC = () => {
         const serializedUser = serializeUser(userAuth);
         console.log('[FamPals] User authenticated:', userAuth.email);
         setState(prev => ({ ...prev, isAuthenticated: true, user: serializedUser }));
+        setView((prev) => (prev === 'login' ? 'dashboard' : prev));
+        authDebugLog('Auth user present, moving out of login state');
         // Don't set view here - wait for Firestore to check onboarding status first
 
         // Safety timeout to prevent stuck loading state if Firestore fails
@@ -438,6 +482,11 @@ const App: React.FC = () => {
           const initialState = getInitialState(serializedUser);
           if (dbState) {
             const onboardingCompleted = !!dbState.onboardingCompletedAt || dbState.onboardingCompleted === true;
+            authDebugLog('User doc loaded', {
+              onboardingCompleted,
+              hasUserDoc: true,
+              dbKeys: Object.keys(dbState || {}),
+            });
             setNeedsOnboarding(!onboardingCompleted);
             setOnboardingChecked(true);
             legacyFavoritesRef.current = Array.isArray(dbState.favorites) ? dbState.favorites : [];
@@ -509,11 +558,14 @@ const App: React.FC = () => {
             });
             setLoading(false);
             if (!onboardingCompleted) {
+              authDebugLog('Routing to onboarding', { reason: 'onboarding_incomplete' });
               setView('onboarding');
             } else {
+              authDebugLog('Routing to dashboard', { reason: 'onboarding_complete' });
               setView((prev) => (prev === 'login' || prev === 'onboarding') ? 'dashboard' : prev);
             }
           } else {
+            authDebugLog('User doc missing, defaulting to onboarding and creating profile doc');
             legacyFavoritesRef.current = [];
             savedPlacesMigratedAtRef.current = null;
             setNeedsOnboarding(true);
@@ -530,6 +582,7 @@ const App: React.FC = () => {
           }
         });
       } else {
+        authDebugLog('No auth user, routing to login', { reason: 'user_null' });
         setSavedPlacesLoaded(false);
         legacyFavoritesRef.current = [];
         savedPlacesMigratedAtRef.current = null;
@@ -557,7 +610,7 @@ const App: React.FC = () => {
       }
       unsubscribe();
     };
-  }, [authBypassEnabled, isGuest, state.user?.uid]);
+  }, [authBypassEnabled, isGuest]);
 
   const handleOnboardingComplete = useCallback(async (result: OnboardingResult) => {
     const uid = state.user?.uid || auth?.currentUser?.uid;
@@ -607,11 +660,25 @@ const App: React.FC = () => {
     redirectHandledRef.current = true;
     (async () => {
       try {
+        authDebugLog('Checking redirect result on app load');
         const redirectResult = await getRedirectResult(auth);
+        if (import.meta.env.DEV) {
+          console.log('[FamPals Auth] Redirect result uid:', redirectResult?.user?.uid ?? null);
+          console.log('[FamPals Auth] auth.currentUser after redirect:', auth.currentUser ? {
+            uid: auth.currentUser.uid,
+            email: auth.currentUser.email,
+            providers: (auth.currentUser.providerData || []).map((p) => p.providerId),
+          } : null);
+        }
         if (redirectResult && import.meta.env.DEV) {
           console.log('[FamPals Auth] Redirect result completed successfully');
         }
         if (redirectResult) {
+          authDebugLog('Redirect result received', {
+            uid: redirectResult.user.uid,
+            email: redirectResult.user.email,
+            provider: redirectResult.providerId,
+          });
           setView('dashboard');
           navigate('/', { replace: true });
         }
@@ -659,6 +726,22 @@ const App: React.FC = () => {
       }
     })();
   }, [accessContext.canSyncCloud]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (isGuest) return;
+    if (!state.user) return;
+    if (!onboardingChecked) return;
+    if (needsOnboarding) return;
+    if (view === 'login' || view === 'onboarding') {
+      authDebugLog('Authenticated user ready; forcing home navigation', {
+        fromView: view,
+        reason: 'auth_confirmed',
+      });
+      setView('dashboard');
+      navigate('/', { replace: true });
+    }
+  }, [loading, isGuest, state.user, onboardingChecked, needsOnboarding, view, navigate]);
 
   useEffect(() => {
     if (!accessContext.canSyncCloud) return;
@@ -797,7 +880,14 @@ const App: React.FC = () => {
   }, [accessContext.canSyncCloud, state.user?.uid, savedPlacesLoaded, state.savedPlaces]);
 
   const renderView = () => {
-    console.log('[FamPals] renderView called - loading:', loading, 'view:', view, 'onboardingChecked:', onboardingChecked, 'needsOnboarding:', needsOnboarding);
+    authDebugLog('renderView', {
+      loading,
+      view,
+      onboardingChecked,
+      needsOnboarding,
+      hasUser: !!state.user,
+      isGuest,
+    });
     
     // Show loading while waiting for auth or onboarding status check
     if (loading) {

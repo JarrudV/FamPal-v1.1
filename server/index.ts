@@ -103,6 +103,10 @@ const APP_URL = process.env.APP_URL
   || (replitDomains[0] ? `https://${replitDomains[0]}` : 'http://localhost:5000');
 const GOOGLE_PLACES_API_KEY = PLACES_API_KEY;
 const PLACES_CONFIGURED = !!GOOGLE_PLACES_API_KEY;
+const PLACE_REFRESH_MAX_PER_RUN = Math.max(1, Number(process.env.PLACE_REFRESH_MAX_PER_RUN || 30));
+const PLACE_REFRESH_CANDIDATE_MULTIPLIER = Math.max(2, Number(process.env.PLACE_REFRESH_CANDIDATE_MULTIPLIER || 4));
+const PLACE_REFRESH_CONCURRENCY = Math.max(1, Number(process.env.PLACE_REFRESH_CONCURRENCY || 3));
+const PLACE_REFRESH_CRON_TOKEN = process.env.PLACE_REFRESH_CRON_TOKEN || '';
 
 console.log('[FamPals API] Startup config:', {
   port: process.env.PORT || 8080,
@@ -156,6 +160,279 @@ async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextF
   }
 }
 
+function requireSchedulerAuth(req: Request, res: Response, next: NextFunction) {
+  const tokenFromHeader = (req.headers['x-scheduler-token'] as string) || '';
+  const bearer = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+  const provided = tokenFromHeader || bearer;
+  const isProd = process.env.NODE_ENV === 'production';
+
+  if (!PLACE_REFRESH_CRON_TOKEN) {
+    if (isProd) {
+      return res.status(500).json({ error: 'PLACE_REFRESH_CRON_TOKEN is required in production' });
+    }
+    console.warn('[FamPals Refresh] PLACE_REFRESH_CRON_TOKEN missing; allowing local/dev execution.');
+    next();
+    return;
+  }
+
+  if (provided !== PLACE_REFRESH_CRON_TOKEN) {
+    return res.status(401).json({ error: 'Unauthorized scheduler request' });
+  }
+  next();
+}
+
+type PlaceRefreshOptions = {
+  limit?: number;
+  dryRun?: boolean;
+};
+
+async function fetchGooglePlaceForRefresh(googlePlaceId: string): Promise<any> {
+  const response = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(googlePlaceId)}`, {
+    headers: {
+      'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
+      'X-Goog-FieldMask': 'id,displayName,formattedAddress,rating,userRatingCount,types,priceLevel,location,photos,primaryType,primaryTypeDisplayName,googleMapsUri,goodForChildren,menuForChildren,restroom,accessibilityOptions,parkingOptions',
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Google details refresh failed: HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+async function runPlaceRefreshJob(options: PlaceRefreshOptions = {}) {
+  const startedAt = Date.now();
+  if (!PLACES_CONFIGURED) {
+    return {
+      ok: false,
+      reason: 'GOOGLE_PLACES_API_KEY missing',
+      scannedCount: 0,
+      staleCount: 0,
+      refreshedCount: 0,
+      failedCount: 0,
+      skippedCount: 0,
+      limitPerRun: 0,
+      elapsedMs: 0,
+    };
+  }
+
+  const limitPerRun = Math.max(1, Math.min(Number(options.limit || PLACE_REFRESH_MAX_PER_RUN), 200));
+  const candidateLimit = Math.max(limitPerRun * PLACE_REFRESH_CANDIDATE_MULTIPLIER, limitPerRun);
+  const dryRun = options.dryRun === true;
+  const now = new Date();
+  const staleCandidates: Array<{ id: string; data: any }> = [];
+
+  const snap = await db.collection('places').orderBy('lastRefreshedAt', 'asc').limit(candidateLimit).get();
+  snap.docs.forEach((docSnap) => {
+    const data = docSnap.data() || {};
+    const lastRefreshedAt = data.lastRefreshedAt?.toDate?.() || null;
+    const savedCount = Math.max(0, Number(data.savedCount || 0));
+    const viewCount = Math.max(0, Number(data.viewCount || 0));
+    const popularityScore = Math.max(
+      0,
+      Number(data.popularityScore || computePopularityScore(savedCount, viewCount, Number(data.userRatingsTotal || 0)))
+    );
+    const staleAfterDays = computeStaleAfterDays(savedCount, viewCount, popularityScore);
+    const staleMillis = staleAfterDays * 24 * 60 * 60 * 1000;
+    const staleByLastRefreshed = !lastRefreshedAt || now.getTime() - lastRefreshedAt.getTime() >= staleMillis;
+    const nextRefreshAtRaw = data.refreshState?.nextRefreshAt;
+    const nextRefreshAt = nextRefreshAtRaw?.toDate?.() || (typeof nextRefreshAtRaw === 'string' ? new Date(nextRefreshAtRaw) : null);
+    const staleByNextRefresh = nextRefreshAt instanceof Date && !Number.isNaN(nextRefreshAt.getTime())
+      ? nextRefreshAt.getTime() <= now.getTime()
+      : false;
+    if (staleByLastRefreshed || staleByNextRefresh) {
+      staleCandidates.push({ id: docSnap.id, data });
+    }
+  });
+
+  const staleTargets = staleCandidates
+    .filter((item) => typeof item.data.googlePlaceId === 'string' && item.data.googlePlaceId.length > 0)
+    .slice(0, limitPerRun);
+
+  let refreshedCount = 0;
+  let failedCount = 0;
+  let skippedCount = 0;
+  const errors: Array<{ placeId: string; error: string }> = [];
+
+  const queue = [...staleTargets];
+  const workers = Array.from({ length: PLACE_REFRESH_CONCURRENCY }).map(async () => {
+    while (queue.length > 0) {
+      const next = queue.shift();
+      if (!next) return;
+      const placeRef = db.collection('places').doc(next.id);
+      const googlePlaceId = String(next.data.googlePlaceId || '');
+      if (!googlePlaceId) {
+        skippedCount += 1;
+        continue;
+      }
+      const previousFailures = Number(next.data?.refreshState?.consecutiveFailures || 0);
+      const requestedCategory = next.data?.categoryContext?.requestedCategory || 'all';
+      const savedCount = Math.max(0, Number(next.data.savedCount || 0));
+      const viewCount = Math.max(0, Number(next.data.viewCount || 0));
+
+      if (dryRun) {
+        refreshedCount += 1;
+        continue;
+      }
+
+      try {
+        await placeRef.set({
+          refreshState: {
+            ...(next.data.refreshState || {}),
+            status: 'refreshing',
+            lastAttemptAt: FieldValue.serverTimestamp(),
+          },
+        }, { merge: true });
+
+        const p = await fetchGooglePlaceForRefresh(googlePlaceId);
+        const imageUrl = p.photos?.[0]
+          ? `https://places.googleapis.com/v1/${p.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${GOOGLE_PLACES_API_KEY}`
+          : null;
+        const source = {
+          googlePlaceId: p.id || googlePlaceId,
+          name: p.displayName?.text || next.data.name || 'Unknown Place',
+          address: p.formattedAddress || next.data.address || '',
+          lat: p.location?.latitude || next.data?.geo?.lat || 0,
+          lng: p.location?.longitude || next.data?.geo?.lng || 0,
+          types: Array.isArray(p.types) ? p.types : [],
+          primaryType: p.primaryType || null,
+          primaryTypeDisplayName: p.primaryTypeDisplayName?.text || null,
+          rating: typeof p.rating === 'number' ? p.rating : null,
+          userRatingsTotal: typeof p.userRatingCount === 'number' ? p.userRatingCount : null,
+          priceLevel: p.priceLevel || null,
+          mapsUrl: p.googleMapsUri || `https://www.google.com/maps/place/?q=place_id:${googlePlaceId}`,
+          photoUrl: imageUrl,
+          goodForChildren: p.goodForChildren === true,
+          menuForChildren: p.menuForChildren === true,
+          restroom: p.restroom === true,
+          accessibilityOptions: p.accessibilityOptions || {},
+          parkingOptions: p.parkingOptions || {},
+        };
+        const facets = buildFacetSnapshotFromGoogle({
+          name: source.name,
+          address: source.address,
+          types: source.types,
+          primaryTypeDisplayName: source.primaryTypeDisplayName || undefined,
+          goodForChildren: source.goodForChildren,
+          menuForChildren: source.menuForChildren,
+          restroom: source.restroom,
+          accessibilityOptions: source.accessibilityOptions,
+          requestedCategory,
+          rating: source.rating || undefined,
+          userRatingsTotal: source.userRatingsTotal || undefined,
+        });
+        const popularityScore = computePopularityScore(savedCount, viewCount, source.userRatingsTotal || undefined);
+        const staleAfterDays = computeStaleAfterDays(savedCount, viewCount, popularityScore);
+        const nextRefreshAt = new Date(Date.now() + staleAfterDays * 24 * 60 * 60 * 1000);
+        const versionHash = crypto
+          .createHash('sha256')
+          .update(JSON.stringify({
+            id: source.googlePlaceId,
+            rating: source.rating,
+            userRatingsTotal: source.userRatingsTotal,
+            priceLevel: source.priceLevel,
+            types: source.types,
+            lat: source.lat,
+            lng: source.lng,
+          }))
+          .digest('hex')
+          .slice(0, 12);
+
+        await placeRef.set({
+          placeId: next.id,
+          googlePlaceId: source.googlePlaceId,
+          name: source.name,
+          normalizedName: source.name.toLowerCase().trim(),
+          address: source.address,
+          geo: { lat: source.lat, lng: source.lng },
+          rating: source.rating,
+          userRatingsTotal: source.userRatingsTotal,
+          priceLevel: source.priceLevel,
+          mapsUrl: source.mapsUrl,
+          imageUrl: source.photoUrl,
+          types: source.types,
+          primaryType: source.primaryType,
+          facets: {
+            categories: facets.categories,
+            venueTypes: facets.venueTypes,
+            foodTypes: facets.foodTypes,
+            kidFriendlySignals: facets.kidFriendlySignals,
+            accessibilitySignals: facets.accessibilitySignals,
+            indoorOutdoorSignals: facets.indoorOutdoorSignals,
+          },
+          facetsConfidence: facets.confidence,
+          sourceVersions: { google: versionHash },
+          popularityScore,
+          staleAfterDays,
+          savedCount,
+          viewCount,
+          refreshState: {
+            status: 'ready',
+            consecutiveFailures: 0,
+            lastAttemptAt: FieldValue.serverTimestamp(),
+            lastError: null,
+            nextRefreshAt,
+          },
+          lastRefreshedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        await placeRef.collection('sources').doc('google').set({
+          googlePlaceId: source.googlePlaceId,
+          versionHash,
+          fetchedAt: FieldValue.serverTimestamp(),
+          requestedCategory,
+          searchQuery: null,
+          ingestionSource: 'scheduler_refresh',
+          source: p,
+        }, { merge: true });
+
+        refreshedCount += 1;
+      } catch (err: any) {
+        failedCount += 1;
+        const failureCount = previousFailures + 1;
+        const backoffDays = Math.min(30, Math.max(1, 2 ** Math.min(failureCount, 5)));
+        const nextRetry = new Date(Date.now() + backoffDays * 24 * 60 * 60 * 1000);
+        errors.push({ placeId: next.id, error: err?.message || 'refresh_failed' });
+        await placeRef.set({
+          refreshState: {
+            status: 'error',
+            consecutiveFailures: failureCount,
+            lastAttemptAt: FieldValue.serverTimestamp(),
+            lastError: err?.message || 'refresh_failed',
+            nextRefreshAt: nextRetry,
+          },
+        }, { merge: true });
+      }
+    }
+  });
+
+  await Promise.all(workers);
+  const elapsedMs = Date.now() - startedAt;
+  console.log('[FamPals Refresh] completed', {
+    dryRun,
+    scannedCount: snap.size,
+    staleCount: staleTargets.length,
+    refreshedCount,
+    failedCount,
+    skippedCount,
+    limitPerRun,
+    elapsedMs,
+  });
+
+  return {
+    ok: true,
+    dryRun,
+    scannedCount: snap.size,
+    staleCount: staleTargets.length,
+    refreshedCount,
+    failedCount,
+    skippedCount,
+    limitPerRun,
+    elapsedMs,
+    errors: errors.slice(0, 20),
+  };
+}
+
 if (!PLACES_CONFIGURED) {
   console.warn('[FamPals API] Google Places API key is not configured. Places search will fail.');
 }
@@ -183,6 +460,119 @@ function sleep(ms: number): Promise<void> {
 
 function normalizeType(value: string): string {
   return value.toLowerCase().replace(/\s+/g, '_').trim();
+}
+
+function normalizeFacetToken(value: string): string {
+  return value.toLowerCase().trim().replace(/\s+/g, '_');
+}
+
+function computePopularityScore(savedCount: number, viewCount: number, userRatingsTotal?: number): number {
+  const ratingsSignal = Math.min(Math.max(userRatingsTotal || 0, 0), 1000);
+  return Math.max(0, savedCount * 20 + viewCount + Math.round(ratingsSignal / 10));
+}
+
+function computeStaleAfterDays(savedCount: number, viewCount: number, popularityScore: number): number {
+  const highEngagement = savedCount >= 10 || viewCount >= 500 || popularityScore >= 120;
+  return highEngagement ? 7 : 30;
+}
+
+function buildFacetSnapshotFromGoogle(source: {
+  name: string;
+  address: string;
+  types: string[];
+  primaryTypeDisplayName?: string;
+  goodForChildren?: boolean;
+  menuForChildren?: boolean;
+  restroom?: boolean;
+  accessibilityOptions?: Record<string, unknown>;
+  requestedCategory?: string;
+  rating?: number;
+  userRatingsTotal?: number;
+}): {
+  categories: string[];
+  venueTypes: string[];
+  foodTypes: string[];
+  kidFriendlySignals: string[];
+  accessibilitySignals: string[];
+  indoorOutdoorSignals: string[];
+  confidence: number;
+} {
+  const types = (source.types || []).map(normalizeFacetToken);
+  const text = `${source.name || ''} ${source.primaryTypeDisplayName || ''} ${source.address || ''}`.toLowerCase();
+  const venueTypes = new Set<string>();
+  const foodTypes = new Set<string>();
+  const kidFriendlySignals = new Set<string>();
+  const accessibilitySignals = new Set<string>();
+  const indoorOutdoorSignals = new Set<string>();
+  const indoorHints = ['museum', 'gallery', 'library', 'cinema', 'mall', 'bowling', 'aquarium', 'indoor'];
+  const outdoorHints = ['park', 'trail', 'hike', 'beach', 'garden', 'camp', 'nature', 'outdoor'];
+
+  if (types.includes('restaurant') || types.includes('meal_takeaway') || types.includes('meal_delivery')) venueTypes.add('restaurant');
+  if (types.includes('cafe') || types.includes('coffee_shop')) venueTypes.add('cafe');
+  if (types.includes('bar') || types.includes('pub')) venueTypes.add('bar_pub');
+  if (types.includes('market')) venueTypes.add('market');
+  if (types.includes('bakery')) venueTypes.add('bakery');
+  if (types.includes('food_truck') || text.includes('food truck')) venueTypes.add('food_truck');
+  if (types.includes('winery') || text.includes('wine farm') || text.includes('wine estate') || text.includes('wine tasting')) venueTypes.add('wine_farm');
+
+  ['coffee', 'bakery', 'brunch', 'breakfast', 'pizza', 'sushi', 'burger', 'steak', 'seafood', 'italian', 'pasta', 'indian', 'curry', 'mexican', 'tacos', 'asian', 'thai', 'chinese', 'ice cream', 'gelato', 'farm stall']
+    .forEach((keyword) => {
+      if (text.includes(keyword)) foodTypes.add(normalizeFacetToken(keyword));
+    });
+
+  if (source.goodForChildren) kidFriendlySignals.add('child_friendly_space');
+  if (source.menuForChildren) kidFriendlySignals.add('kids_menu');
+  if (text.includes('high chair')) kidFriendlySignals.add('high_chair');
+  if (text.includes('play area') || text.includes('playground') || text.includes('jungle gym')) kidFriendlySignals.add('play_area_jungle_gym');
+  if (text.includes('stroller') || text.includes('pram')) kidFriendlySignals.add('stroller_friendly');
+
+  const accessibilityText = JSON.stringify(source.accessibilityOptions || {}).toLowerCase();
+  if (source.restroom || accessibilityText.includes('wheelchair') || accessibilityText.includes('accessible')) {
+    accessibilitySignals.add('wheelchair_friendly');
+  }
+  if (source.restroom || accessibilityText.includes('restroom') || accessibilityText.includes('toilet')) {
+    accessibilitySignals.add('accessible_toilet');
+  }
+  if (text.includes('quiet') || text.includes('calm')) accessibilitySignals.add('quiet_friendly');
+
+  const hasIndoor = types.some((t) => indoorHints.includes(t)) || indoorHints.some((k) => text.includes(k));
+  const hasOutdoor = types.some((t) => outdoorHints.includes(t)) || outdoorHints.some((k) => text.includes(k));
+  if (hasIndoor) indoorOutdoorSignals.add('indoor');
+  if (hasOutdoor) indoorOutdoorSignals.add('outdoor');
+  if (hasIndoor && hasOutdoor) indoorOutdoorSignals.add('both');
+
+  const categories = new Set<string>();
+  if (types.some((type) => ['restaurant', 'cafe', 'meal_takeaway', 'meal_delivery', 'bakery'].includes(type))) categories.add('restaurant');
+  if (types.some((type) => ['park', 'national_park', 'beach', 'campground', 'hiking_area'].includes(type))) categories.add('outdoor');
+  if (types.some((type) => ['museum', 'movie_theater', 'library', 'bowling_alley', 'aquarium'].includes(type))) categories.add('indoor');
+  if (types.some((type) => ['gym', 'sports_complex', 'swimming_pool', 'amusement_park', 'playground'].includes(type))) categories.add('active');
+  if (types.some((type) => ['hiking_area', 'national_park', 'state_park'].includes(type)) || text.includes('hike') || text.includes('trail')) categories.add('hike');
+  if (types.some((type) => ['winery', 'vineyard'].includes(type)) || text.includes('wine farm') || text.includes('wine estate') || text.includes('wine tasting')) categories.add('wine');
+  if (types.some((type) => ['golf_course'].includes(type)) || text.includes('golf')) categories.add('golf');
+  if (types.some((type) => ['playground', 'amusement_park', 'zoo', 'aquarium'].includes(type)) || text.includes('kids') || text.includes('family') || text.includes('child')) categories.add('kids');
+  if (categories.size === 0 && source.requestedCategory && source.requestedCategory !== 'all') categories.add(source.requestedCategory);
+  if (categories.size === 0) categories.add('all');
+
+  const signalCount =
+    (venueTypes.size > 0 ? 1 : 0) +
+    (foodTypes.size > 0 ? 1 : 0) +
+    (kidFriendlySignals.size > 0 ? 1 : 0) +
+    (accessibilitySignals.size > 0 ? 1 : 0) +
+    (indoorOutdoorSignals.size > 0 ? 1 : 0);
+  const confidence = Math.min(
+    0.95,
+    0.35 + signalCount * 0.1 + (typeof source.rating === 'number' ? 0.08 : 0) + ((source.userRatingsTotal || 0) >= 20 ? 0.12 : 0)
+  );
+
+  return {
+    categories: Array.from(categories),
+    venueTypes: Array.from(venueTypes),
+    foodTypes: Array.from(foodTypes),
+    kidFriendlySignals: Array.from(kidFriendlySignals),
+    accessibilitySignals: Array.from(accessibilitySignals),
+    indoorOutdoorSignals: Array.from(indoorOutdoorSignals),
+    confidence: Number(confidence.toFixed(2)),
+  };
 }
 
 function includesAny(text: string, keywords: string[]): boolean {
@@ -224,6 +614,18 @@ app.get('/api/health', (_req, res) => {
     placesConfigured: PLACES_CONFIGURED,
     nodeEnv: process.env.NODE_ENV || 'development',
   });
+});
+
+app.post('/api/admin/places/refresh-stale', requireSchedulerAuth, async (req, res) => {
+  try {
+    const dryRun = req.query.dryRun === 'true' || req.body?.dryRun === true;
+    const limit = Number(req.query.limit || req.body?.limit || PLACE_REFRESH_MAX_PER_RUN);
+    const result = await runPlaceRefreshJob({ dryRun, limit });
+    return res.status(result.ok ? 200 : 500).json(result);
+  } catch (error: any) {
+    console.error('[FamPals Refresh] endpoint error', error);
+    return res.status(500).json({ ok: false, error: error?.message || 'place_refresh_failed' });
+  }
 });
 
 app.get('/api/places/nearby', async (req, res) => {
