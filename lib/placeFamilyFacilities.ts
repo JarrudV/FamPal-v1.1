@@ -61,5 +61,7 @@ export async function submitFamilyFacilitiesReport(input: SubmitFamilyFacilities
     comment: input.comment || null,
     createdAt: serverTimestamp(),
   });
+
+  import('./placeCache').then(m => m.markPlaceAsCommunityEnriched(input.placeId)).catch(() => {});
 }
 

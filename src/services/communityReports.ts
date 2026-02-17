@@ -168,6 +168,8 @@ export async function createReport(
     { merge: true }
   );
 
+  import('../../lib/placeCache').then(m => m.markPlaceAsCommunityEnriched(placeId)).catch(() => {});
+
   return {
     id: ref.id,
     ...docPayload,

@@ -134,7 +134,7 @@ service cloud.firestore {
     match /placeCache/{placeId} {
       allow read: if signedIn();
       allow create, update: if signedIn()
-        && request.resource.data.keys().hasOnly(['details', 'cachedAt', 'version'])
+        && request.resource.data.keys().hasOnly(['details', 'cachedAt', 'version', 'hasCommunityData', 'lastGoogleRefresh'])
         && request.resource.data.cachedAt is number
         && request.resource.data.version is number
         && request.resource.data.details is map;

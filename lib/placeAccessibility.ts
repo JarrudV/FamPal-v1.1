@@ -84,6 +84,8 @@ export async function submitAccessibilityReport(input: SubmitAccessibilityReport
   const normalized = normalizeAccessibility(currentData.accessibility || [], input.features);
   const summary = generateAccessibilitySummary(normalized);
 
+  import('./placeCache').then(m => m.markPlaceAsCommunityEnriched(input.placeId)).catch(() => {});
+
   return {
     accessibility: normalized,
     accessibilitySummary: summary,

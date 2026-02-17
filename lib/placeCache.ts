@@ -2,15 +2,17 @@ import { db, doc, getDoc, setDoc } from './firebase';
 import type { PlaceDetails } from '../placesService';
 
 const COLLECTION = 'placeCache';
-const CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+const GOOGLE_ONLY_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 
 interface CachedPlaceDoc {
   details: PlaceDetails;
   cachedAt: number;
   version: number;
+  hasCommunityData?: boolean;
+  lastGoogleRefresh?: number;
 }
 
-const CURRENT_VERSION = 1;
+const CURRENT_VERSION = 2;
 
 export async function getPlaceFromFirestore(placeId: string): Promise<PlaceDetails | null> {
   if (!db || !placeId) return null;
@@ -20,9 +22,12 @@ export async function getPlaceFromFirestore(placeId: string): Promise<PlaceDetai
     if (!snap.exists()) return null;
     const data = snap.data() as CachedPlaceDoc;
     if (!data.details || !data.cachedAt) return null;
-    if (data.version !== CURRENT_VERSION) return null;
+    if (data.version && data.version > CURRENT_VERSION) return null;
+    if (data.hasCommunityData) {
+      return data.details;
+    }
     const age = Date.now() - data.cachedAt;
-    if (age > CACHE_TTL_MS) return null;
+    if (age > GOOGLE_ONLY_TTL_MS) return null;
     return data.details;
   } catch (err) {
     console.warn('[PlaceCache] Firestore read failed:', err);
@@ -30,18 +35,51 @@ export async function getPlaceFromFirestore(placeId: string): Promise<PlaceDetai
   }
 }
 
-export async function savePlaceToFirestore(placeId: string, details: PlaceDetails): Promise<void> {
+export async function savePlaceToFirestore(
+  placeId: string,
+  details: PlaceDetails,
+): Promise<void> {
   if (!db || !placeId || !details) return;
   try {
     const ref = doc(db, COLLECTION, placeId);
+    let existingCommunityFlag = false;
+    try {
+      const existing = await getDoc(ref);
+      if (existing.exists()) {
+        existingCommunityFlag = (existing.data() as CachedPlaceDoc).hasCommunityData === true;
+      }
+    } catch {}
     const payload: CachedPlaceDoc = {
       details: sanitizeForFirestore(details),
       cachedAt: Date.now(),
       version: CURRENT_VERSION,
+      hasCommunityData: existingCommunityFlag,
+      lastGoogleRefresh: Date.now(),
     };
     await setDoc(ref, payload, { merge: true });
   } catch (err) {
     console.warn('[PlaceCache] Firestore write failed:', err);
+  }
+}
+
+export async function markPlaceAsCommunityEnriched(placeId: string): Promise<void> {
+  if (!db || !placeId) return;
+  try {
+    const ref = doc(db, COLLECTION, placeId);
+    const existing = await getDoc(ref);
+    if (existing.exists()) {
+      await setDoc(ref, { hasCommunityData: true }, { merge: true });
+    } else {
+      await setDoc(ref, {
+        details: {},
+        cachedAt: Date.now(),
+        version: CURRENT_VERSION,
+        hasCommunityData: true,
+        lastGoogleRefresh: 0,
+      }, { merge: true });
+    }
+  } catch (err) {
+    console.warn('[PlaceCache] Failed to mark as community-enriched:', err);
   }
 }
 
