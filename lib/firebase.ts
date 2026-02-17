@@ -54,6 +54,24 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
+const normalizeStorageBucket = (bucket: string | undefined, projectId: string | undefined): string | undefined => {
+  if (!bucket) return bucket;
+  const cleaned = bucket
+    .replace(/^gs:\/\//, '')
+    .replace(/^https?:\/\/storage\.googleapis\.com\/v0\/b\//, '')
+    .replace(/\/.*$/, '');
+
+  if (cleaned.endsWith('.appspot.com') && projectId) {
+    return `${projectId}.firebasestorage.app`;
+  }
+  return cleaned;
+};
+
+const resolvedStorageBucket = normalizeStorageBucket(firebaseConfig.storageBucket, firebaseConfig.projectId);
+if (resolvedStorageBucket) {
+  firebaseConfig.storageBucket = resolvedStorageBucket;
+}
+
 console.log('[FamPals] Firebase config check:', {
   hasApiKey: !!firebaseConfig.apiKey,
   hasAuthDomain: !!firebaseConfig.authDomain,
@@ -76,7 +94,9 @@ if (isConfigValid) {
   app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
   auth = getAuth(app);
   db = getFirestore(app);
-  storage = getStorage(app);
+  storage = firebaseConfig.storageBucket
+    ? getStorage(app, `gs://${firebaseConfig.storageBucket}`)
+    : getStorage(app);
   googleProvider = new GoogleAuthProvider();
 
   setPersistence(auth, browserLocalPersistence).catch((localErr) => {
