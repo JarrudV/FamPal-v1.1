@@ -130,6 +130,17 @@ service cloud.firestore {
       allow read: if signedIn();
     }
 
+    // Shared place detail cache (any signed-in user can read/write)
+    match /placeCache/{placeId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+        && request.resource.data.keys().hasOnly(['details', 'cachedAt', 'version'])
+        && request.resource.data.cachedAt is number
+        && request.resource.data.version is number
+        && request.resource.data.details is map;
+      allow delete: if false;
+    }
+
     // Public place data (root docs are read-only from clients)
     match /places/{placeId} {
       allow read: if true;
