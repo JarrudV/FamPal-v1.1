@@ -4,6 +4,7 @@ import {
   doc,
   getDoc,
   addDoc,
+  setDoc,
   serverTimestamp,
 } from './firebase';
 import type { Place, UserAccessibilityNeeds, AccessibilityFeatureValue } from '../types';
@@ -83,6 +84,12 @@ export async function submitAccessibilityReport(input: SubmitAccessibilityReport
 
   const normalized = normalizeAccessibility(currentData.accessibility || [], input.features);
   const summary = generateAccessibilitySummary(normalized);
+
+  await setDoc(placeRef, {
+    accessibility: normalized,
+    accessibilitySummary: summary,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
 
   import('./placeCache').then(m => m.markPlaceAsCommunityEnriched(input.placeId)).catch(() => {});
   import('../src/services/gamification').then(m => { m.awardPoints('accessibility_report'); m.invalidateGamificationCache(); }).catch(() => {});

@@ -1195,13 +1195,28 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
     }
     setSubmittingFamilyFacilitiesForPlaceId(placeId);
     try {
-      await submitFamilyFacilitiesReport({
+      const updated = await submitFamilyFacilitiesReport({
         placeId,
         userId: uid,
         userDisplayName: state.user?.displayName || state.user?.email || 'Member',
         features: payload.features,
         comment: payload.comment,
       });
+
+      setPlaceFamilyFacilitiesById((prev: Record<string, FamilyFacilityValue[]>) => ({ ...prev, [placeId]: updated.familyFacilities }));
+      setPlaceFamilyFacilitiesSummaryById((prev: Record<string, string>) => ({ ...prev, [placeId]: updated.familyFacilitiesSummary }));
+      setPlaces((prev) =>
+        prev.map((place) =>
+          place.id === placeId
+            ? { ...place, familyFacilities: updated.familyFacilities, familyFacilitiesSummary: updated.familyFacilitiesSummary }
+            : place
+        )
+      );
+      setSelectedPlace((prev) =>
+        prev && prev.id === placeId
+          ? { ...prev, familyFacilities: updated.familyFacilities, familyFacilitiesSummary: updated.familyFacilitiesSummary }
+          : prev
+      );
 
       try {
         const communityPayload = mapToCommunityReport([], payload.features, payload.comment);

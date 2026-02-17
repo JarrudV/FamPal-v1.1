@@ -4,10 +4,11 @@ import {
   doc,
   getDoc,
   addDoc,
+  setDoc,
   serverTimestamp,
 } from './firebase';
 import type { FamilyFacility, FamilyFacilityValue } from '../src/types/place';
-import { generateFamilyFacilitiesSummary } from '../src/utils/familyFacilities';
+import { generateFamilyFacilitiesSummary, normalizeFamilyFacilities } from '../src/utils/familyFacilities';
 
 export async function loadPlaceFamilyFacilitiesByIds(placeIds: string[]): Promise<{
   familyFacilitiesById: Record<string, FamilyFacilityValue[]>;
@@ -41,7 +42,7 @@ interface SubmitFamilyFacilitiesReportInput {
   comment?: string;
 }
 
-export async function submitFamilyFacilitiesReport(input: SubmitFamilyFacilitiesReportInput): Promise<void> {
+export async function submitFamilyFacilitiesReport(input: SubmitFamilyFacilitiesReportInput): Promise<{ familyFacilities: FamilyFacilityValue[]; familyFacilitiesSummary: string }> {
   if (!db) throw new Error('Firestore not initialized');
 
   const selections = input.features
@@ -49,10 +50,15 @@ export async function submitFamilyFacilitiesReport(input: SubmitFamilyFacilities
     .map((item) => ({
       feature: item.feature as FamilyFacility,
       value: true as const,
-      confidence: 'reported' as const,
+      confidence: item.confidence || ('reported' as const),
+      updatedAt: new Date().toISOString(),
     }));
 
-  if (selections.length === 0) return;
+  if (selections.length === 0) return { familyFacilities: [], familyFacilitiesSummary: 'Family info not yet confirmed.' };
+
+  const placeRef = doc(db, 'places', input.placeId);
+  const currentPlace = await getDoc(placeRef);
+  const currentData = currentPlace.exists() ? (currentPlace.data() as { familyFacilities?: FamilyFacilityValue[] }) : {};
 
   await addDoc(collection(db, 'places', input.placeId, 'familyFacilitiesReports'), {
     userId: input.userId,
@@ -62,7 +68,18 @@ export async function submitFamilyFacilitiesReport(input: SubmitFamilyFacilities
     createdAt: serverTimestamp(),
   });
 
+  const normalized = normalizeFamilyFacilities(currentData.familyFacilities || [], selections);
+  const summary = generateFamilyFacilitiesSummary(normalized);
+
+  await setDoc(placeRef, {
+    familyFacilities: normalized,
+    familyFacilitiesSummary: summary,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+
   import('./placeCache').then(m => m.markPlaceAsCommunityEnriched(input.placeId)).catch(() => {});
   import('../src/services/gamification').then(m => { m.awardPoints('family_facilities_report'); m.invalidateGamificationCache(); }).catch(() => {});
+
+  return { familyFacilities: normalized, familyFacilitiesSummary: summary };
 }
 
