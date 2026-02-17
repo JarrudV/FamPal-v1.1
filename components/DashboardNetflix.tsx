@@ -178,7 +178,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, acc
   const canSyncCloud = accessContext?.canSyncCloud ?? !isGuest;
   const effectiveGuestForPersistence = !canSyncCloud;
   const userPrefs = state.userPreferences || {};
-  const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner'>(
+  const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'activity' | 'memories' | 'circles' | 'partner'>(
     (initialTab as any) || 'explore'
   );
 
@@ -188,7 +188,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, acc
     }
   }, [initialTab]);
 
-  const handleTabChange = (tab: 'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner') => {
+  const handleTabChange = (tab: 'explore' | 'favorites' | 'activity' | 'memories' | 'circles' | 'partner') => {
     setActiveTab(tab);
     onTabChange?.(tab);
   };
@@ -434,7 +434,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, acc
           {[
             { key: 'explore' as const, label: 'Explore' },
             { key: 'favorites' as const, label: 'Saved', count: state.favorites.length },
-            { key: 'adventures' as const, label: 'Adventures', count: (state.visitedPlaces || []).length },
+            { key: 'activity' as const, label: 'My Activity' },
             { key: 'memories' as const, label: 'Memories', count: state.memories.length },
             { key: 'partner' as const, label: 'Partner' },
             { key: 'circles' as const, label: 'Circles', count: 0 },
@@ -627,7 +627,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, acc
         <div className="px-5 mt-2">
           <div className="py-16 text-center">
             <div className="flex justify-center mb-3">
-              {activeTab === 'adventures' ? (
+              {activeTab === 'activity' ? (
                 <svg className="w-10 h-10 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10" /><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" /></svg>
               ) : activeTab === 'memories' ? (
                 <svg className="w-10 h-10 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" /><circle cx="12" cy="13" r="4" /></svg>

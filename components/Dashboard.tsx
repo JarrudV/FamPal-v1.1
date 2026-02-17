@@ -44,6 +44,7 @@ import { getPartnerThreadId, ensurePartnerThread } from '../lib/partnerThreads';
 import { Timestamp } from 'firebase/firestore';
 import type { AppAccessContext } from '../lib/access';
 import { formatPriceLevel as formatPriceLevelUtil } from '../src/utils/priceLevel';
+import ActivityDashboard from './ActivityDashboard';
 
 interface DashboardProps {
   state: AppState;
@@ -54,7 +55,7 @@ interface DashboardProps {
   onUpdateState: (key: keyof AppState, value: any) => void;
   initialCircleId?: string | null;
   onClearInitialCircle?: () => void;
-  initialTab?: 'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner';
+  initialTab?: 'explore' | 'favorites' | 'activity' | 'memories' | 'circles' | 'partner';
   onTabChange?: (tab: string) => void;
   discoveryMode?: boolean;
   onToggleDiscoveryMode?: () => void;
@@ -102,7 +103,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
   const canSyncCloud = accessContext?.canSyncCloud ?? !isGuest;
   const effectiveGuestForPersistence = !canSyncCloud;
   const userPrefs = state.userPreferences || {};
-  const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner'>(initialTab || 'explore');
+  const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'activity' | 'memories' | 'circles' | 'partner'>(initialTab || 'explore');
   
   React.useEffect(() => {
     if (initialTab && initialTab !== activeTab) {
@@ -110,7 +111,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
     }
   }, [initialTab]);
   
-  const handleTabChange = (tab: 'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner') => {
+  const handleTabChange = (tab: 'explore' | 'favorites' | 'activity' | 'memories' | 'circles' | 'partner') => {
     setActiveTab(tab);
     onTabChange?.(tab);
   };
@@ -1807,7 +1808,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
         <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar pb-1 scroll-pl-4" style={{ scrollPaddingLeft: '1rem', scrollPaddingRight: '1rem' }}>
           <TabButton label="Explore" active={activeTab === 'explore'} onClick={() => handleTabChange('explore')} />
           <TabButton label="Saved" count={state.favorites.length} active={activeTab === 'favorites'} onClick={() => handleTabChange('favorites')} />
-          <TabButton label="Adventures" count={(state.visitedPlaces || []).length} active={activeTab === 'adventures'} onClick={() => handleTabChange('adventures')} />
+          <TabButton label="My Activity" active={activeTab === 'activity'} onClick={() => handleTabChange('activity')} />
           <TabButton label="Memories" count={state.memories.length} active={activeTab === 'memories'} onClick={() => handleTabChange('memories')} />
           <TabButton label="Partner" active={activeTab === 'partner'} onClick={() => handleTabChange('partner')} />
           <TabButton label="Circles" count={circles.length} active={activeTab === 'circles'} onClick={() => handleTabChange('circles')} />
@@ -2084,97 +2085,37 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
           </div>
         )}
 
-        {activeTab === 'adventures' && (
-          <div className="space-y-4 mt-4">
-            <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-3xl p-6 text-white shadow-lg mb-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-widest opacity-80 font-bold">Adventures Completed</p>
-                  <p className="text-4xl font-black mt-1">{(state.visitedPlaces || []).length}</p>
-                </div>
-                <div><svg className="w-12 h-12 text-white/90" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 010-5H6" /><path d="M18 9h1.5a2.5 2.5 0 000-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20 17 22" /><path d="M18 2H6v7a6 6 0 0012 0V2z" /></svg></div>
-              </div>
-            </div>
-
-            {isGuest ? (
-              <div className="py-16 text-center bg-white rounded-[40px] border border-slate-100">
-                <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mb-4 mx-auto">
-                  <svg className="w-8 h-8 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" /><line x1="8" y1="2" x2="8" y2="18" /><line x1="16" y1="6" x2="16" y2="22" /></svg>
-                </div>
-                <h3 className="text-base font-semibold text-slate-700 mb-2">Track Your Adventures</h3>
-                <p className="text-sm text-slate-500 max-w-xs mx-auto">
-                  Sign in to keep a record of places you've visited and add notes about your experiences.
-                </p>
-              </div>
-            ) : (state.visitedPlaces || []).length > 0 ? (
-              <div className="space-y-3">
-                {(state.visitedPlaces || []).map(visit => {
-                  const handleOpenVisitedPlace = () => {
-                    const existingPlace = savedPlaces.find(sp => sp.placeId === visit.placeId);
-                    if (existingPlace) {
-                      setSelectedPlace(mapSavedPlaceToPlace(existingPlace));
-                    } else {
-                      const fallbackImage = visit.imageUrl || 'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=200&h=200&fit=crop';
-                      const placeFromVisit: Place = {
-                        id: visit.placeId,
-                        name: visit.placeName,
-                        type: visit.placeType || 'all',
-                        tags: [visit.placeType || 'Family'],
-                        rating: 0,
-                        address: '',
-                        description: '',
-                        priceLevel: undefined,
-                        distance: '',
-                        ageAppropriate: '',
-                        imageUrl: fallbackImage,
-                        mapsUrl: `https://www.google.com/maps/place/?q=place_id:${visit.placeId}`,
-                      };
-                      setSelectedPlace(placeFromVisit);
-                    }
-                  };
-                  return (
-                    <div key={visit.placeId} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                      <button
-                        onClick={handleOpenVisitedPlace}
-                        className="w-full flex gap-4 p-4 text-left hover:bg-slate-50 transition-colors"
-                      >
-                        <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 shrink-0">
-                          {visit.imageUrl && <img src={visit.imageUrl} className="w-full h-full object-cover" alt="" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <h3 className="font-bold text-slate-800 truncate">{visit.placeName}</h3>
-                            {visit.isFavorite && <svg className="w-4 h-4 text-sky-500 shrink-0" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>}
-                          </div>
-                          <p className="text-xs text-slate-400 mt-1">
-                            Visited {new Date(visit.visitedAt).toLocaleDateString()}
-                          </p>
-                          {visit.notes && (
-                            <p className="text-sm text-slate-600 mt-2 line-clamp-2">{visit.notes}</p>
-                          )}
-                        </div>
-                        <div className="shrink-0 text-slate-300">
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </div>
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="py-16 text-center bg-white rounded-[40px] border border-slate-100">
-                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 mx-auto">
-                  <svg className="w-8 h-8 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" /><line x1="8" y1="2" x2="8" y2="18" /><line x1="16" y1="6" x2="16" y2="22" /></svg>
-                </div>
-                <h3 className="text-base font-semibold text-slate-700 mb-2">No adventures yet</h3>
-                <p className="text-sm text-slate-500 max-w-xs mx-auto">
-                  Mark places as visited to track your family adventures!
-                </p>
-              </div>
-            )}
-          </div>
+        {activeTab === 'activity' && (
+          <ActivityDashboard
+            isGuest={isGuest}
+            visitedPlaces={state.visitedPlaces || []}
+            memories={state.memories}
+            savedPlaces={savedPlaces}
+            userId={state.user?.uid}
+            onOpenPlace={(visit) => {
+              const existingPlace = savedPlaces.find(sp => sp.placeId === visit.placeId);
+              if (existingPlace) {
+                setSelectedPlace(mapSavedPlaceToPlace(existingPlace));
+              } else {
+                const fallbackImage = visit.imageUrl || 'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=200&h=200&fit=crop';
+                const placeFromVisit: Place = {
+                  id: visit.placeId,
+                  name: visit.placeName,
+                  type: visit.placeType || 'all',
+                  tags: [visit.placeType || 'Family'],
+                  rating: 0,
+                  address: '',
+                  description: '',
+                  priceLevel: undefined,
+                  distance: '',
+                  ageAppropriate: '',
+                  imageUrl: fallbackImage,
+                  mapsUrl: `https://www.google.com/maps/place/?q=place_id:${visit.placeId}`,
+                };
+                setSelectedPlace(placeFromVisit);
+              }
+            }}
+          />
         )}
 
         {activeTab === 'circles' && (

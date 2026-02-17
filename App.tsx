@@ -148,7 +148,7 @@ const App: React.FC = () => {
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [pendingJoinCircleId, setPendingJoinCircleId] = useState<string | null>(null);
-  const [dashboardTab, setDashboardTab] = useState<'explore' | 'favorites' | 'adventures' | 'memories' | 'circles' | 'partner'>('explore');
+  const [dashboardTab, setDashboardTab] = useState<'explore' | 'favorites' | 'activity' | 'memories' | 'circles' | 'partner'>('explore');
   const [useNetflixLayout, setUseNetflixLayout] = useState(() => {
     try { return localStorage.getItem('fampals_netflix_layout') === 'true'; } catch { return false; }
   });
