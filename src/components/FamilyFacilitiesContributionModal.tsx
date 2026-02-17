@@ -269,7 +269,7 @@ const FamilyFacilitiesContributionModal: React.FC<FamilyFacilitiesContributionMo
           ))}
         </div>
 
-        <div className="px-6 pb-6" style={{ paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 1rem))' }}>
+        <div className="px-6 pt-2 pb-6" style={{ paddingBottom: 'max(6rem, calc(env(safe-area-inset-bottom) + 5rem))' }}>
           <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Optional comment</label>
           <textarea
             value={comment}
