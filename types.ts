@@ -31,6 +31,19 @@ export interface Place {
   accessibilitySummary?: string;
   familyFacilities?: FamilyFacilityValue[];
   familyFacilitiesSummary?: string;
+  googlePlaceId?: string;
+  userRatingsTotal?: number;
+  lat?: number;
+  lng?: number;
+  facetSnapshot?: {
+    categories: string[];
+    venueTypes: string[];
+    foodTypes: string[];
+    kidFriendlySignals: string[];
+    accessibilitySignals: string[];
+    indoorOutdoorSignals: string[];
+    reportConfidence: Record<string, number>;
+  };
 }
 
 export type ActivityType = 'restaurant' | 'outdoor' | 'indoor' | 'active' | 'hike' | 'wine' | 'golf' | 'kids' | 'all';
