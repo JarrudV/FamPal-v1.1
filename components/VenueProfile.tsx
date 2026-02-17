@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Place, FavoriteData, ACTIVITY_OPTIONS, Memory, Entitlement, PartnerLink, GroupPlace, AccessibilityFeatureValue, FamilyFacilityValue } from '../types';
 import { askAboutPlace, generateFamilySummary } from '../geminiService';
 import { getPlaceDetails, PlaceDetails, PlaceReview } from '../placesService';
@@ -117,6 +117,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   
   const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
   const [photoViewerIndex, setPhotoViewerIndex] = useState(0);
+  const lightboxSwipeStartX = useRef(0);
 
   // Swipe gesture handling
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -294,8 +295,14 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
       onTouchEnd={onTouchEnd}
     >
       <div className="relative h-56 sm:h-64">
-        <img src={place.imageUrl} className="w-full h-full object-cover" alt={place.name} />
-        <div className="absolute inset-0 bg-gradient-to-t from-white via-white/40 to-black/20"></div>
+        <button
+          className="w-full h-full block"
+          onClick={() => { setPhotoViewerIndex(0); setPhotoViewerOpen(true); lightboxSwipeStartX.current = 0; }}
+          aria-label="View full photo"
+        >
+          <img src={place.imageUrl} className="w-full h-full object-cover" alt={place.name} />
+        </button>
+        <div className="absolute inset-0 bg-gradient-to-t from-white via-white/40 to-black/20 pointer-events-none"></div>
         <button onClick={onClose} className="absolute top-4 left-4 w-10 h-10 bg-white/20 backdrop-blur-xl rounded-xl text-white flex items-center justify-center border border-white/20 safe-area-top">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" /></svg>
         </button>
@@ -998,48 +1005,73 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
         </div>
       )}
 
-      {photoViewerOpen && placeDetails?.photos && (
-        <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col" onClick={() => setPhotoViewerOpen(false)}>
-          <div className="flex items-center justify-between px-4 pt-4 pb-2 safe-area-top">
-            <span className="text-white/70 text-sm font-bold">{photoViewerIndex + 1} / {placeDetails.photos.length}</span>
-            <button onClick={() => setPhotoViewerOpen(false)} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-          </div>
-          <div className="flex-1 flex items-center justify-center px-4" onClick={(e) => e.stopPropagation()}>
-            <img
-              src={placeDetails.photos[photoViewerIndex]}
-              alt={`${place.name} photo ${photoViewerIndex + 1}`}
-              className="max-w-full max-h-[70vh] object-contain rounded-lg"
-            />
-          </div>
-          <div className="flex items-center justify-center gap-4 pb-6 safe-area-bottom">
-            <button
-              onClick={(e) => { e.stopPropagation(); setPhotoViewerIndex(Math.max(0, photoViewerIndex - 1)); }}
-              disabled={photoViewerIndex === 0}
-              className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center disabled:opacity-30"
-            >
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-            </button>
-            <div className="flex gap-1.5">
-              {placeDetails.photos.map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={(e) => { e.stopPropagation(); setPhotoViewerIndex(idx); }}
-                  className={`w-2 h-2 rounded-full transition-all ${idx === photoViewerIndex ? 'bg-white scale-125' : 'bg-white/30'}`}
-                />
-              ))}
+      {photoViewerOpen && (() => {
+        const allPhotos = placeDetails?.photos && placeDetails.photos.length > 0
+          ? placeDetails.photos
+          : place.imageUrl ? [place.imageUrl] : [];
+        if (allPhotos.length === 0) return null;
+        const safeIndex = Math.min(photoViewerIndex, allPhotos.length - 1);
+        const handleSwipeStart = (e: React.TouchEvent) => { lightboxSwipeStartX.current = e.touches[0].clientX; };
+        const handleSwipeEnd = (e: React.TouchEvent) => {
+          const diff = lightboxSwipeStartX.current - e.changedTouches[0].clientX;
+          if (Math.abs(diff) > 50) {
+            if (diff > 0 && safeIndex < allPhotos.length - 1) setPhotoViewerIndex(safeIndex + 1);
+            if (diff < 0 && safeIndex > 0) setPhotoViewerIndex(safeIndex - 1);
+          }
+        };
+        return (
+          <div
+            className="fixed inset-0 z-[100] bg-black flex flex-col"
+            onClick={() => setPhotoViewerOpen(false)}
+            onTouchStart={handleSwipeStart}
+            onTouchEnd={handleSwipeEnd}
+          >
+            <div className="flex items-center justify-between px-4 pt-4 pb-2" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
+              <span className="text-white/70 text-sm font-bold">{safeIndex + 1} / {allPhotos.length}</span>
+              <button onClick={(e) => { e.stopPropagation(); setPhotoViewerOpen(false); }} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
             </div>
-            <button
-              onClick={(e) => { e.stopPropagation(); setPhotoViewerIndex(Math.min(placeDetails.photos.length - 1, photoViewerIndex + 1)); }}
-              disabled={photoViewerIndex === placeDetails.photos.length - 1}
-              className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center disabled:opacity-30"
-            >
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-            </button>
+            <div className="flex-1 flex items-center justify-center px-2" onClick={(e) => e.stopPropagation()}>
+              <img
+                src={allPhotos[safeIndex]}
+                alt={`${place.name} photo ${safeIndex + 1}`}
+                className="max-w-full max-h-[80vh] object-contain select-none"
+                draggable={false}
+              />
+            </div>
+            {allPhotos.length > 1 && (
+              <div className="flex items-center justify-center gap-4 pb-6" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setPhotoViewerIndex(Math.max(0, safeIndex - 1)); }}
+                  disabled={safeIndex === 0}
+                  className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center disabled:opacity-30"
+                >
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                </button>
+                <div className="flex gap-1.5 max-w-[200px] flex-wrap justify-center">
+                  {allPhotos.length <= 10 ? allPhotos.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={(e) => { e.stopPropagation(); setPhotoViewerIndex(idx); }}
+                      className={`w-2 h-2 rounded-full transition-all ${idx === safeIndex ? 'bg-white scale-125' : 'bg-white/30'}`}
+                    />
+                  )) : (
+                    <span className="text-white/50 text-xs font-bold">{safeIndex + 1} of {allPhotos.length}</span>
+                  )}
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setPhotoViewerIndex(Math.min(allPhotos.length - 1, safeIndex + 1)); }}
+                  disabled={safeIndex === allPhotos.length - 1}
+                  className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center disabled:opacity-30"
+                >
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                </button>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 };

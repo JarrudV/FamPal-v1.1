@@ -185,7 +185,7 @@ export interface PlaceDetails {
   isOpen?: boolean;
   photos: string[];
   reviews?: PlaceReview[];
-  priceLevel?: number;
+  priceLevel?: string;
   types?: string[];
   lat: number;
   lng: number;
@@ -369,7 +369,19 @@ function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   return d < 1 ? `${Math.round(d * 1000)}m` : `${d.toFixed(1)}km`;
 }
 
-function priceLevelToString(level?: number): "$" | "$$" | "$$$" | "$$$$" {
+function priceLevelToString(level?: number | string): "$" | "$$" | "$$$" | "$$$$" {
+  if (typeof level === 'string') {
+    switch(level) {
+      case 'PRICE_LEVEL_FREE': return '$';
+      case 'PRICE_LEVEL_INEXPENSIVE': return '$';
+      case 'PRICE_LEVEL_MODERATE': return '$$';
+      case 'PRICE_LEVEL_EXPENSIVE': return '$$$';
+      case 'PRICE_LEVEL_VERY_EXPENSIVE': return '$$$$';
+      default:
+        if (level.startsWith('$')) return level as "$" | "$$" | "$$$" | "$$$$";
+        return '$$';
+    }
+  }
   switch(level) {
     case 0: return "$";
     case 1: return "$";
@@ -1772,7 +1784,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
         relativeTimeDescription: r.relativePublishTimeDescription || '',
         profilePhotoUrl: r.authorAttribution?.photoUri
       })),
-      priceLevel: p.priceLevel,
+      priceLevel: priceLevelToString(p.priceLevel),
       types: p.types,
       lat: p.location?.latitude || 0,
       lng: p.location?.longitude || 0,
