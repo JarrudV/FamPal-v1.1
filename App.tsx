@@ -182,18 +182,14 @@ const App: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
-      const redirectPending = typeof window !== 'undefined' && window.sessionStorage.getItem(AUTH_REDIRECT_PENDING_KEY) === '1';
-      if (!redirectPending) {
-        if (typeof window !== 'undefined') {
-          window.sessionStorage.setItem(AUTH_REDIRECT_PENDING_KEY, '1');
-        }
-        if (isDev) {
-          console.log('[FamPals Auth] Using redirect flow for Google sign-in');
-        }
-        await signInWithRedirect(auth, googleProvider);
-        return;
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(AUTH_REDIRECT_PENDING_KEY, '1');
       }
-      setLoading(false);
+      if (isDev) {
+        console.log('[FamPals Auth] Using redirect flow for Google sign-in');
+      }
+      await signInWithRedirect(auth, googleProvider);
+      return;
     } catch (redirectErr: any) {
       if (typeof window !== 'undefined') {
         window.sessionStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
@@ -617,6 +613,7 @@ const App: React.FC = () => {
         }
         if (redirectResult) {
           setView('dashboard');
+          navigate('/', { replace: true });
         }
       } catch (err: any) {
         if (err?.code === 'auth/unauthorized-domain') {
@@ -634,7 +631,7 @@ const App: React.FC = () => {
         }
       }
     })();
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     if (!BILLING_ENABLED) return;
