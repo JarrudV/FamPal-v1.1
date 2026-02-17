@@ -208,59 +208,49 @@ const App: React.FC = () => {
       setError(firebaseConfigError || "Firebase is not configured properly.");
       return;
     }
-    const isDev = import.meta.env.DEV;
-    const popupSafe = canUsePopupFlowSafely();
-    const localhost = isLocalhost();
     setError(null);
     setLoading(true);
     try {
       await authPersistenceReady;
-      authDebugLog('Google sign-in start', { flow: localhost ? 'popup(localhost)' : 'redirect', popupSafe, localhost });
-      if (localhost) {
-        if (isDev) {
-          console.log('[FamPals Auth] Localhost detected, using popup flow for Google sign-in');
-        }
-        await signInWithPopup(auth, googleProvider);
+      authDebugLog('Google sign-in start', { flow: 'popup-first' });
+      await signInWithPopup(auth, googleProvider);
+      return;
+    } catch (popupErr: any) {
+      authDebugLog('Popup sign-in failed', { code: popupErr?.code, message: popupErr?.message });
+      if (popupErr?.code === 'auth/popup-closed-by-user' || popupErr?.code === 'auth/cancelled-popup-request') {
+        setError(null);
+        setLoading(false);
         return;
       }
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem(AUTH_REDIRECT_PENDING_KEY, '1');
+      if (popupErr?.code === 'auth/unauthorized-domain') {
+        setError("This domain is not authorized for Google Sign-In. Please add it to Firebase Console -> Authentication -> Settings -> Authorized domains.");
+        setLoading(false);
+        return;
       }
-      if (isDev) {
-        console.log('[FamPals Auth] Using redirect flow for Google sign-in');
-      }
-      await signInWithRedirect(auth, googleProvider);
-      return;
-    } catch (redirectErr: any) {
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
-      }
-      if (popupSafe) {
+      const isPopupBlocked = popupErr?.code === 'auth/popup-blocked' ||
+        popupErr?.code === 'auth/operation-not-supported-in-this-environment';
+      if (isPopupBlocked) {
+        authDebugLog('Popup blocked, falling back to redirect');
         try {
-          await authPersistenceReady;
-          authDebugLog('Redirect failed, trying popup fallback');
-          if (isDev) {
-            console.log('[FamPals Auth] Redirect failed, falling back to popup flow');
+          if (typeof window !== 'undefined') {
+            window.sessionStorage.setItem(AUTH_REDIRECT_PENDING_KEY, '1');
           }
-          await signInWithPopup(auth, googleProvider);
+          await signInWithRedirect(auth, googleProvider);
           return;
-        } catch (popupErr: any) {
-          if (popupErr.code === 'auth/unauthorized-domain') {
+        } catch (redirectErr: any) {
+          if (typeof window !== 'undefined') {
+            window.sessionStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
+          }
+          if (redirectErr?.code === 'auth/unauthorized-domain') {
             setError("This domain is not authorized for Google Sign-In. Please add it to Firebase Console -> Authentication -> Settings -> Authorized domains.");
-          } else if (popupErr.code === 'auth/popup-closed-by-user') {
-            setError(null);
           } else {
-            setError(`Login failed: ${popupErr.message}`);
+            setError(`Login failed: ${redirectErr?.message || 'Unknown error'}`);
           }
           setLoading(false);
           return;
         }
       }
-      if (redirectErr?.code === 'auth/unauthorized-domain') {
-        setError("This domain is not authorized for Google Sign-In. Please add it to Firebase Console -> Authentication -> Settings -> Authorized domains.");
-      } else {
-        setError(`Login failed: ${redirectErr?.message || 'Unknown error'}`);
-      }
+      setError(`Login failed: ${popupErr?.message || 'Unknown error'}`);
       setLoading(false);
     }
   }, [authBypassEnabled]);
