@@ -139,6 +139,8 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   const [accessibilityToast, setAccessibilityToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [familyToast, setFamilyToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [osmData, setOsmData] = useState<OsmVenueData | null>(null);
+  const [activitiesExpanded, setActivitiesExpanded] = useState(false);
+  const [costExpanded, setCostExpanded] = useState(false);
   
   useEffect(() => {
     let cancelled = false;
@@ -357,7 +359,8 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
 
   return (
     <div 
-      className="min-h-screen bg-[#F8FAFC] overflow-x-hidden container-safe pb-24"
+      className="min-h-screen bg-[#F8FAFC] overflow-x-hidden pb-32"
+      style={{ maxWidth: '100vw' }}
     >
       <div className="relative h-56 sm:h-64">
         <button
@@ -368,10 +371,10 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
           <img src={place.imageUrl} className="w-full h-full object-cover" alt={place.name} />
         </button>
         <div className="absolute inset-0 bg-gradient-to-t from-white via-white/40 to-black/20 pointer-events-none"></div>
-        <button onClick={onClose} className="absolute top-4 left-4 w-10 h-10 bg-white/20 backdrop-blur-xl rounded-xl text-white flex items-center justify-center border border-white/20 safe-area-top">
+        <button onClick={onClose} className="absolute top-4 left-4 w-11 h-11 bg-white/20 backdrop-blur-xl rounded-xl text-white flex items-center justify-center border border-white/20 safe-area-top">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" /></svg>
         </button>
-        <button onClick={onToggleFavorite} className="absolute top-4 right-4 w-10 h-10 bg-white/20 backdrop-blur-xl rounded-xl flex items-center justify-center border border-white/20 safe-area-top">
+        <button onClick={onToggleFavorite} className="absolute top-4 right-4 w-11 h-11 bg-white/20 backdrop-blur-xl rounded-xl flex items-center justify-center border border-white/20 safe-area-top">
           <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>
         </button>
         <div className="absolute bottom-6 left-5 right-5">
@@ -981,56 +984,81 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                   />
                 </div>
 
-                <div className="space-y-4">
-                  <h3 className="text-xl font-extrabold text-sky-900 flex items-center gap-2">
-                    <svg className="w-4 h-4 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg> Activities & Features
-                  </h3>
-                  <p className="text-xs text-slate-500">Tag what's available at this spot for quick reference</p>
-                  
-                  {Object.entries(ACTIVITY_OPTIONS).map(([category, activities]) => (
-                    <div key={category} className="bg-white rounded-2xl p-4 shadow-sm">
-                      <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-3">{category}</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {activities.map((activity) => {
-                          const isSelected = favoriteData?.activities?.includes(activity);
-                          return (
-                            <button
-                              key={activity}
-                              onClick={() => {
-                                const currentActivities = favoriteData?.activities || [];
-                                const newActivities = isSelected
-                                  ? currentActivities.filter(a => a !== activity)
-                                  : [...currentActivities, activity];
-                                onUpdateDetails({ activities: newActivities });
-                              }}
-                              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                                isSelected
-                                  ? 'bg-sky-500 text-white shadow-sm'
-                                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                              }`}
-                            >
-                              {activity}
-                            </button>
-                          );
-                        })}
-                      </div>
+                <div className="space-y-3">
+                  <button
+                    onClick={() => setActivitiesExpanded(!activitiesExpanded)}
+                    className="w-full flex items-center justify-between py-2"
+                  >
+                    <h3 className="text-xl font-extrabold text-sky-900 flex items-center gap-2">
+                      <svg className="w-4 h-4 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg> Activities & Features
+                      {(favoriteData?.activities?.length || 0) > 0 && (
+                        <span className="text-xs font-bold bg-sky-100 text-sky-600 px-2 py-0.5 rounded-full">{favoriteData!.activities!.length} tagged</span>
+                      )}
+                    </h3>
+                    <svg className={`w-5 h-5 text-slate-400 transition-transform ${activitiesExpanded ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                  </button>
+                  {activitiesExpanded && (
+                    <div className="space-y-3">
+                      <p className="text-xs text-slate-500">Tag what's available at this spot for quick reference</p>
+                      {Object.entries(ACTIVITY_OPTIONS).map(([category, activities]) => (
+                        <div key={category} className="bg-white rounded-2xl p-4 shadow-sm">
+                          <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-3">{category}</h4>
+                          <div className="flex flex-wrap gap-2">
+                            {activities.map((activity) => {
+                              const isSelected = favoriteData?.activities?.includes(activity);
+                              return (
+                                <button
+                                  key={activity}
+                                  onClick={() => {
+                                    const currentActivities = favoriteData?.activities || [];
+                                    const newActivities = isSelected
+                                      ? currentActivities.filter(a => a !== activity)
+                                      : [...currentActivities, activity];
+                                    onUpdateDetails({ activities: newActivities });
+                                  }}
+                                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                                    isSelected
+                                      ? 'bg-sky-500 text-white shadow-sm'
+                                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                  }`}
+                                >
+                                  {activity}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
 
-                <div className="space-y-4">
-                  <h3 className="text-xl font-extrabold text-sky-900">Actual Cost Paid</h3>
-                  <div className="flex gap-2 bg-white p-2 rounded-3xl shadow-sm">
-                    {['$', '$$', '$$$', '$$$$'].map(price => (
-                      <button 
-                        key={price}
-                        onClick={() => onUpdateDetails({ costEstimate: price })}
-                        className={`flex-1 h-12 rounded-2xl font-black text-xs transition-all ${favoriteData?.costEstimate === price ? 'bg-sky-500 text-white shadow-lg' : 'text-slate-300 hover:bg-slate-50'}`}
-                      >
-                        {price}
-                      </button>
-                    ))}
-                  </div>
+                <div className="space-y-3">
+                  <button
+                    onClick={() => setCostExpanded(!costExpanded)}
+                    className="w-full flex items-center justify-between py-2"
+                  >
+                    <h3 className="text-xl font-extrabold text-sky-900 flex items-center gap-2">
+                      Actual Cost Paid
+                      {favoriteData?.costEstimate && (
+                        <span className="text-xs font-bold bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full">{favoriteData.costEstimate}</span>
+                      )}
+                    </h3>
+                    <svg className={`w-5 h-5 text-slate-400 transition-transform ${costExpanded ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                  </button>
+                  {costExpanded && (
+                    <div className="flex gap-2 bg-white p-2 rounded-3xl shadow-sm">
+                      {['$', '$$', '$$$', '$$$$'].map(price => (
+                        <button 
+                          key={price}
+                          onClick={() => onUpdateDetails({ costEstimate: price })}
+                          className={`flex-1 h-12 rounded-2xl font-black text-xs transition-all ${favoriteData?.costEstimate === price ? 'bg-sky-500 text-white shadow-lg' : 'text-slate-300 hover:bg-slate-50'}`}
+                        >
+                          {price}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Add Memory Section */}
@@ -1123,7 +1151,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
         onSubmit={handleSubmitFamilyFacilities}
       />
       {accessibilityToast && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50">
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40">
           <div
             className={`px-4 py-2 text-xs font-semibold rounded-full shadow-lg ${
               accessibilityToast.type === 'success'
@@ -1136,7 +1164,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
         </div>
       )}
       {familyToast && (
-        <div className="fixed bottom-14 left-1/2 -translate-x-1/2 z-50">
+        <div className="fixed bottom-14 left-1/2 -translate-x-1/2 z-40">
           <div
             className={`px-4 py-2 text-xs font-semibold rounded-full shadow-lg ${
               familyToast.type === 'success'

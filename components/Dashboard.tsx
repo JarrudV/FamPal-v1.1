@@ -1710,7 +1710,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
   const showPlaceDetail = !!selectedPlaceWithAccessibility;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-32 container-safe">
+    <div className={`min-h-screen bg-[#F8FAFC] pb-32 ${showPlaceDetail ? '' : 'container-safe'}`}>
       {!showCircleDetail && !showPlaceDetail && (
         <Header 
           setView={setView} 
