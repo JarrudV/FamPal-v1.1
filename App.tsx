@@ -748,7 +748,7 @@ const App: React.FC = () => {
     if (loading) return;
     if (isGuest) return;
     if (!state.user) return;
-    if (!redirectChecked || !authChecked) return;
+    if (!authChecked) return;
     if (!onboardingChecked) return;
     if (needsOnboarding) return;
     const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
@@ -761,7 +761,7 @@ const App: React.FC = () => {
       setView('dashboard');
       navigate('/', { replace: true });
     }
-  }, [loading, isGuest, state.user, redirectChecked, authChecked, onboardingChecked, needsOnboarding, view, navigate]);
+  }, [loading, isGuest, state.user, authChecked, onboardingChecked, needsOnboarding, view, navigate]);
 
   useEffect(() => {
     if (!accessContext.canSyncCloud) return;
@@ -918,8 +918,8 @@ const App: React.FC = () => {
       return <div className="flex items-center justify-center h-screen bg-gradient-to-br from-sky-50 to-white"><div className="text-sky-500 text-lg">Loading...</div></div>;
     }
 
-    // Never hold login view until both redirect and auth state checks complete.
-    if (!isGuest && (!redirectChecked || !authChecked)) {
+    // Wait for auth state to be checked before showing login
+    if (!isGuest && !authChecked) {
       return <div className="flex items-center justify-center h-screen bg-gradient-to-br from-sky-50 to-white"><div className="text-sky-500 text-lg">Loading...</div></div>;
     }
 
