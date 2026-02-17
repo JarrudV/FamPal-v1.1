@@ -566,6 +566,10 @@ function uniqueQueries(queries: string[]): string[] {
   return output;
 }
 
+function normalizeQueryForCache(query: string): string {
+  return query.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
 type FacetSnapshot = {
   categories: string[];
   venueTypes: string[];
@@ -1135,6 +1139,7 @@ export async function searchExploreIntent(
   const definition = getExploreIntentDefinition(intent);
   const requestedCategory = mapIntentToCategory(intent);
   const searchQuery = options?.searchQuery?.trim() || '';
+  const qKey = normalizeQueryForCache(searchQuery);
   const baselineQueries = uniqueQueries(searchQuery ? [searchQuery, ...definition.queries.slice(0, 2)] : definition.queries);
   const boosterQueries = buildBoosterQueriesFromFilters(options?.exploreFilters);
   const queries = uniqueQueries([...baselineQueries, ...boosterQueries]);
@@ -1150,9 +1155,11 @@ export async function searchExploreIntent(
       s: options.exploreFilters.strict,
     })
     : '';
-  const searchKey =
+  const baseSearchKey =
     options?.searchKey ||
-    `intent:${intent}:${lat.toFixed(3)}:${lng.toFixed(3)}:${radiusKm}:${searchQuery.toLowerCase()}:${options?.cacheContext || ''}:${filtersSignature}`;
+    `intent:${intent}:${lat.toFixed(3)}:${lng.toFixed(3)}:${radiusKm}:${options?.cacheContext || ''}:${filtersSignature}`;
+  const searchKey = `${baseSearchKey}|q:${qKey}`;
+  intentLog('[FamPals] Explore search cache key', { query: searchQuery, qKey, searchKey });
   const runWithLimit = createRequestLimiter(3);
   const debug: IntentSearchDebug = {
     intent,
