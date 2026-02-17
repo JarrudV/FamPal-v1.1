@@ -119,25 +119,23 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   const [photoViewerIndex, setPhotoViewerIndex] = useState(0);
   const lightboxSwipeStartX = useRef(0);
 
-  // Swipe gesture handling
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const touchStartRef = useRef<number | null>(null);
+  const touchEndRef = useRef<number | null>(null);
   const minSwipeDistance = 100;
   
   const onTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
+    touchEndRef.current = null;
+    touchStartRef.current = e.targetTouches[0].clientX;
   };
   
   const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX);
+    touchEndRef.current = e.targetTouches[0].clientX;
   };
   
   const onTouchEnd = () => {
-    if (touchStart === null || touchEnd === null) return;
-    const distance = touchEnd - touchStart;
-    const isRightSwipe = distance > minSwipeDistance;
-    if (isRightSwipe) {
+    if (touchStartRef.current === null || touchEndRef.current === null) return;
+    const distance = touchEndRef.current - touchStartRef.current;
+    if (distance > minSwipeDistance) {
       onClose();
     }
   };
@@ -289,7 +287,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-30 bg-[#F8FAFC] overflow-y-auto overflow-x-hidden animate-slide-up container-safe"
+      className="fixed inset-0 z-[60] bg-[#F8FAFC] overflow-y-auto overflow-x-hidden animate-slide-up container-safe"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
@@ -413,7 +411,22 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
         {activeTab === 'info' ? (
           <>
             <section className="space-y-4">
-              <h3 className="text-xl font-extrabold text-[#1E293B]">Expert Review</h3>
+              {(placeDetails?.editorialSummary || placeDetails?.reviewSummary) && (
+                <div className="bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl border border-sky-100 p-4 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-sky-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
+                    <span className="text-xs font-bold text-sky-700 uppercase tracking-wide">About this place</span>
+                  </div>
+                  {placeDetails.editorialSummary && (
+                    <p className="text-sm text-slate-700 leading-relaxed">{placeDetails.editorialSummary}</p>
+                  )}
+                  {placeDetails.reviewSummary && placeDetails.reviewSummary !== placeDetails.editorialSummary && (
+                    <p className="text-sm text-slate-600 leading-relaxed">{placeDetails.reviewSummary}</p>
+                  )}
+                  <p className="text-[10px] text-slate-400">Source: Google Places</p>
+                </div>
+              )}
+              <h3 className="text-base font-bold text-[#1E293B]">Family Review</h3>
               <p className="text-slate-500 leading-relaxed text-sm font-medium">
                 {place.fullSummary || place.description}
               </p>
@@ -480,9 +493,9 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                     className="w-full h-16 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-3xl font-extrabold shadow-xl shadow-purple-100 flex items-center justify-center gap-3 active:scale-95 transition-all"
                   >
                     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
-                    Smart Insights for This Place
+                    <span className="px-2">Smart Insights for This Place</span>
                     {aiInfo.limit !== -1 && (
-                      <span className="text-xs bg-white/20 px-2 py-1 rounded-lg">
+                      <span className="text-xs bg-white/20 px-3 py-1.5 rounded-lg shrink-0">
                         {aiInfo.remaining} left this month
                       </span>
                     )}

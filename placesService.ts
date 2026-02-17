@@ -197,6 +197,8 @@ export interface PlaceDetails {
   restroom?: boolean;
   parkingOptions?: Record<string, unknown>;
   familyHints?: { feature: FamilyFacility; source: 'google_places' }[];
+  editorialSummary?: string;
+  reviewSummary?: string;
 }
 
 export interface PlaceReview {
@@ -1746,16 +1748,32 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
     return cached;
   }
 
+  const baseFields = 'id,displayName,formattedAddress,nationalPhoneNumber,internationalPhoneNumber,websiteUri,rating,userRatingCount,regularOpeningHours,photos,reviews,priceLevel,types,location,googleMapsUri,accessibilityOptions,goodForChildren,menuForChildren,restroom,parkingOptions';
+  const extendedFields = `${baseFields},editorialSummary,generativeSummary`;
+
   try {
-    const response = await fetch(
+    let response = await fetch(
       `https://places.googleapis.com/v1/places/${placeId}`,
       {
         headers: {
           'X-Goog-Api-Key': PLACES_API_KEY,
-          'X-Goog-FieldMask': 'id,displayName,formattedAddress,nationalPhoneNumber,internationalPhoneNumber,websiteUri,rating,userRatingCount,regularOpeningHours,photos,reviews,priceLevel,types,location,googleMapsUri,accessibilityOptions,goodForChildren,menuForChildren,restroom,parkingOptions'
+          'X-Goog-FieldMask': extendedFields
         }
       }
     );
+
+    if (!response.ok && response.status === 400) {
+      console.warn('[FamPals] Extended field mask failed, retrying with base fields');
+      response = await fetch(
+        `https://places.googleapis.com/v1/places/${placeId}`,
+        {
+          headers: {
+            'X-Goog-Api-Key': PLACES_API_KEY,
+            'X-Goog-FieldMask': baseFields
+          }
+        }
+      );
+    }
 
     if (!response.ok) {
       console.error('Place details error:', await response.text());
@@ -1794,6 +1812,8 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
       menuForChildren: p.menuForChildren === true,
       restroom: p.restroom === true,
       parkingOptions: p.parkingOptions || undefined,
+      editorialSummary: p.editorialSummary?.text || undefined,
+      reviewSummary: p.generativeSummary?.overview?.text || undefined,
     };
 
     setCache(DETAILS_CACHE_KEY, placeId, details);
