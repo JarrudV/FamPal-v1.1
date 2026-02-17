@@ -246,7 +246,7 @@ const AccessibilityContributionModal: React.FC<AccessibilityContributionModalPro
           ))}
         </div>
 
-        <div className="px-6 pb-6">
+        <div className="px-6 pb-6" style={{ paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 1rem))' }}>
           <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Optional comment</label>
           <textarea
             value={comment}
@@ -258,7 +258,7 @@ const AccessibilityContributionModal: React.FC<AccessibilityContributionModalPro
             type="button"
             onClick={handleSubmit}
             disabled={selectedFeatures.length === 0 || submitting}
-            className="mt-5 w-full h-12 rounded-2xl bg-sky-500 text-white font-bold text-sm disabled:opacity-50"
+            className="mt-5 w-full h-14 rounded-2xl bg-sky-500 text-white font-bold text-sm disabled:opacity-50"
           >
             {submitting ? 'Saving...' : 'Submit accessibility report'}
           </button>
