@@ -1779,13 +1779,27 @@ export async function textSearchPlaces(
 }
 
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | null> {
-  if (!PLACES_API_KEY || !placeId) return null;
+  if (!placeId) return null;
 
-  const cached = getCached<PlaceDetails>(DETAILS_CACHE_KEY, placeId);
-  if (cached) {
-    intentLog('[FamPals] Loaded place details from cache');
-    return cached;
+  const localCached = getCached<PlaceDetails>(DETAILS_CACHE_KEY, placeId);
+  if (localCached) {
+    intentLog('[FamPals] Loaded place details from localStorage cache');
+    return localCached;
   }
+
+  try {
+    const { getPlaceFromFirestore, savePlaceToFirestore } = await import('./lib/placeCache');
+    const firestoreCached = await getPlaceFromFirestore(placeId);
+    if (firestoreCached) {
+      intentLog('[FamPals] Loaded place details from Firestore cache');
+      setCache(DETAILS_CACHE_KEY, placeId, firestoreCached);
+      return firestoreCached;
+    }
+  } catch (err) {
+    console.warn('[FamPals] Firestore cache check failed, falling back to API:', err);
+  }
+
+  if (!PLACES_API_KEY) return null;
 
   const baseFields = 'id,displayName,formattedAddress,nationalPhoneNumber,internationalPhoneNumber,websiteUri,rating,userRatingCount,regularOpeningHours,photos,reviews,priceLevel,types,location,googleMapsUri,accessibilityOptions,goodForChildren,menuForChildren,restroom,parkingOptions';
   const extendedFields = `${baseFields},editorialSummary,generativeSummary`;
@@ -1856,7 +1870,9 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
     };
 
     setCache(DETAILS_CACHE_KEY, placeId, details);
-    intentLog('[FamPals] Cached place details');
+
+    import('./lib/placeCache').then(m => m.savePlaceToFirestore(placeId, details)).catch(() => {});
+    intentLog('[FamPals] Cached place details (localStorage + Firestore)');
     
     return details;
   } catch (error) {
