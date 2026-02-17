@@ -3,6 +3,7 @@ import { AppState, Place, Memory, UserReview, ExploreIntent, GroupPlace, Visited
 import Header from './Header';
 import PlaceCard from './PlaceCard';
 import Filters from './Filters';
+import FilterPanel from './FilterPanel';
 import VenueProfile from './VenueProfile';
 import GroupsList from './GroupsList';
 import GroupDetail from './GroupDetail';
@@ -131,6 +132,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
   const [selectedFilter, setSelectedFilter] = useState<ExploreIntent>(userPrefs.lastCategory || 'all');
   const [exploreFilters, setExploreFilters] = useState<ExploreFilters>(() => createDefaultExploreFilters());
   const [showMustHavesSheet, setShowMustHavesSheet] = useState(false);
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [manualRefreshTrigger, setManualRefreshTrigger] = useState(0);
   const [places, setPlaces] = useState<Place[]>([]);
   const [placeAccessibilityById, setPlaceAccessibilityById] = useState<Record<string, AccessibilityFeatureValue[]>>({});
   const [placeAccessibilitySummaryById, setPlaceAccessibilitySummaryById] = useState<Record<string, string>>({});
@@ -670,7 +673,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
     }
 
     const fetchPlaces = async () => {
-      const searchKey = `${userLocation.lat.toFixed(3)}:${userLocation.lng.toFixed(3)}:${selectedFilter}:${radiusKm}:${searchQuery.trim().toLowerCase()}:${prefFilterMode}:${hideSavedPlaces ? 'discover' : 'all'}`;
+      const searchKey = `${userLocation.lat.toFixed(3)}:${userLocation.lng.toFixed(3)}:${selectedFilter}:${radiusKm}:${searchQuery.trim().toLowerCase()}:${prefFilterMode}:${hideSavedPlaces ? 'discover' : 'all'}:${manualRefreshTrigger}`;
       placesSearchKeyRef.current = searchKey;
       setLoading(true);
       setLoadingMore(false);
@@ -738,7 +741,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
     return () => {
       controller.abort();
     };
-  }, [selectedFilter, activeTab, userLocation, radiusKm, searchQuery, applyFlickerGuard, exploreFilters, prefFilterMode, hideSavedPlaces]);
+  }, [selectedFilter, activeTab, userLocation, radiusKm, searchQuery, applyFlickerGuard, exploreFilters, prefFilterMode, hideSavedPlaces, manualRefreshTrigger]);
 
   useEffect(() => {
     if (!canSyncCloud) return;
@@ -1661,9 +1664,6 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
         {activeTab === 'explore' && (
           <>
             <Filters selected={selectedFilter} onChange={handleFilterChange} />
-            <p className="mt-2 text-xs font-semibold text-slate-500">
-              {getExploreIntentSubtitle(selectedFilter)}
-            </p>
             {placesServerConfigured === false && (
               <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
                 <p className="text-xs font-semibold text-amber-700">
@@ -1671,235 +1671,88 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
                 </p>
               </div>
             )}
-            <div className="bg-white rounded-2xl p-4 mt-2 border border-slate-100 shadow-sm">
-              <div className="flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowMustHavesSheet(true)}
-                  className="h-11 px-4 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold"
-                >
-                  Refine
-                </button>
-                <p className="flex-1 text-xs font-semibold text-slate-500 truncate">{mustHavesButtonLabel}</p>
-                {selectedLensChipItems.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={clearExploreFilters}
-                    className="h-8 px-3 rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600"
-                  >
-                    Clear all
-                  </button>
-                )}
-              </div>
-              {selectedLensChipItems.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {selectedLensChipItems.map((chip) => (
-                    <button
-                      key={`${chip.lensKey}:${chip.chipId}`}
-                      type="button"
-                      onClick={() => toggleLensChip(chip.lensKey, chip.chipId)}
-                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-semibold bg-sky-50 text-sky-700 border border-sky-100"
-                    >
-                      <span>{chip.label}</span>
-                      <span className="text-sky-500">x</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {/* Future hook: cuisine intents (e.g., sushi) can be layered here using google place types + keyword matching on place name/types. */}
-            </div>
-            
-            {/* Radius Slider */}
-            <div className="bg-white rounded-2xl p-4 mt-4 border border-slate-100 shadow-sm">
-              <div className="flex justify-between items-center mb-3">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Search Radius</span>
-                <span className="text-base font-bold text-sky-500">{radiusKm} km</span>
-              </div>
-              <input
-                type="range"
-                min="1"
-                max="200"
-                value={radiusKm}
-                onChange={(e) => handleRadiusSliderChange(parseInt(e.target.value))}
-                className="w-full h-2 bg-slate-200 rounded-full appearance-none cursor-pointer accent-sky-500"
-              />
-              <div className="flex justify-between mt-2">
-                <span className="text-[10px] text-slate-400 font-medium">1 km</span>
-                <span className="text-[10px] text-slate-400 font-medium">200 km</span>
-              </div>
+
+            <div className="flex items-center gap-2 mt-3">
               <button
-                onClick={refreshGpsLocation}
-                className="w-full mt-4 py-3 bg-slate-100 active:bg-slate-200 rounded-xl text-sm font-semibold text-slate-600 transition-colors flex items-center justify-center gap-2 min-h-[48px]"
+                onClick={() => setShowFilterPanel(true)}
+                className="flex-1 h-11 flex items-center gap-2 px-4 rounded-xl bg-white border border-slate-200 shadow-sm text-sm font-semibold text-slate-700 active:bg-slate-50"
               >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" /></svg>
-                <span>Use Current Location</span>
+                <svg className="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></svg>
+                <span>Filters</span>
+                {(prefFilterMode !== 'all' || hideSavedPlaces || selectedLensChipItems.length > 0 || radiusKm !== 10) && (
+                  <span className="ml-auto flex items-center justify-center w-5 h-5 rounded-full bg-sky-500 text-white text-[10px] font-bold">
+                    {[prefFilterMode !== 'all', hideSavedPlaces, selectedLensChipItems.length > 0, radiusKm !== 10].filter(Boolean).length}
+                  </span>
+                )}
               </button>
-              {locationError && (
-                <p className="text-xs text-rose-500 mt-2 text-center">{locationError}</p>
-              )}
+              <button
+                onClick={() => setManualRefreshTrigger(prev => prev + 1)}
+                className="h-11 px-4 rounded-xl bg-sky-500 active:bg-sky-600 text-white text-sm font-bold shadow-sm flex items-center gap-2 min-w-[100px] justify-center"
+              >
+                <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" /></svg>
+                Refresh
+              </button>
             </div>
 
-            {/* Who's Coming Filter */}
-            <div className="bg-white rounded-2xl p-4 mt-4 border border-slate-100 shadow-sm">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 block">Who's Coming?</span>
-              <div className="flex gap-2 flex-wrap">
-                <button
-                  onClick={() => setPrefFilterMode('all')}
-                  className={`px-4 py-3 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
-                    prefFilterMode === 'all'
-                      ? 'bg-slate-800 text-white'
-                      : 'bg-slate-100 text-slate-600 active:bg-slate-200'
-                  }`}
-                >
-                  Everyone
-                </button>
-                <button
-                  onClick={() => setPrefFilterMode('family')}
-                  className={`px-4 py-3 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
-                    prefFilterMode === 'family'
-                      ? 'bg-sky-500 text-white'
-                      : 'bg-sky-50 text-sky-600 active:bg-sky-100'
-                  }`}
-                >
-                  Family
-                </button>
-                {hasLinkedPartner && (
-                  <button
-                    onClick={() => setPrefFilterMode('partner')}
-                    className={`px-4 py-3 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
-                      prefFilterMode === 'partner'
-                        ? 'bg-rose-500 text-white'
-                        : 'bg-rose-50 text-rose-600 active:bg-rose-100'
-                    }`}
-                  >
-                    <svg className="w-4 h-4 inline -mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg> Partner
-                  </button>
+            {(prefFilterMode !== 'all' || radiusKm !== 10 || selectedLensChipItems.length > 0 || hideSavedPlaces) && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {radiusKm !== 10 && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600">{radiusKm} km</span>
                 )}
-                <button
-                  onClick={() => setPrefFilterMode('solo')}
-                  className={`px-4 py-3 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
-                    prefFilterMode === 'solo'
-                      ? 'bg-purple-500 text-white'
-                      : 'bg-purple-50 text-purple-600 active:bg-purple-100'
-                  }`}
-                >
-                  Just Me
-                </button>
+                {prefFilterMode !== 'all' && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-semibold bg-sky-50 text-sky-700">
+                    {prefFilterMode === 'family' ? 'Family' : prefFilterMode === 'partner' ? 'Partner' : 'Solo'}
+                  </span>
+                )}
+                {hideSavedPlaces && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700">Fresh only</span>
+                )}
+                {selectedLensChipItems.slice(0, 3).map((chip) => (
+                  <span key={`${chip.lensKey}:${chip.chipId}`} className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-semibold bg-sky-50 text-sky-700 border border-sky-100">
+                    {chip.label}
+                  </span>
+                ))}
+                {selectedLensChipItems.length > 3 && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500">
+                    +{selectedLensChipItems.length - 3} more
+                  </span>
+                )}
               </div>
-              {prefFilterMode !== 'all' && (
-                <div className="mt-3 text-xs text-slate-500">
-                  {prefFilterMode === 'family' && (
-                    <span>Considering preferences for you{hasLinkedPartner ? `, ${partnerLabel}` : ''}{state.children.length > 0 ? ` & ${state.children.length} kid${state.children.length > 1 ? 's' : ''}` : ''}</span>
-                  )}
-                  {prefFilterMode === 'partner' && (
-                    <span>Considering preferences for you & {partnerLabel}</span>
-                  )}
-                  {prefFilterMode === 'solo' && (
-                    <span>Just your preferences</span>
-                  )}
-                </div>
-              )}
-              
-              {/* Preference chips - show combined allergies/accessibility */}
-              {prefFilterMode !== 'all' && (combinedPreferences.allergies.length > 0 || combinedPreferences.accessibility.length > 0) && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {combinedPreferences.allergies.map(allergy => (
-                    <span key={allergy} className="inline-flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-medium">
-                      <svg className="w-3.5 h-3.5 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg> {allergy}
-                    </span>
-                  ))}
-                  {combinedPreferences.accessibility.map(access => (
-                    <span key={access} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
-                      <svg className="w-3.5 h-3.5 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9 12h6M9 12l2 5M15 12l-2 5M12 7v2" /></svg> {access}
-                    </span>
-                  ))}
-                </div>
-              )}
-              
-              {/* Food preferences chips */}
-              {prefFilterMode !== 'all' && combinedPreferences.foodPreferences.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {combinedPreferences.foodPreferences.map(pref => (
-                    <span key={pref} className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 rounded-full text-xs font-medium">
-                      <svg className="w-3.5 h-3.5 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 010 8h-1" /><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z" /><line x1="6" y1="1" x2="6" y2="4" /><line x1="10" y1="1" x2="10" y2="4" /><line x1="14" y1="1" x2="14" y2="4" /></svg> {pref}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
+            )}
 
             {locationError && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mt-4 text-amber-700 text-xs font-bold">
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mt-3 text-amber-700 text-xs font-bold">
                 {locationError}. Showing default location.
               </div>
             )}
-            
-            {/* Discovery Mode & Fresh Finds */}
-            <div className="mt-4 space-y-3">
-              <div className="bg-gradient-to-r from-sky-50 to-purple-50 rounded-2xl p-4 border border-sky-100">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <svg className="w-5 h-5 text-sky-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" /></svg>
-                    <div>
-                      <span className="font-bold text-slate-700 text-sm">Discovery Mode</span>
-                      <p className="text-[10px] text-slate-400 mt-0.5">Browse by category</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => onToggleDiscoveryMode?.()}
-                    className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
-                      discoveryMode ? 'bg-sky-500' : 'bg-slate-300'
-                    }`}
-                    aria-label="Toggle Discovery Mode"
-                  >
-                    <span data-toggle-knob className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${
-                      discoveryMode ? 'translate-x-5' : 'translate-x-0'
-                    }`} />
-                  </button>
-                </div>
-              </div>
-              <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <svg className="w-5 h-5 text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
-                    <div>
-                      <span className="font-bold text-slate-700 text-sm">Fresh Finds Only</span>
-                      <p className="text-[10px] text-slate-400 mt-0.5">
-                        {hideSavedPlaces ? 'Saved spots hidden' : 'Hide places you already saved'}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setHideSavedPlaces(!hideSavedPlaces)}
-                    className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
-                      hideSavedPlaces ? 'bg-sky-500' : 'bg-slate-300'
-                    }`}
-                    aria-label="Toggle Fresh Finds"
-                  >
-                    <span data-toggle-knob className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${
-                      hideSavedPlaces ? 'translate-x-5' : 'translate-x-0'
-                    }`} />
-                  </button>
-                </div>
-              </div>
-            </div>
 
-            {/* Fun encouragement messages */}
-            {!loading && userLocation && (
-              <div className="mt-4 text-center">
-                <p className="text-sm text-slate-500 italic">
-                  {prefFilterMode === 'family' && "Finding fun for the whole crew!"}
-                  {prefFilterMode === 'partner' && "Date ideas incoming..."}
-                  {prefFilterMode === 'solo' && "Me-time discoveries await!"}
-                  {prefFilterMode === 'all' && [
-                    "Every day is an adventure waiting to happen!",
-                    "The best memories are made exploring together.",
-                    "Ready for your next family adventure?",
-                    "New places, new memories, new stories!",
-                  ][Math.floor(Date.now() / 60000) % 4]}
-                </p>
-              </div>
-            )}
+            <FilterPanel
+              isOpen={showFilterPanel}
+              onClose={() => setShowFilterPanel(false)}
+              onApply={() => setManualRefreshTrigger(prev => prev + 1)}
+              selectedFilter={selectedFilter}
+              onFilterChange={handleFilterChange}
+              radiusKm={radiusKm}
+              onRadiusChange={handleRadiusSliderChange}
+              prefFilterMode={prefFilterMode}
+              onPrefFilterModeChange={setPrefFilterMode}
+              hasLinkedPartner={hasLinkedPartner}
+              partnerLabel={partnerLabel}
+              combinedPreferences={combinedPreferences}
+              childrenCount={state.children.length}
+              discoveryMode={discoveryMode}
+              onToggleDiscoveryMode={() => onToggleDiscoveryMode?.()}
+              hideSavedPlaces={hideSavedPlaces}
+              onToggleHideSavedPlaces={() => setHideSavedPlaces(!hideSavedPlaces)}
+              onRefreshLocation={refreshGpsLocation}
+              locationError={locationError}
+              onOpenMustHaves={() => setShowMustHavesSheet(true)}
+              mustHavesButtonLabel={mustHavesButtonLabel}
+              selectedLensChipItems={selectedLensChipItems}
+              onToggleLensChip={toggleLensChip}
+              onClearExploreFilters={clearExploreFilters}
+              subtitleText={getExploreIntentSubtitle(selectedFilter)}
+            />
 
             {loading || !userLocation ? (
               <div className="py-24 text-center text-slate-300 font-black text-xs uppercase tracking-widest">
