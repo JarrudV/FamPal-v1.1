@@ -14,6 +14,7 @@ import PlaceFamilyFacilitiesSection from '../src/components/PlaceFamilyFacilitie
 import FamilyFacilitiesContributionModal from '../src/components/FamilyFacilitiesContributionModal';
 import { getFamilyFacilitiesHintsFromGoogle } from '../src/utils/familyFacilitiesHints';
 import { getPublicHints } from '../src/utils/publicHints';
+import { fetchOsmVenueData, OsmVenueData } from '../src/utils/osmService';
 
 function getNavigationUrls(place: Place, placeDetails?: PlaceDetails | null) {
   const lat = (place as any).lat || placeDetails?.lat;
@@ -120,26 +121,6 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   const [photoViewerIndex, setPhotoViewerIndex] = useState(0);
   const lightboxSwipeStartX = useRef(0);
 
-  const touchStartRef = useRef<number | null>(null);
-  const touchEndRef = useRef<number | null>(null);
-  const minSwipeDistance = 100;
-  
-  const onTouchStart = (e: React.TouchEvent) => {
-    touchEndRef.current = null;
-    touchStartRef.current = e.targetTouches[0].clientX;
-  };
-  
-  const onTouchMove = (e: React.TouchEvent) => {
-    touchEndRef.current = e.targetTouches[0].clientX;
-  };
-  
-  const onTouchEnd = () => {
-    if (touchStartRef.current === null || touchEndRef.current === null) return;
-    const distance = touchEndRef.current - touchStartRef.current;
-    if (distance > minSwipeDistance) {
-      onClose();
-    }
-  };
   
   // Fetch place details from Google Places for reviews and extra info
   const [placeDetails, setPlaceDetails] = useState<PlaceDetails | null>(null);
@@ -152,14 +133,26 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   const [familyHighlightedSuggested, setFamilyHighlightedSuggested] = useState<FamilyFacilityValue['feature'][]>([]);
   const [accessibilityToast, setAccessibilityToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [familyToast, setFamilyToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [osmData, setOsmData] = useState<OsmVenueData | null>(null);
   
   useEffect(() => {
+    let cancelled = false;
     if (place.id) {
       setLoadingDetails(true);
+      setOsmData(null);
       getPlaceDetails(place.id)
-        .then(details => setPlaceDetails(details))
-        .finally(() => setLoadingDetails(false));
+        .then(details => {
+          if (cancelled) return;
+          setPlaceDetails(details);
+          if (details?.lat && details?.lng) {
+            fetchOsmVenueData(details.lat, details.lng, details.name || place.name)
+              .then(osm => { if (!cancelled) setOsmData(osm); })
+              .catch(() => {});
+          }
+        })
+        .finally(() => { if (!cancelled) setLoadingDetails(false); });
     }
+    return () => { cancelled = true; };
   }, [place]);
 
   useEffect(() => {
@@ -328,27 +321,38 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   const confirmedAccessibility = (place.accessibility || []).filter(
     (item) => item.value === true && (item.confidence === 'reported' || item.confidence === 'verified')
   );
-  const suggestedGoogleHints = getAccessibilityHintsFromGoogle(placeDetails).filter(
-    (feature) => !confirmedAccessibility.some((confirmed) => confirmed.feature === feature)
-  );
+  const suggestedGoogleHints = React.useMemo(() => {
+    const googleHints = getAccessibilityHintsFromGoogle(placeDetails);
+    const osmHints = osmData?.accessibilityHints || [];
+    const combined = new Set([...googleHints, ...osmHints]);
+    return [...combined].filter(
+      (feature) => !confirmedAccessibility.some((confirmed) => confirmed.feature === feature)
+    );
+  }, [placeDetails, osmData, confirmedAccessibility]);
   const confirmedFamilyFacilities = (place.familyFacilities || []).filter(
     (item) => item.value === true && (item.confidence === 'reported' || item.confidence === 'verified')
   );
-  const suggestedFamilyHints = getFamilyFacilitiesHintsFromGoogle(placeDetails).filter(
-    (feature) => !confirmedFamilyFacilities.some((confirmed) => confirmed.feature === feature)
-  );
+  const suggestedFamilyHints = React.useMemo(() => {
+    const googleHints = getFamilyFacilitiesHintsFromGoogle(placeDetails);
+    const osmHints = osmData?.familyFacilityHints || [];
+    const combined = new Set([...googleHints, ...osmHints]);
+    return [...combined].filter(
+      (feature) => !confirmedFamilyFacilities.some((confirmed) => confirmed.feature === feature)
+    );
+  }, [placeDetails, osmData, confirmedFamilyFacilities]);
   const publicHints = getPublicHints(placeDetails);
   const confirmedStrollerFromFamily = confirmedFamilyFacilities.some((item) => item.feature === 'stroller_friendly');
   const confirmedStrollerFromAccessibility = confirmedAccessibility.some((item) => item.feature === 'step_free_entry');
   const strollerFriendlyConfirmed = confirmedStrollerFromFamily || confirmedStrollerFromAccessibility;
   const strollerFriendlySuggested = !strollerFriendlyConfirmed && publicHints.strollerFriendlySuggested;
 
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [place.id]);
+
   return (
     <div 
-      className="fixed inset-0 z-[60] bg-[#F8FAFC] overflow-y-auto overflow-x-hidden animate-slide-up container-safe"
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
+      className="min-h-screen bg-[#F8FAFC] overflow-x-hidden container-safe pb-24"
     >
       <div className="relative h-56 sm:h-64">
         <button

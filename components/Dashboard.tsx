@@ -1626,10 +1626,11 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
   };
 
   const showCircleDetail = !!selectedCircle;
+  const showPlaceDetail = !!selectedPlaceWithAccessibility;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-32 container-safe">
-      {!showCircleDetail && (
+      {!showCircleDetail && !showPlaceDetail && (
         <Header 
           setView={setView} 
           user={state.user} 
@@ -1638,8 +1639,75 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
           onLocationChange={handleLocationChange}
         />
       )}
-      
-      {selectedCircle ? (
+
+      {showPlaceDetail ? (
+        <VenueProfile 
+          place={selectedPlaceWithAccessibility} 
+          isFavorite={state.favorites.includes(selectedPlaceWithAccessibility.id)}
+          isVisited={(state.visitedPlaces || []).some(v => v.placeId === selectedPlaceWithAccessibility.id)}
+          memories={state.memories}
+          memoryCount={state.memories.length}
+          onToggleFavorite={() => toggleFavorite(selectedPlaceWithAccessibility)}
+          onMarkVisited={() => markVisited(selectedPlaceWithAccessibility)}
+          onClose={() => setSelectedPlace(null)}
+          onUpdateDetails={(data) => {
+            const newDetails = { ...state.favoriteDetails, [selectedPlaceWithAccessibility.id]: { ...state.favoriteDetails[selectedPlaceWithAccessibility.id], ...data, placeId: selectedPlaceWithAccessibility.id } };
+            onUpdateState('favoriteDetails', newDetails);
+          }}
+          favoriteData={state.favoriteDetails[selectedPlaceWithAccessibility.id]}
+          childrenAges={state.children?.map(c => c.age) || []}
+          isGuest={isGuest}
+          entitlement={accessContext?.entitlement ?? state.entitlement}
+          familyPool={state.familyPool}
+          onIncrementAiRequests={handleIncrementAiRequests}
+          circles={circles}
+          partnerLink={state.partnerLink}
+          userName={state.user?.displayName || 'You'}
+          userId={state.user?.uid || ''}
+          tripContext={prefFilterMode !== 'all' ? combinedPreferences : undefined}
+          onSubmitAccessibilityContribution={(votes) => handleSubmitAccessibilityContribution(selectedPlaceWithAccessibility.id, votes)}
+          isSubmittingAccessibilityContribution={submittingAccessibilityForPlaceId === selectedPlaceWithAccessibility.id}
+          onSubmitFamilyFacilitiesContribution={(votes) => handleSubmitFamilyFacilitiesContribution(selectedPlaceWithAccessibility.id, votes)}
+          isSubmittingFamilyFacilitiesContribution={submittingFamilyFacilitiesForPlaceId === selectedPlaceWithAccessibility.id}
+          onTagMemoryToCircle={handleTagMemoryToCircle}
+          onAddToCircle={(circleId, groupPlace) => {
+            if (circleId === 'partner') {
+              const currentPartnerPlaces = state.partnerSharedPlaces || [];
+              if (currentPartnerPlaces.some(p => p.placeId === groupPlace.placeId)) {
+                alert('This place is already in Partner Plans!');
+                return;
+              }
+              handleAddPartnerPlace(groupPlace);
+            } else {
+              if (!canSyncCloud) {
+                alert('Please sign in to add places to circles.');
+                return;
+              }
+              const circle = circles.find(c => c.id === circleId);
+              const note = prompt('Add a note for this place (optional):') || '';
+              saveCirclePlace(circleId, {
+                placeId: groupPlace.placeId,
+                savedByUid: state.user?.uid || 'guest',
+                savedByName: state.user?.displayName || state.user?.email || 'Member',
+                savedAt: new Date().toISOString(),
+                note: note.trim(),
+                placeSummary: {
+                  placeId: groupPlace.placeId,
+                  name: groupPlace.placeName,
+                  imageUrl: groupPlace.imageUrl,
+                  type: groupPlace.placeType,
+                },
+              }).then(() => {
+                alert(`Added to ${circle?.name || 'circle'}!`);
+              }).catch(err => {
+                console.error('Failed to save circle place:', err);
+                alert('Failed to add to circle. Please try again.');
+              });
+            }
+          }}
+          onAddMemory={handleAddMemory}
+        />
+      ) : selectedCircle ? (
         <GroupDetail
           circle={selectedCircle}
           userId={state.user?.uid || ''}
@@ -2446,75 +2514,6 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
         onToggleStrict={toggleLensStrict}
         onClear={clearExploreFilters}
       />
-
-      {selectedPlaceWithAccessibility && (
-        <VenueProfile 
-          place={selectedPlaceWithAccessibility} 
-          isFavorite={state.favorites.includes(selectedPlaceWithAccessibility.id)}
-          isVisited={(state.visitedPlaces || []).some(v => v.placeId === selectedPlaceWithAccessibility.id)}
-          memories={state.memories}
-          memoryCount={state.memories.length}
-          onToggleFavorite={() => toggleFavorite(selectedPlaceWithAccessibility)}
-          onMarkVisited={() => markVisited(selectedPlaceWithAccessibility)}
-          onClose={() => setSelectedPlace(null)}
-          onUpdateDetails={(data) => {
-            const newDetails = { ...state.favoriteDetails, [selectedPlaceWithAccessibility.id]: { ...state.favoriteDetails[selectedPlaceWithAccessibility.id], ...data, placeId: selectedPlaceWithAccessibility.id } };
-            onUpdateState('favoriteDetails', newDetails);
-          }}
-          favoriteData={state.favoriteDetails[selectedPlaceWithAccessibility.id]}
-          childrenAges={state.children?.map(c => c.age) || []}
-          isGuest={isGuest}
-          entitlement={accessContext?.entitlement ?? state.entitlement}
-          familyPool={state.familyPool}
-          onIncrementAiRequests={handleIncrementAiRequests}
-          circles={circles}
-          partnerLink={state.partnerLink}
-          userName={state.user?.displayName || 'You'}
-          userId={state.user?.uid || ''}
-          tripContext={prefFilterMode !== 'all' ? combinedPreferences : undefined}
-          onSubmitAccessibilityContribution={(votes) => handleSubmitAccessibilityContribution(selectedPlaceWithAccessibility.id, votes)}
-          isSubmittingAccessibilityContribution={submittingAccessibilityForPlaceId === selectedPlaceWithAccessibility.id}
-          onSubmitFamilyFacilitiesContribution={(votes) => handleSubmitFamilyFacilitiesContribution(selectedPlaceWithAccessibility.id, votes)}
-          isSubmittingFamilyFacilitiesContribution={submittingFamilyFacilitiesForPlaceId === selectedPlaceWithAccessibility.id}
-          onTagMemoryToCircle={handleTagMemoryToCircle}
-          onAddToCircle={(circleId, groupPlace) => {
-            if (circleId === 'partner') {
-              const currentPartnerPlaces = state.partnerSharedPlaces || [];
-              if (currentPartnerPlaces.some(p => p.placeId === groupPlace.placeId)) {
-                alert('This place is already in Partner Plans!');
-                return;
-              }
-              handleAddPartnerPlace(groupPlace);
-            } else {
-              if (!canSyncCloud) {
-                alert('Circle editing is disabled in read-only review mode.');
-                return;
-              }
-              const note = window.prompt('Add a note for this place (optional)') || '';
-              const circle = circles.find(c => c.id === circleId);
-              saveCirclePlace(circleId, {
-                placeId: groupPlace.placeId,
-                savedByUid: state.user?.uid || 'guest',
-                savedByName: state.user?.displayName || state.user?.email || 'Member',
-                savedAt: new Date().toISOString(),
-                note: note.trim(),
-                placeSummary: {
-                  placeId: groupPlace.placeId,
-                  name: groupPlace.placeName,
-                  imageUrl: groupPlace.imageUrl,
-                  type: groupPlace.placeType,
-                },
-              }).then(() => {
-                alert(`Added to ${circle?.name || 'circle'}!`);
-              }).catch(err => {
-                console.error('Failed to save circle place:', err);
-                alert('Failed to add to circle. Please try again.');
-              });
-            }
-          }}
-          onAddMemory={handleAddMemory}
-        />
-      )}
 
       {showPlanBilling && (
         <PlanBilling 
