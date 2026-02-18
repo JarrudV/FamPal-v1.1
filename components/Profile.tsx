@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AppState, Child, PartnerLink, Preferences, UserAccessibilityNeeds, FOOD_PREFERENCES, ALLERGY_OPTIONS, ACCESSIBILITY_OPTIONS, ACTIVITY_PREFERENCES, PLAN_LIMITS } from '../types';
+import { AppState, Child, Pet, PetType, PartnerLink, Preferences, UserAccessibilityNeeds, FOOD_PREFERENCES, ALLERGY_OPTIONS, ACCESSIBILITY_OPTIONS, ACTIVITY_PREFERENCES, PET_TYPE_OPTIONS, PLAN_LIMITS } from '../types';
 import PlanBilling from './PlanBilling';
 import ExplorerLevel from './ExplorerLevel';
 import { getLimits, getPlanDisplayName, canUseAI, isPaidTier } from '../lib/entitlements';
@@ -67,6 +67,8 @@ const generateInviteCode = () => {
 const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSignOut, setView, onUpdateState, onResetOnboarding, darkMode, onToggleDarkMode }) => {
   const [childName, setChildName] = useState('');
   const [childAge, setChildAge] = useState('');
+  const [petName, setPetName] = useState('');
+  const [petType, setPetType] = useState<PetType>('dog');
   const [spouseEmail, setSpouseEmail] = useState('');
   const [partnerCode, setPartnerCode] = useState('');
   const [showCodeInput, setShowCodeInput] = useState(false);
@@ -184,6 +186,18 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
 
   const handleRemoveChild = (id: string) => {
     onUpdateState('children', state.children.filter(c => c.id !== id));
+  };
+
+  const handleAddPet = () => {
+    if (!petName.trim()) return;
+    const newPet: Pet = { id: Date.now().toString(), name: petName.trim(), type: petType };
+    onUpdateState('pets', [...(state.pets || []), newPet]);
+    setPetName('');
+    setPetType('dog');
+  };
+
+  const handleRemovePet = (id: string) => {
+    onUpdateState('pets', (state.pets || []).filter(p => p.id !== id));
   };
 
   const handleGenerateCode = () => {
@@ -889,6 +903,77 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
                   <span>+</span> Add Child
                 </button>
               </form>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-6">
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Pets</h3>
+          {!isGuest ? (
+            <div className="bg-white rounded-[40px] p-6 border border-slate-100 shadow-sm space-y-4">
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Add your pets to find pet-friendly spots and activities.
+              </p>
+
+              <div className="space-y-3">
+                {(state.pets || []).map(pet => {
+                  const typeOption = PET_TYPE_OPTIONS.find(o => o.value === pet.type);
+                  return (
+                    <div key={pet.id} className="bg-slate-50 rounded-2xl border border-slate-100/50 overflow-hidden">
+                      <div className="flex justify-between items-center p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-lg">
+                            {typeOption?.icon || '🐾'}
+                          </div>
+                          <div>
+                            <p className="font-black text-sm text-[#1E293B]">{pet.name}</p>
+                            <p className="text-[9px] text-amber-500 font-black uppercase tracking-widest">{typeOption?.label || pet.type}</p>
+                          </div>
+                        </div>
+                        <button onClick={() => handleRemovePet(pet.id)} className="text-slate-300 font-black text-[10px] uppercase hover:text-rose-500 transition-colors">×</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAddPet();
+                }}
+                className="space-y-3"
+              >
+                <div className="flex gap-3">
+                  <input
+                    placeholder="Pet's Name"
+                    className="flex-1 h-14 bg-slate-50 border-none rounded-2xl px-5 text-sm font-bold outline-none focus:bg-white focus:ring-2 focus:ring-amber-100"
+                    value={petName}
+                    onChange={e => setPetName(e.target.value)}
+                  />
+                  <select
+                    value={petType}
+                    onChange={e => setPetType(e.target.value as PetType)}
+                    className="w-28 h-14 bg-slate-50 border-none rounded-2xl px-3 text-sm font-bold outline-none focus:bg-white focus:ring-2 focus:ring-amber-100 appearance-none text-center"
+                  >
+                    {PET_TYPE_OPTIONS.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.icon} {opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="submit"
+                  className="w-full h-12 bg-amber-500 text-white rounded-2xl font-bold text-sm shadow-lg shadow-amber-100 active-press flex items-center justify-center gap-2"
+                >
+                  <span>+</span> Add Pet
+                </button>
+              </form>
+            </div>
+          ) : (
+            <div className="bg-white rounded-[40px] p-6 border border-slate-100 shadow-sm text-center">
+              <p className="text-xs text-slate-400">
+                Create an account to save your pets' details and find pet-friendly spots.
+              </p>
             </div>
           )}
         </div>

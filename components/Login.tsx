@@ -85,7 +85,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onEmailSignIn, onEmailSignUp, on
 
       <h1 className="text-3xl font-black text-center mb-2 tracking-tighter">FamPals</h1>
       <p className="text-white/90 text-center mb-8 max-w-xs font-semibold leading-relaxed text-sm">
-        Curated family adventures, right in your pocket.
+        Verified kid & pet-friendly spots, right in your pocket.
       </p>
 
       <div className="w-full max-w-xs space-y-3 relative z-10">

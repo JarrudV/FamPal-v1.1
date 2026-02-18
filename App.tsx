@@ -25,7 +25,7 @@ import Dashboard from './components/Dashboard';
 import DashboardNetflix from './components/DashboardNetflix';
 import Profile from './components/Profile';
 import Onboarding from './components/Onboarding';
-import { AppState, User, getDefaultEntitlement, UserPreferences, SavedPlace, Preferences, Child, PartnerLink, ProfileInfo } from './types';
+import { AppState, User, getDefaultEntitlement, UserPreferences, SavedPlace, Preferences, Child, Pet, PartnerLink, ProfileInfo } from './types';
 import { getGuestPreferences, syncGuestPreferencesToUser } from './lib/profileSync';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
@@ -112,6 +112,7 @@ const getInitialState = (user: User | null, guestPrefs?: UserPreferences): AppSt
   reviews: [],
   memories: [],
   children: [],
+  pets: [],
   spouseName: '',
   linkedEmail: '',
   accessibilityNeeds: {
@@ -189,6 +190,7 @@ const App: React.FC = () => {
     profileInfo?: ProfileInfo | null;
     preferences?: Preferences | null;
     children?: Child[] | null;
+    pets?: Pet[] | null;
     userPreferences?: UserPreferences | null;
     partnerLink?: PartnerLink | null;
     skipped: boolean;
@@ -642,6 +644,9 @@ const App: React.FC = () => {
       if (result.children) {
         handleUpdateState('children', result.children);
       }
+      if (result.pets) {
+        handleUpdateState('pets', result.pets);
+      }
       if (result.partnerLink && !state.partnerLink) {
         handleUpdateState('partnerLink', result.partnerLink);
       }
@@ -932,6 +937,7 @@ const App: React.FC = () => {
           initialUserPreferences={state.userPreferences}
           initialPreferences={state.preferences}
           initialChildren={state.children}
+          initialPets={state.pets}
           initialPartnerLink={state.partnerLink}
           onComplete={handleOnboardingComplete}
         />
@@ -975,6 +981,7 @@ const App: React.FC = () => {
             initialUserPreferences={state.userPreferences}
             initialPreferences={state.preferences}
             initialChildren={state.children}
+            initialPets={state.pets}
             initialPartnerLink={state.partnerLink}
             onComplete={handleOnboardingComplete}
           />

@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import type { ExploreIntent, UserPreferences, Preferences, Child, PartnerLink, ProfileInfo } from '../types';
-import { FOOD_PREFERENCES, ALLERGY_OPTIONS, ACTIVITY_PREFERENCES } from '../types';
+import type { ExploreIntent, UserPreferences, Preferences, Child, Pet, PetType, PartnerLink, ProfileInfo } from '../types';
+import { FOOD_PREFERENCES, ALLERGY_OPTIONS, ACTIVITY_PREFERENCES, PET_TYPE_OPTIONS, PET_SIZE_OPTIONS } from '../types';
 
 interface OnboardingProps {
   userName?: string | null;
@@ -8,11 +8,13 @@ interface OnboardingProps {
   initialUserPreferences?: UserPreferences;
   initialPreferences?: Preferences;
   initialChildren?: Child[];
+  initialPets?: Pet[];
   initialPartnerLink?: PartnerLink;
   onComplete: (result: {
     profileInfo?: ProfileInfo | null;
     preferences?: Preferences | null;
     children?: Child[] | null;
+    pets?: Pet[] | null;
     userPreferences?: UserPreferences | null;
     partnerLink?: PartnerLink | null;
     skipped: boolean;
@@ -58,6 +60,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
   initialUserPreferences,
   initialPreferences,
   initialChildren,
+  initialPets,
   initialPartnerLink,
   onComplete,
 }) => {
@@ -75,6 +78,9 @@ const Onboarding: React.FC<OnboardingProps> = ({
   const [children, setChildren] = useState<Child[]>(initialChildren || []);
   const [childName, setChildName] = useState('');
   const [childAge, setChildAge] = useState('');
+  const [pets, setPets] = useState<Pet[]>(initialPets || []);
+  const [petName, setPetName] = useState('');
+  const [petType, setPetType] = useState<PetType>('dog');
   const [partnerLink, setPartnerLink] = useState<PartnerLink | null>(initialPartnerLink || null);
 
   const totalSteps = 4;
@@ -125,6 +131,22 @@ const Onboarding: React.FC<OnboardingProps> = ({
     setChildren((prev) => prev.filter((child) => child.id !== id));
   };
 
+  const handleAddPet = () => {
+    if (!petName.trim()) return;
+    const newPet: Pet = {
+      id: Date.now().toString(),
+      name: petName.trim(),
+      type: petType,
+    };
+    setPets((prev) => [...prev, newPet]);
+    setPetName('');
+    setPetType('dog');
+  };
+
+  const handleRemovePet = (id: string) => {
+    setPets((prev) => prev.filter((p) => p.id !== id));
+  };
+
   const handleGeneratePartnerLink = () => {
     if (partnerLink?.status === 'accepted') return;
     const code = partnerLink?.inviteCode || generateInviteCode();
@@ -155,6 +177,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
       profileInfo,
       preferences,
       children,
+      pets,
       userPreferences: {
         ...(initialUserPreferences || {}),
         lastRadius: radiusKm,
@@ -204,6 +227,13 @@ const Onboarding: React.FC<OnboardingProps> = ({
           setChildAge={setChildAge}
           handleAddChild={handleAddChild}
           handleRemoveChild={handleRemoveChild}
+          pets={pets}
+          petName={petName}
+          setPetName={setPetName}
+          petType={petType}
+          setPetType={setPetType}
+          handleAddPet={handleAddPet}
+          handleRemovePet={handleRemovePet}
           partnerLink={partnerLink}
           handleGeneratePartnerLink={handleGeneratePartnerLink}
           handleSharePartnerLink={handleSharePartnerLink}
@@ -409,12 +439,21 @@ const StepFamily: React.FC<{
   setChildAge: (v: string) => void;
   handleAddChild: () => void;
   handleRemoveChild: (id: string) => void;
+  pets: Pet[];
+  petName: string;
+  setPetName: (v: string) => void;
+  petType: PetType;
+  setPetType: (v: PetType) => void;
+  handleAddPet: () => void;
+  handleRemovePet: (id: string) => void;
   partnerLink: PartnerLink | null;
   handleGeneratePartnerLink: () => void;
   handleSharePartnerLink: () => void;
 }> = ({
   children, childName, setChildName, childAge, setChildAge,
   handleAddChild, handleRemoveChild,
+  pets, petName, setPetName, petType, setPetType,
+  handleAddPet, handleRemovePet,
   partnerLink, handleGeneratePartnerLink, handleSharePartnerLink,
 }) => (
   <div className="flex-1 flex flex-col px-6 pt-4 pb-2 overflow-y-auto">
@@ -426,7 +465,7 @@ const StepFamily: React.FC<{
         Your Family
       </h1>
       <p className="text-sm text-slate-500 max-w-xs">
-        Add your kids so we can recommend age-appropriate activities.
+        Add your kids and pets so we can find the perfect spots for everyone.
       </p>
     </div>
 
@@ -481,6 +520,68 @@ const StepFamily: React.FC<{
           <button
             onClick={handleAddChild}
             className="h-12 w-12 rounded-2xl bg-gradient-to-br from-pink-400 to-rose-500 text-white flex items-center justify-center shadow-md active:scale-90 transition-all flex-shrink-0"
+          >
+            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-slate-50 rounded-3xl p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-slate-700">Pets</h3>
+          <span className="text-xs font-semibold text-slate-400 bg-white px-3 py-1 rounded-full">{pets.length} added</span>
+        </div>
+
+        {pets.length > 0 && (
+          <div className="space-y-2">
+            {pets.map(pet => {
+              const typeOption = PET_TYPE_OPTIONS.find(o => o.value === pet.type);
+              return (
+                <div key={pet.id} className="flex items-center justify-between bg-white rounded-2xl px-4 py-3 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-300 to-orange-400 flex items-center justify-center text-lg">
+                      {typeOption?.icon || '🐾'}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-700">{pet.name}</p>
+                      <p className="text-[11px] text-slate-400">{typeOption?.label || pet.type}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleRemovePet(pet.id)}
+                    className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center active:scale-90 transition-all"
+                  >
+                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-rose-400">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <input
+            value={petName}
+            onChange={(e) => setPetName(e.target.value)}
+            placeholder="Pet name"
+            className="flex-1 h-12 rounded-2xl bg-white border-2 border-slate-100 px-4 text-sm font-semibold text-slate-700 outline-none focus:border-amber-300 transition-all"
+          />
+          <select
+            value={petType}
+            onChange={(e) => setPetType(e.target.value as PetType)}
+            className="w-24 h-12 rounded-2xl bg-white border-2 border-slate-100 px-2 text-sm font-semibold text-slate-700 outline-none focus:border-amber-300 transition-all text-center appearance-none"
+          >
+            {PET_TYPE_OPTIONS.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.icon} {opt.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={handleAddPet}
+            className="h-12 w-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-white flex items-center justify-center shadow-md active:scale-90 transition-all flex-shrink-0"
           >
             <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />

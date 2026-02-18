@@ -180,6 +180,26 @@ export interface Child {
   preferences?: Preferences;
 }
 
+export type PetType = 'dog' | 'cat' | 'bird' | 'rabbit' | 'other';
+
+export const PET_TYPE_OPTIONS: { value: PetType; label: string; icon: string }[] = [
+  { value: 'dog', label: 'Dog', icon: '🐕' },
+  { value: 'cat', label: 'Cat', icon: '🐱' },
+  { value: 'bird', label: 'Bird', icon: '🐦' },
+  { value: 'rabbit', label: 'Rabbit', icon: '🐰' },
+  { value: 'other', label: 'Other', icon: '🐾' },
+];
+
+export const PET_SIZE_OPTIONS = ['Small', 'Medium', 'Large'] as const;
+export type PetSize = typeof PET_SIZE_OPTIONS[number];
+
+export interface Pet {
+  id: string;
+  name: string;
+  type: PetType;
+  size?: PetSize;
+}
+
 export interface FamilyGroup {
   id: string;
   name: string;
@@ -366,6 +386,7 @@ export interface AppState {
   reviews: UserReview[];
   memories: Memory[];
   children: Child[];
+  pets: Pet[];
   preferences?: Preferences;
   accessibilityNeeds?: UserAccessibilityNeeds;
   userPreferences?: UserPreferences;

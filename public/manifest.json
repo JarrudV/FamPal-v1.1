@@ -4,8 +4,8 @@
   "description": "Discover family-friendly activities near you",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#3B82F6",
+  "background_color": "#0F0A2A",
+  "theme_color": "#A855F7",
   "orientation": "portrait",
   "icons": [
     {
