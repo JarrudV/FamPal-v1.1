@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
-import { Place, FavoriteData, ACTIVITY_OPTIONS, Memory, Entitlement, PartnerLink, GroupPlace, AccessibilityFeatureValue, FamilyFacilityValue } from '../types';
+import { Place, FavoriteData, ACTIVITY_OPTIONS, Memory, Entitlement, PartnerLink, GroupPlace, AccessibilityFeatureValue, FamilyFacilityValue, PetFriendlyFeatureValue } from '../types';
 import { askAboutPlace, generateFamilySummary } from '../geminiService';
 import { getPlaceDetails, PlaceDetails, PlaceReview } from '../placesService';
 import { canUseAI } from '../lib/entitlements';
@@ -13,6 +13,8 @@ import { getAccessibilityHintsFromGoogle } from '../src/utils/accessibilityHints
 import PlaceFamilyFacilitiesSection from '../src/components/PlaceFamilyFacilitiesSection';
 import FamilyFacilitiesContributionModal from '../src/components/FamilyFacilitiesContributionModal';
 import { getFamilyFacilitiesHintsFromGoogle } from '../src/utils/familyFacilitiesHints';
+import PlacePetFriendlySection from '../src/components/PlacePetFriendlySection';
+import PetFriendlyContributionModal from '../src/components/PetFriendlyContributionModal';
 import { getPublicHints } from '../src/utils/publicHints';
 import { fetchOsmVenueData, OsmVenueData } from '../src/utils/osmService';
 
@@ -82,6 +84,8 @@ interface VenueProfileProps {
   isSubmittingAccessibilityContribution?: boolean;
   onSubmitFamilyFacilitiesContribution?: (payload: { features: FamilyFacilityValue[]; comment?: string }) => void | Promise<void>;
   isSubmittingFamilyFacilitiesContribution?: boolean;
+  onSubmitPetFriendlyContribution?: (payload: { features: PetFriendlyFeatureValue[]; comment?: string }) => void | Promise<void>;
+  isSubmittingPetFriendlyContribution?: boolean;
   communityTrust?: AggregatedReportSignals | null;
 }
 
@@ -113,6 +117,8 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   isSubmittingAccessibilityContribution = false,
   onSubmitFamilyFacilitiesContribution,
   isSubmittingFamilyFacilitiesContribution = false,
+  onSubmitPetFriendlyContribution,
+  isSubmittingPetFriendlyContribution = false,
   communityTrust
 }) => {
   const aiInfo = canUseAI(entitlement, familyPool, userId);
@@ -142,8 +148,12 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   const [accessibilityHighlightedSuggested, setAccessibilityHighlightedSuggested] = useState<AccessibilityFeatureValue['feature'][]>([]);
   const [familyModalScrollTarget, setFamilyModalScrollTarget] = useState<'suggested' | 'manual'>('manual');
   const [familyHighlightedSuggested, setFamilyHighlightedSuggested] = useState<FamilyFacilityValue['feature'][]>([]);
+  const [showPetFriendlyModal, setShowPetFriendlyModal] = useState(false);
+  const [petFriendlyModalScrollTarget, setPetFriendlyModalScrollTarget] = useState<'suggested' | 'manual'>('manual');
+  const [petFriendlyHighlightedSuggested, setPetFriendlyHighlightedSuggested] = useState<PetFriendlyFeatureValue['feature'][]>([]);
   const [accessibilityToast, setAccessibilityToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [familyToast, setFamilyToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [petFriendlyToast, setPetFriendlyToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [osmData, setOsmData] = useState<OsmVenueData | null>(null);
   const [activitiesExpanded, setActivitiesExpanded] = useState(false);
   const [costExpanded, setCostExpanded] = useState(false);
@@ -323,6 +333,20 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
     } catch (err) {
       setFamilyToast({ type: 'error', message: "Couldn't save. Please try again." });
       setTimeout(() => setFamilyToast(null), 2200);
+    }
+  };
+
+  const handleSubmitPetFriendly = async (payload: { features: PetFriendlyFeatureValue[]; comment?: string }) => {
+    if (!onSubmitPetFriendlyContribution) return;
+    if (payload.features.length === 0) return;
+    try {
+      await onSubmitPetFriendlyContribution(payload);
+      setPetFriendlyToast({ type: 'success', message: 'Thanks! Your update helps other pet owners.' });
+      setShowPetFriendlyModal(false);
+      setTimeout(() => setPetFriendlyToast(null), 2200);
+    } catch (err) {
+      setPetFriendlyToast({ type: 'error', message: "Couldn't save. Please try again." });
+      setTimeout(() => setPetFriendlyToast(null), 2200);
     }
   };
 
@@ -754,6 +778,16 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                 setAccessibilityModalScrollTarget(options?.focusSection || 'manual');
                 setAccessibilityHighlightedSuggested(options?.highlightedSuggestedFeatures || []);
                 setShowAccessibilityModal(true);
+              }}
+            />
+
+            <PlacePetFriendlySection
+              petFriendly={place.petFriendly}
+              petFriendlySummary={place.petFriendlySummary}
+              onAddPetFriendlyInfo={(options) => {
+                setPetFriendlyModalScrollTarget(options?.focusSection || 'manual');
+                setPetFriendlyHighlightedSuggested(options?.highlightedSuggestedFeatures || []);
+                setShowPetFriendlyModal(true);
               }}
             />
 
@@ -1347,6 +1381,33 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
             }`}
           >
             {familyToast.message}
+          </div>
+        </div>
+      )}
+      <PetFriendlyContributionModal
+        isOpen={showPetFriendlyModal}
+        onClose={() => {
+          setShowPetFriendlyModal(false);
+          setPetFriendlyModalScrollTarget('manual');
+          setPetFriendlyHighlightedSuggested([]);
+        }}
+        confirmedFeatures={(place.petFriendly || []).filter(
+          (item) => item.value === true && item.confidence !== 'unknown'
+        )}
+        initialScrollTarget={petFriendlyModalScrollTarget}
+        highlightedSuggestedFeatures={petFriendlyHighlightedSuggested}
+        onSubmit={handleSubmitPetFriendly}
+      />
+      {petFriendlyToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
+          <div
+            className={`px-4 py-2 text-xs font-semibold rounded-full shadow-lg ${
+              petFriendlyToast.type === 'success'
+                ? 'bg-emerald-600 text-white shadow-emerald-700/30'
+                : 'bg-rose-600 text-white shadow-rose-700/30'
+            }`}
+          >
+            {petFriendlyToast.message}
           </div>
         </div>
       )}

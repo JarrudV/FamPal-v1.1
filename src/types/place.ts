@@ -75,3 +75,38 @@ export const FAMILY_FACILITY_LABELS: Record<FamilyFacility, string> = {
   nursing_room: 'Nursing room',
   child_friendly_space: 'Child-friendly space',
 };
+
+export type PetFriendlyFeature =
+  | 'dogs_allowed'
+  | 'cats_allowed'
+  | 'pet_friendly_patio'
+  | 'water_bowls'
+  | 'off_leash_area'
+  | 'pet_menu'
+  | 'shaded_pet_area'
+  | 'pet_waste_stations'
+  | 'enclosed_garden'
+  | 'pets_inside_allowed';
+
+export type PetFriendlyConfidence = 'verified' | 'reported' | 'unknown';
+
+export interface PetFriendlyFeatureValue {
+  feature: PetFriendlyFeature;
+  value: boolean;
+  confidence: PetFriendlyConfidence;
+  sourcesCount?: number;
+  updatedAt?: string;
+}
+
+export const PET_FRIENDLY_FEATURE_LABELS: Record<PetFriendlyFeature, string> = {
+  dogs_allowed: 'Dogs allowed',
+  cats_allowed: 'Cats allowed',
+  pet_friendly_patio: 'Pet-friendly patio',
+  water_bowls: 'Water bowls provided',
+  off_leash_area: 'Off-leash area',
+  pet_menu: 'Pet menu / treats',
+  shaded_pet_area: 'Shaded pet area',
+  pet_waste_stations: 'Pet waste stations',
+  enclosed_garden: 'Enclosed garden',
+  pets_inside_allowed: 'Pets allowed inside',
+};

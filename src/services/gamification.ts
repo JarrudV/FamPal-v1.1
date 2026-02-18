@@ -12,6 +12,7 @@ export type ContributionType =
   | 'community_report'
   | 'accessibility_report'
   | 'family_facilities_report'
+  | 'pet_friendly_report'
   | 'mark_visited'
   | 'save_memory'
   | 'add_notes'
@@ -21,6 +22,7 @@ export const POINTS_MAP: Record<ContributionType, number> = {
   community_report: 15,
   accessibility_report: 10,
   family_facilities_report: 10,
+  pet_friendly_report: 10,
   mark_visited: 5,
   save_memory: 5,
   add_notes: 3,
@@ -87,6 +89,7 @@ const DEFAULT_CONTRIBUTIONS: Record<ContributionType, number> = {
   community_report: 0,
   accessibility_report: 0,
   family_facilities_report: 0,
+  pet_friendly_report: 0,
   mark_visited: 0,
   save_memory: 0,
   add_notes: 0,

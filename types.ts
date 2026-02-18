@@ -1,6 +1,6 @@
 
 import type { Timestamp } from 'firebase/firestore';
-import type { AccessibilityFeatureValue, FamilyFacilityValue, UserAccessibilityNeeds } from './src/types/place';
+import type { AccessibilityFeatureValue, FamilyFacilityValue, PetFriendlyFeatureValue, UserAccessibilityNeeds } from './src/types/place';
 import type { ClaimStatus, OwnerTier, OwnerContent, PlaceClaim, PlaceOwnerProfile } from './src/types/placeOwner';
 export type {
   AccessibilityFeature,
@@ -9,6 +9,9 @@ export type {
   FamilyFacility,
   FamilyFacilityConfidence,
   FamilyFacilityValue,
+  PetFriendlyFeature,
+  PetFriendlyConfidence,
+  PetFriendlyFeatureValue,
   UserAccessibilityNeeds,
 } from './src/types/place';
 export type { ClaimStatus, OwnerTier, OwnerContent, PlaceClaim, PlaceOwnerProfile } from './src/types/placeOwner';
@@ -33,6 +36,8 @@ export interface Place {
   accessibilitySummary?: string;
   familyFacilities?: FamilyFacilityValue[];
   familyFacilitiesSummary?: string;
+  petFriendly?: PetFriendlyFeatureValue[];
+  petFriendlySummary?: string;
   googlePlaceId?: string;
   userRatingsTotal?: number;
   lat?: number;

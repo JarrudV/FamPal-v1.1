@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { AppState, Place, Memory, UserReview, ExploreIntent, GroupPlace, VisitedPlace, PLAN_LIMITS, UserPreferences, SavedLocation, SavedPlace, AccessibilityFeatureValue, FamilyFacilityValue, UserAccessibilityNeeds } from '../types';
+import { AppState, Place, Memory, UserReview, ExploreIntent, GroupPlace, VisitedPlace, PLAN_LIMITS, UserPreferences, SavedLocation, SavedPlace, AccessibilityFeatureValue, FamilyFacilityValue, PetFriendlyFeatureValue, UserAccessibilityNeeds } from '../types';
 import Header from './Header';
 import PlaceCard from './PlaceCard';
 import Filters from './Filters';
@@ -27,6 +27,7 @@ import { upsertSavedPlace, deleteSavedPlace } from '../lib/userData';
 import { loadPlaceAccessibilityByIds, rankPlacesWithAccessibilityNeeds, submitAccessibilityReport } from '../lib/placeAccessibility';
 import { generateAccessibilitySummary } from '../src/utils/accessibility';
 import { loadPlaceFamilyFacilitiesByIds, submitFamilyFacilitiesReport } from '../lib/placeFamilyFacilities';
+import { loadPlacePetFriendlyByIds, submitPetFriendlyReport } from '../lib/placePetFriendly';
 import { createReport as createCommunityReport, aggregateReportSignals, type CommunityReportPayload } from '../src/services/communityReports';
 import { generateFamilyFacilitiesSummary } from '../src/utils/familyFacilities';
 import MemoryCreate from './MemoryCreate';
@@ -144,6 +145,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
   const [placeFamilyFacilitiesById, setPlaceFamilyFacilitiesById] = useState<Record<string, FamilyFacilityValue[]>>({});
   const [placeFamilyFacilitiesSummaryById, setPlaceFamilyFacilitiesSummaryById] = useState<Record<string, string>>({});
   const [submittingFamilyFacilitiesForPlaceId, setSubmittingFamilyFacilitiesForPlaceId] = useState<string | null>(null);
+  const [placePetFriendlyById, setPlacePetFriendlyById] = useState<Record<string, PetFriendlyFeatureValue[]>>({});
+  const [placePetFriendlySummaryById, setPlacePetFriendlySummaryById] = useState<Record<string, string>>({});
+  const [submittingPetFriendlyForPlaceId, setSubmittingPetFriendlyForPlaceId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [pagingComplete, setPagingComplete] = useState(false);
@@ -954,6 +958,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
       familyFacilitiesSummary:
         placeFamilyFacilitiesSummaryById[saved.placeId] ||
         generateFamilyFacilitiesSummary(placeFamilyFacilitiesById[saved.placeId] || []),
+      petFriendly: placePetFriendlyById[saved.placeId],
+      petFriendlySummary: placePetFriendlySummaryById[saved.placeId],
     };
     return place;
   };
@@ -1028,6 +1034,25 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
         }
         if (typeof data.familyFacilitiesSummary === 'string') {
           setPlaceFamilyFacilitiesSummaryById((prev) => ({ ...prev, [placeId]: data.familyFacilitiesSummary || '' }));
+        }
+      })
+    );
+    return () => {
+      unsubs.forEach((unsub) => unsub());
+    };
+  }, [accessibilityPlaceIds]);
+
+  useEffect(() => {
+    if (!db || accessibilityPlaceIds.length === 0) return;
+    const unsubs = accessibilityPlaceIds.map((placeId) =>
+      onSnapshot(doc(db, 'places', placeId), (snap) => {
+        if (!snap.exists()) return;
+        const data = snap.data() as { petFriendly?: PetFriendlyFeatureValue[]; petFriendlySummary?: string };
+        if (Array.isArray(data.petFriendly)) {
+          setPlacePetFriendlyById((prev) => ({ ...prev, [placeId]: data.petFriendly || [] }));
+        }
+        if (typeof data.petFriendlySummary === 'string') {
+          setPlacePetFriendlySummaryById((prev) => ({ ...prev, [placeId]: data.petFriendlySummary || '' }));
         }
       })
     );
@@ -1229,6 +1254,51 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
       throw err;
     } finally {
       setSubmittingFamilyFacilitiesForPlaceId(null);
+    }
+  };
+
+  const handleSubmitPetFriendlyContribution = async (
+    placeId: string,
+    payload: { features: PetFriendlyFeatureValue[]; comment?: string }
+  ) => {
+    if (!canSyncCloud) {
+      alert('Contributions are disabled in read-only review mode.');
+      return;
+    }
+    const uid = state.user?.uid || auth?.currentUser?.uid;
+    if (!uid) {
+      alert('You need to be signed in to contribute.');
+      return;
+    }
+    setSubmittingPetFriendlyForPlaceId(placeId);
+    try {
+      const updated = await submitPetFriendlyReport({
+        placeId,
+        userId: uid,
+        userDisplayName: state.user?.displayName || state.user?.email || 'Member',
+        features: payload.features,
+        comment: payload.comment,
+      });
+
+      setPlacePetFriendlyById((prev) => ({ ...prev, [placeId]: updated.petFriendly }));
+      setPlacePetFriendlySummaryById((prev) => ({ ...prev, [placeId]: updated.petFriendlySummary }));
+      setPlaces((prev) =>
+        prev.map((place) =>
+          place.id === placeId
+            ? { ...place, petFriendly: updated.petFriendly, petFriendlySummary: updated.petFriendlySummary }
+            : place
+        )
+      );
+      setSelectedPlace((prev) =>
+        prev && prev.id === placeId
+          ? { ...prev, petFriendly: updated.petFriendly, petFriendlySummary: updated.petFriendlySummary }
+          : prev
+      );
+    } catch (err) {
+      console.warn('Failed to submit pet-friendly contribution', err);
+      throw err;
+    } finally {
+      setSubmittingPetFriendlyForPlaceId(null);
     }
   };
 
@@ -1488,6 +1558,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
       places.map((place) => {
         const accessibility = placeAccessibilityById[place.id] || place.accessibility || [];
         const familyFacilities = placeFamilyFacilitiesById[place.id] || place.familyFacilities || [];
+        const petFriendly = placePetFriendlyById[place.id] || place.petFriendly || [];
         return {
           ...place,
           accessibility,
@@ -1500,9 +1571,11 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
             placeFamilyFacilitiesSummaryById[place.id] ||
             place.familyFacilitiesSummary ||
             generateFamilyFacilitiesSummary(familyFacilities),
+          petFriendly,
+          petFriendlySummary: placePetFriendlySummaryById[place.id] || place.petFriendlySummary || '',
         };
       }),
-    [places, placeAccessibilityById, placeAccessibilitySummaryById, placeFamilyFacilitiesById, placeFamilyFacilitiesSummaryById]
+    [places, placeAccessibilityById, placeAccessibilitySummaryById, placeFamilyFacilitiesById, placeFamilyFacilitiesSummaryById, placePetFriendlyById, placePetFriendlySummaryById]
   );
   const rankedPlaces = useMemo(
     () => rankPlacesWithAccessibilityNeeds(placesWithAccessibility, accessibilityNeeds),
@@ -1540,6 +1613,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
         placeFamilyFacilitiesSummaryById[selectedPlace.id] ||
         selectedPlace.familyFacilitiesSummary ||
         generateFamilyFacilitiesSummary(placeFamilyFacilitiesById[selectedPlace.id] || selectedPlace.familyFacilities || []),
+      petFriendly: placePetFriendlyById[selectedPlace.id] || selectedPlace.petFriendly || [],
+      petFriendlySummary: placePetFriendlySummaryById[selectedPlace.id] || selectedPlace.petFriendlySummary || '',
     }
     : null;
 
@@ -1768,6 +1843,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
           isSubmittingAccessibilityContribution={submittingAccessibilityForPlaceId === selectedPlaceWithAccessibility.id}
           onSubmitFamilyFacilitiesContribution={(votes) => handleSubmitFamilyFacilitiesContribution(selectedPlaceWithAccessibility.id, votes)}
           isSubmittingFamilyFacilitiesContribution={submittingFamilyFacilitiesForPlaceId === selectedPlaceWithAccessibility.id}
+          onSubmitPetFriendlyContribution={(votes) => handleSubmitPetFriendlyContribution(selectedPlaceWithAccessibility.id, votes)}
+          isSubmittingPetFriendlyContribution={submittingPetFriendlyForPlaceId === selectedPlaceWithAccessibility.id}
           communityTrust={selectedPlaceTrust}
           onTagMemoryToCircle={handleTagMemoryToCircle}
           onAddToCircle={(circleId, groupPlace) => {
