@@ -45,7 +45,7 @@ const Header: React.FC<HeaderProps> = ({ setView, user, locationName, onSearch, 
       <div className="flex flex-col gap-4">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <Logo size={42} className="shadow-lg shadow-purple-200/50 rounded-xl" />
+            <Logo size={42} className="shadow-lg shadow-blue-200/50 rounded-xl" />
             <div>
               <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest leading-none mb-1">Local Guide</p>
               <button 
