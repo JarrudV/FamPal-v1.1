@@ -153,7 +153,11 @@ const App: React.FC = () => {
     try { return localStorage.getItem('fampals_netflix_layout') === 'true'; } catch { return false; }
   });
   const [darkMode, setDarkMode] = useState(() => {
-    try { return localStorage.getItem('fampals_dark_mode') === 'true'; } catch { return false; }
+    try {
+      const stored = localStorage.getItem('fampals_dark_mode');
+      if (stored !== null) return stored === 'true';
+      return true;
+    } catch { return true; }
   });
   const accessContext: AppAccessContext = buildAccessContext({
     isGuest,
