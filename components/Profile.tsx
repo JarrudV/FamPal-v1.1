@@ -16,6 +16,7 @@ import {
 } from '../lib/accountDeletion';
 import ReportContentModal from './ReportContentModal';
 import { createUgcReport, type UgcReportReason } from '../src/services/ugcReports';
+import ManageMyData from '../src/components/ManageMyData';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const DELETE_CONFIRM_TEXT = 'DELETE';
@@ -80,6 +81,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
   const [adminTapCount, setAdminTapCount] = useState(0);
   const [uploadingProfilePic, setUploadingProfilePic] = useState(false);
   const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
+  const [showManageData, setShowManageData] = useState(false);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
   const [deleteInProgress, setDeleteInProgress] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -1328,6 +1330,29 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
         </div>
 
         {isLoggedIn && !isAuthBypass && (
+          <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100">
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-4 h-4 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest">Data & Privacy</h3>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Manage or delete specific categories of your personal data.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowManageData(true)}
+              className="w-full flex items-center justify-between p-6 text-blue-600 font-black text-xs uppercase tracking-widest hover:bg-blue-50 transition-colors min-h-[52px]"
+            >
+              <span>Manage My Data</span>
+              <span>→</span>
+            </button>
+          </div>
+        )}
+
+        {isLoggedIn && !isAuthBypass && (
           <div className="bg-white rounded-[32px] border border-rose-100 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-rose-100">
               <h3 className="text-sm font-black text-rose-700 uppercase tracking-widest">Delete Account</h3>
@@ -1403,7 +1428,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
         <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
           {!isGuest && (
             <div className="px-6 pt-6 pb-2 text-xs text-slate-500 leading-relaxed border-b border-slate-100">
-              Data controls: your profile, memories, and saved places are stored in Firebase. You can self-serve account deletion from the Delete Account section above.
+              Your profile, memories, and saved places are stored in Firebase. Use the Data & Privacy section to selectively delete data, or Delete Account to remove everything.
             </div>
           )}
           {!isGuest && (import.meta.env.VITE_ADMIN_UIDS || '').split(',').includes(state.user?.uid || '') && (
@@ -1435,6 +1460,11 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
         )}
       </div>
 
+      {showManageData && (
+        <div className="fixed inset-0 z-50 bg-slate-50">
+          <ManageMyData onBack={() => setShowManageData(false)} />
+        </div>
+      )}
       {showPlanBilling && (
         <PlanBilling 
           state={state} 

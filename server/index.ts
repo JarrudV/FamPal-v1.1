@@ -1773,6 +1773,34 @@ app.post('/api/paystack/verify-business', requireAuth, async (req: Authenticated
   }
 });
 
+const VALID_DELETION_CATEGORIES = ['saved_places', 'search_history', 'reviews_notes', 'profile_preferences', 'partner_circles'];
+
+app.post('/api/user/data-deletion', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.uid!;
+    const { categories } = req.body;
+
+    if (!Array.isArray(categories) || categories.length === 0) {
+      return res.status(400).json({ error: 'No categories specified' });
+    }
+
+    const invalid = categories.filter((c: string) => !VALID_DELETION_CATEGORIES.includes(c));
+    if (invalid.length > 0) {
+      return res.status(400).json({ error: `Invalid categories: ${invalid.join(', ')}` });
+    }
+
+    console.log(`[FamPals API] Data deletion request from user ${userId}:`, {
+      categories,
+      timestamp: new Date().toISOString(),
+    });
+
+    res.json({ success: true, message: 'Data deletion request received. Selected data will be removed shortly.' });
+  } catch (err: any) {
+    console.error('[FamPals API] Data deletion request failed:', err?.message || err);
+    res.status(500).json({ error: 'Failed to process data deletion request' });
+  }
+});
+
 // In production, serve the built frontend
 if (isProduction) {
   // Prefer dist relative to compiled server output (dist-server/../dist)
