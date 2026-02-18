@@ -1,5 +1,22 @@
 apply plugin: 'com.android.application'
 
+def readSecret = { String key, String fallback = null ->
+    def envValue = System.getenv(key)
+    if (envValue != null && envValue.toString().trim().length() > 0) return envValue
+    def propValue = project.findProperty(key)
+    if (propValue != null && propValue.toString().trim().length() > 0) return propValue.toString()
+    return fallback
+}
+
+def releaseStoreFilePath = readSecret('FAMPAL_UPLOAD_STORE_FILE', '../fampal-release.jks')
+def releaseStorePassword = readSecret('FAMPAL_UPLOAD_STORE_PASSWORD')
+def releaseKeyAlias = readSecret('FAMPAL_UPLOAD_KEY_ALIAS')
+def releaseKeyPassword = readSecret('FAMPAL_UPLOAD_KEY_PASSWORD')
+def hasReleaseSigning = releaseStoreFilePath && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+
+def requestedTasks = gradle.startParameter.taskNames.collect { it.toLowerCase() }
+def isReleaseBuildRequested = requestedTasks.any { it.contains('release') || it.contains('bundle') || it.contains('publish') }
+
 android {
     namespace = "co.fampal.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,19 +33,27 @@ android {
     }
     signingConfigs {
         release {
-            storeFile file('../fampal-release.jks')
-            storePassword 'fampal2026release'
-            keyAlias 'fampal-key'
-            keyPassword 'fampal2026release'
+            if (hasReleaseSigning) {
+                storeFile file(releaseStoreFilePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
         }
     }
     buildTypes {
         release {
-            signingConfig signingConfigs.release
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+}
+
+if (isReleaseBuildRequested && !hasReleaseSigning) {
+    throw new GradleException("Missing release signing config. Set FAMPAL_UPLOAD_STORE_FILE, FAMPAL_UPLOAD_STORE_PASSWORD, FAMPAL_UPLOAD_KEY_ALIAS, FAMPAL_UPLOAD_KEY_PASSWORD.")
 }
 
 repositories {
