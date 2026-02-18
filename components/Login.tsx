@@ -80,7 +80,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onEmailSignIn, onEmailSignUp, on
       <div className="absolute top-[30%] left-[60%] w-48 h-48 rounded-full bg-pink-500/10 blur-3xl"></div>
 
       <div className="relative mb-6 animate-bounce-slow">
-        <Logo size={80} variant="dark" className="shadow-2xl rounded-[28px]" />
+        <img src="/fampal-icon.png" alt="FamPals" className="w-20 h-20 shadow-2xl rounded-[28px]" />
       </div>
 
       <h1 className="text-3xl font-black text-center mb-2 tracking-tighter">FamPals</h1>
