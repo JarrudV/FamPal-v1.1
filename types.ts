@@ -335,7 +335,51 @@ export const PLAN_LIMITS = {
 } as const;
 
 export const PLAN_PRICES = {
-  pro: { amount: 5900, currency: 'ZAR', label: 'R59/month' },
+  pro: { amount: 3999, currency: 'ZAR', label: 'R39.99/month' },
+} as const;
+
+export const GOOGLE_PLAY_SUBSCRIPTION_URL = 'https://play.google.com/store/apps/details?id=co.fampal.app';
+
+export const GOOGLE_PLAY_PRICING = {
+  'ZA': { price: 'R39.99', currency: 'ZAR' },
+  'US': { price: '$2.99', currency: 'USD' },
+  'GB': { price: '£2.49', currency: 'GBP' },
+  'AU': { price: 'A$4.49', currency: 'AUD' },
+  'CA': { price: 'C$3.99', currency: 'CAD' },
+  'NZ': { price: 'NZ$4.99', currency: 'NZD' },
+  'IE': { price: '€2.99', currency: 'EUR' },
+  'NG': { price: '₦1,499', currency: 'NGN' },
+  'KE': { price: 'KSh 299', currency: 'KES' },
+  'GH': { price: 'GH₵19.99', currency: 'GHS' },
+  'IN': { price: '₹149', currency: 'INR' },
+  'SG': { price: 'S$3.99', currency: 'SGD' },
+  'PH': { price: '₱149', currency: 'PHP' },
+  'UG': { price: 'USh 4,999', currency: 'UGX' },
+  'TZ': { price: 'TSh 4,999', currency: 'TZS' },
+  'ZM': { price: 'ZMW 29.99', currency: 'ZMW' },
+  'BW': { price: 'P39.99', currency: 'BWP' },
+  'NA': { price: 'N$39.99', currency: 'NAD' },
+  'RW': { price: 'RWF 1,999', currency: 'RWF' },
+  'MW': { price: 'MWK 2,499', currency: 'MWK' },
+  'JM': { price: 'J$449', currency: 'JMD' },
+  'TT': { price: 'TT$19.99', currency: 'TTD' },
+  'MT': { price: '€2.99', currency: 'EUR' },
+  'CY': { price: '€2.99', currency: 'EUR' },
+  'DE': { price: '€2.99', currency: 'EUR' },
+  'FR': { price: '€2.99', currency: 'EUR' },
+  'NL': { price: '€2.99', currency: 'EUR' },
+  'ES': { price: '€2.99', currency: 'EUR' },
+  'IT': { price: '€2.99', currency: 'EUR' },
+  'PT': { price: '€2.99', currency: 'EUR' },
+  'AT': { price: '€2.99', currency: 'EUR' },
+  'BE': { price: '€2.99', currency: 'EUR' },
+  'FI': { price: '€2.99', currency: 'EUR' },
+  'GR': { price: '€2.99', currency: 'EUR' },
+  'SE': { price: '29 kr', currency: 'SEK' },
+  'NO': { price: '29 kr', currency: 'NOK' },
+  'DK': { price: '19.99 kr', currency: 'DKK' },
+  'CH': { price: 'CHF 2.99', currency: 'CHF' },
+  'PL': { price: '9.99 zł', currency: 'PLN' },
 } as const;
 
 export function getDefaultEntitlement(): Entitlement {
