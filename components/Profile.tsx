@@ -14,8 +14,6 @@ import {
   hasRecentLogin,
   isDeleteBlockedByBypass,
 } from '../lib/accountDeletion';
-import ReportContentModal from './ReportContentModal';
-import { createUgcReport, type UgcReportReason } from '../src/services/ugcReports';
 import ManageMyData from '../src/components/ManageMyData';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
@@ -88,8 +86,6 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
   const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
   const [requiresReauthForDelete, setRequiresReauthForDelete] = useState(false);
   const [reauthInProgress, setReauthInProgress] = useState(false);
-  const [reportProfileOpen, setReportProfileOpen] = useState(false);
-  const [reportProfileSubmitting, setReportProfileSubmitting] = useState(false);
   const profilePicInputRef = React.useRef<HTMLInputElement>(null);
   const [profileDisplayName, setProfileDisplayName] = useState(state.profileInfo?.displayName || state.user?.displayName || '');
   const [profileAgeInput, setProfileAgeInput] = useState(
@@ -629,29 +625,6 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
     }
   };
 
-  const handleReportProfile = async (reason: UgcReportReason) => {
-    const reportedUserId = state.user?.uid || auth?.currentUser?.uid;
-    if (!reportedUserId) {
-      alert('Please sign in first.');
-      return;
-    }
-    setReportProfileSubmitting(true);
-    try {
-      await createUgcReport({
-        reported_content_type: 'profile',
-        reported_content_id: reportedUserId,
-        reported_user_id: reportedUserId,
-        reason,
-      });
-      setReportProfileOpen(false);
-      alert('Report submitted. Thank you.');
-    } catch (err) {
-      console.error('Failed to submit profile report:', err);
-      alert('Could not submit report. Please try again.');
-    } finally {
-      setReportProfileSubmitting(false);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-24 container-safe">
@@ -707,15 +680,6 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
           <div className="text-center">
             <h2 className="text-3xl font-black text-[#1E293B]">{userName}</h2>
             <p className="text-sky-500 font-extrabold text-xs uppercase tracking-widest mt-1">Adventure Parent</p>
-            {!isGuest && (
-              <button
-                type="button"
-                onClick={() => setReportProfileOpen(true)}
-                className="mt-2 text-[11px] font-bold text-rose-500 hover:text-rose-600"
-              >
-                Report
-              </button>
-            )}
           </div>
         </div>
 
@@ -1472,16 +1436,6 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
           onUpdateState={onUpdateState}
         />
       )}
-      <ReportContentModal
-        isOpen={reportProfileOpen}
-        targetLabel="this profile"
-        submitting={reportProfileSubmitting}
-        onClose={() => {
-          if (reportProfileSubmitting) return;
-          setReportProfileOpen(false);
-        }}
-        onSubmit={handleReportProfile}
-      />
     </div>
   );
 };
