@@ -25,3 +25,12 @@ lerna-debug.log*
 .DS_Store
 attached_assets/
 dist-server/
+
+# Android build outputs
+*.aab
+*.apk
+android/app/build/
+android/.gradle/
+android/capacitor-cordova-android-plugins/build/
+android/capacitor-android/build/
+android/fampal-release.jks
