@@ -151,7 +151,7 @@ const AdminReports: React.FC<AdminReportsProps> = ({ userId, onBack }) => {
         </button>
         <button
           onClick={() => setActiveSection('claims')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold min-h-[44px] ${activeSection === 'claims' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold min-h-[44px] ${activeSection === 'claims' ? 'bg-purple-600 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}
         >
           Owner Claims ({claims.length})
         </button>
@@ -187,7 +187,7 @@ const AdminReports: React.FC<AdminReportsProps> = ({ userId, onBack }) => {
               <button
                 key={s}
                 onClick={() => setClaimsFilter(s)}
-                className={`px-4 py-2.5 rounded-xl text-xs font-bold min-h-[44px] capitalize ${claimsFilter === s ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold min-h-[44px] capitalize ${claimsFilter === s ? 'bg-purple-600 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}
               >
                 {s}
               </button>

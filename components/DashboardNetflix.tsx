@@ -112,7 +112,7 @@ const NetflixPlaceCard: React.FC<{
         className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center text-sm shadow-sm"
         aria-label={isFavorite ? 'Remove from saved' : 'Save place'}
       >
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" style={{ color: isFavorite ? '#0ea5e9' : '#94a3b8' }}><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" style={{ color: isFavorite ? '#EC4899' : '#94a3b8' }}><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>
       </button>
       {place.distance && (
         <span className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/50 backdrop-blur-sm text-white text-[10px] font-bold rounded-full">
@@ -127,7 +127,7 @@ const NetflixPlaceCard: React.FC<{
         {place.priceLevel && <span className="text-slate-300 text-[11px]">{formatPriceLevel(place.priceLevel)}</span>}
       </div>
       {place.tags?.length > 0 && (
-        <span className="inline-block mt-1.5 px-1.5 py-0.5 bg-sky-50 text-sky-600 text-[9px] font-bold uppercase tracking-wider rounded">
+        <span className="inline-block mt-1.5 px-1.5 py-0.5 bg-purple-50 text-purple-600 text-[9px] font-bold uppercase tracking-wider rounded">
           {place.tags[0]}
         </span>
       )}
@@ -156,7 +156,7 @@ const HeroCard: React.FC<{
       className="absolute top-3 right-3 w-10 h-10 rounded-full bg-white/25 backdrop-blur-md flex items-center justify-center border border-white/20"
       aria-label={isFavorite ? 'Remove from saved' : 'Save place'}
     >
-      <svg className="w-5 h-5" viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" style={{ color: isFavorite ? '#0ea5e9' : '#ffffff' }}><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" style={{ color: isFavorite ? '#EC4899' : '#ffffff' }}><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>
     </button>
     <div className="absolute bottom-0 left-0 right-0 p-4">
       <div className="flex gap-2 mb-1">
@@ -444,7 +444,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, acc
               onClick={() => handleTabChange(tab.key)}
               className={`px-4 py-2.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0 min-h-[44px] ${
                 activeTab === tab.key
-                  ? 'bg-sky-500 text-white shadow-lg shadow-sky-200'
+                  ? 'bg-purple-500 text-white shadow-lg shadow-purple-200'
                   : 'bg-white text-slate-600 border border-slate-200'
               }`}
             >
@@ -464,7 +464,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, acc
           <div className="bg-white rounded-2xl p-3 mb-4 border border-slate-100 shadow-sm">
             <div className="flex justify-between items-center mb-2">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Radius</span>
-              <span className="text-sm font-bold text-sky-500">{radiusKm} km</span>
+              <span className="text-sm font-bold text-purple-500">{radiusKm} km</span>
             </div>
             <input
               type="range"
@@ -485,7 +485,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, acc
               <span className="text-[10px] text-slate-300">1 km</span>
               <button
                 onClick={refreshGpsLocation}
-                className="text-[11px] font-semibold text-sky-500 active:text-sky-700"
+                className="text-[11px] font-semibold text-purple-500 active:text-purple-700"
               >
                 <svg className="w-3.5 h-3.5 inline -mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" /></svg> Update location
               </button>
@@ -496,7 +496,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, acc
           <div className="bg-gradient-to-r from-sky-50 to-purple-50 rounded-2xl p-3 mb-4 border border-sky-100">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <svg className="w-5 h-5 text-sky-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" /></svg>
+                <svg className="w-5 h-5 text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" /></svg>
                 <div>
                   <span className="font-bold text-slate-700 text-sm">Discovery Mode</span>
                   <p className="text-[10px] text-slate-400 mt-0.5">Browse by category</p>
@@ -505,7 +505,7 @@ const DashboardNetflix: React.FC<DashboardNetflixProps> = ({ state, isGuest, acc
               <button
                 onClick={() => onToggleDiscoveryMode?.()}
                 className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
-                  discoveryMode ? 'bg-sky-500' : 'bg-slate-300'
+                  discoveryMode ? 'bg-purple-500' : 'bg-slate-300'
                 }`}
                 aria-label="Toggle Discovery Mode"
               >

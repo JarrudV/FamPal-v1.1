@@ -152,9 +152,22 @@ html.dark select {
 }
 
 html.dark ::selection {
-  background-color: #0369A1;
-  color: #f0f9ff;
+  background-color: #7C3AED;
+  color: #f5f3ff;
 }
+
+html.dark .bg-purple-50 { background-color: rgba(168, 85, 247, 0.15) !important; }
+html.dark .bg-fuchsia-50 { background-color: rgba(217, 70, 239, 0.15) !important; }
+html.dark .bg-pink-50 { background-color: rgba(236, 72, 153, 0.15) !important; }
+html.dark .border-purple-100 { border-color: rgba(168, 85, 247, 0.25) !important; }
+html.dark .border-purple-200 { border-color: rgba(168, 85, 247, 0.3) !important; }
+html.dark .text-purple-700 { color: #c4b5fd !important; }
+html.dark .text-purple-600 { color: #a78bfa !important; }
+html.dark .text-purple-500 { color: #a78bfa !important; }
+html.dark .text-pink-500 { color: #f472b6 !important; }
+html.dark .hover\\:bg-purple-50:hover { background-color: rgba(168, 85, 247, 0.15) !important; }
+html.dark .hover\\:text-purple-600:hover { color: #c4b5fd !important; }
+html.dark .shadow-purple-200 { --tw-shadow-color: rgba(168, 85, 247, 0.2) !important; }
 
 html.dark .bg-\[\#0EA5E9\] { background-color: #0284c7 !important; }
 html.dark .bg-\[\#1E293B\] { background-color: #0f172a !important; }
@@ -219,8 +232,8 @@ html.dark .bg-white\/20 { background-color: rgba(30, 41, 59, 0.3) !important; }
 }
 
 ::selection {
-  background-color: #BAE6FD;
-  color: #0369A1;
+  background-color: #E9D5FF;
+  color: #7C3AED;
 }
 
 .active-press:active {
@@ -280,7 +293,7 @@ input[type="range"]::-webkit-slider-thumb {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: #0ea5e9;
+  background: linear-gradient(135deg, #A855F7, #D946EF);
   cursor: pointer;
   border: 4px solid white;
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);

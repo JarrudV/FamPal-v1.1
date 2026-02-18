@@ -76,7 +76,7 @@ const TabButton: React.FC<TabButtonProps> = ({ label, count, active, onClick }) 
     onClick={onClick}
     aria-label={`${label}${count !== undefined && count > 0 ? `, ${count} items` : ''}`}
     className={`px-4 py-2.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0 min-h-[44px] ${
-      active ? 'bg-sky-500 text-white shadow-lg shadow-sky-200' : 'bg-white text-slate-600 border border-slate-200'
+      active ? 'bg-purple-500 text-white shadow-lg shadow-purple-200' : 'bg-white text-slate-600 border border-slate-200'
     }`}
   >
     {label}{count !== undefined && count > 0 ? ` (${count})` : ''}
@@ -1925,14 +1925,14 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
                 <svg className="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></svg>
                 <span>Filters</span>
                 {(prefFilterMode !== 'all' || hideSavedPlaces || selectedLensChipItems.length > 0 || radiusKm !== 10) && (
-                  <span className="ml-auto flex items-center justify-center w-5 h-5 rounded-full bg-sky-500 text-white text-[10px] font-bold">
+                  <span className="ml-auto flex items-center justify-center w-5 h-5 rounded-full bg-purple-500 text-white text-[10px] font-bold">
                     {[prefFilterMode !== 'all', hideSavedPlaces, selectedLensChipItems.length > 0, radiusKm !== 10].filter(Boolean).length}
                   </span>
                 )}
               </button>
               <button
                 onClick={() => setManualRefreshTrigger(prev => prev + 1)}
-                className="h-11 px-4 rounded-xl bg-sky-500 active:bg-sky-600 text-white text-sm font-bold shadow-sm flex items-center gap-2 min-w-[100px] justify-center"
+                className="h-11 px-4 rounded-xl bg-purple-500 active:bg-purple-600 text-white text-sm font-bold shadow-sm flex items-center gap-2 min-w-[100px] justify-center"
               >
                 <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" /></svg>
                 Refresh
@@ -2007,7 +2007,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
                   </p>
                   <button
                     onClick={() => { setIsSearchMode(false); setSearchResults([]); setSearchQuery(''); }}
-                    className="text-xs font-bold text-sky-500 active:text-sky-700"
+                    className="text-xs font-bold text-purple-500 active:text-purple-700"
                   >
                     Clear search
                   </button>
@@ -2063,9 +2063,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state, isGuest, accessContext, on
                 )}
                 {loadingMore && (
                   <div className="pt-4 pb-2 flex justify-center">
-                    <div className="inline-flex flex-col items-center gap-1 px-4 py-2 bg-sky-50 rounded-xl border border-sky-100">
-                      <span className="text-sm font-semibold text-sky-600">Loading more places...</span>
-                      <span className="text-[11px] text-sky-500">Loading more results in the background</span>
+                    <div className="inline-flex flex-col items-center gap-1 px-4 py-2 bg-purple-50 rounded-xl border border-purple-100">
+                      <span className="text-sm font-semibold text-purple-600">Loading more places...</span>
+                      <span className="text-[11px] text-purple-500">Loading more results in the background</span>
                     </div>
                   </div>
                 )}

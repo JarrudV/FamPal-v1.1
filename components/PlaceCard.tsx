@@ -20,16 +20,16 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place, variant, isFavorite, onTog
     return (
       <div
         onClick={onClick}
-        className="min-w-[280px] h-[380px] bg-white rounded-[40px] overflow-hidden shadow-[0_20px_40px_rgba(14,165,233,0.1)] relative group shrink-0 cursor-pointer border border-white/20"
+        className="min-w-[280px] h-[380px] bg-white rounded-[40px] overflow-hidden shadow-[0_20px_40px_rgba(168,85,247,0.1)] relative group shrink-0 cursor-pointer border border-white/20"
       >
         <img src={place.imageUrl} alt={place.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-        <div className="absolute inset-0 bg-gradient-to-t from-sky-950/90 via-sky-950/20 to-transparent"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/20 to-transparent"></div>
 
         <button
           onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
           className="absolute top-6 right-6 w-11 h-11 bg-white/30 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/20"
         >
-          <svg className={`w-5 h-5 transition-colors ${isFavorite ? 'fill-sky-400 stroke-sky-400' : 'stroke-white'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className={`w-5 h-5 transition-colors ${isFavorite ? 'fill-pink-400 stroke-pink-400' : 'stroke-white'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
           </svg>
         </button>
@@ -37,12 +37,12 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place, variant, isFavorite, onTog
         <div className="absolute bottom-8 left-8 right-8 text-white space-y-2">
           <div className="flex gap-2">
             {place.tags.slice(0, 1).map((t) => (
-              <span key={t} className="px-2 py-0.5 bg-sky-500/40 backdrop-blur-sm rounded-lg text-[8px] font-extrabold uppercase tracking-widest">{t}</span>
+              <span key={t} className="px-2 py-0.5 bg-purple-500/40 backdrop-blur-sm rounded-lg text-[8px] font-extrabold uppercase tracking-widest">{t}</span>
             ))}
           </div>
           <h3 className="text-xl font-extrabold leading-tight">{place.name}</h3>
           <div className="flex items-center gap-3 text-[10px] font-bold text-white/70">
-            <span className="flex items-center gap-1 text-sky-300"><svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg> {place.rating ?? '—'}</span>
+            <span className="flex items-center gap-1 text-purple-300"><svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg> {place.rating ?? '—'}</span>
             <span>•</span>
             <span>{place.distance}</span>
           </div>
@@ -89,7 +89,7 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place, variant, isFavorite, onTog
         )}
         <button
           onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
-          className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${isFavorite ? 'text-sky-500 bg-sky-50' : 'text-slate-300 bg-slate-50'}`}
+          className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${isFavorite ? 'text-pink-500 bg-pink-50' : 'text-slate-300 bg-slate-50'}`}
           aria-label={isFavorite ? 'Remove from saved' : 'Save place'}
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>

@@ -685,7 +685,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
               onClick={() => canSyncCloud && profilePicInputRef.current?.click()}
               disabled={!canSyncCloud || uploadingProfilePic}
               className={`absolute -bottom-2 -right-2 w-12 h-12 rounded-2xl flex items-center justify-center text-white border-4 border-[#F8FAFC] shadow-lg ${
-                !canSyncCloud ? 'bg-slate-300 cursor-not-allowed' : 'bg-sky-500 hover:bg-sky-600 cursor-pointer'
+                !canSyncCloud ? 'bg-slate-300 cursor-not-allowed' : 'bg-purple-500 hover:bg-purple-600 cursor-pointer'
               }`}
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" /><circle cx="12" cy="13" r="4" /></svg>
@@ -693,7 +693,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
           </div>
           <div className="text-center">
             <h2 className="text-3xl font-black text-[#1E293B]">{userName}</h2>
-            <p className="text-sky-500 font-extrabold text-xs uppercase tracking-widest mt-1">Adventure Parent</p>
+            <p className="text-purple-500 font-extrabold text-xs uppercase tracking-widest mt-1">Adventure Parent</p>
           </div>
         </div>
 
@@ -761,7 +761,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
             >
               <div className="text-center py-6">
                 <div className="w-16 h-16 bg-sky-100 rounded-full flex items-center justify-center mb-4 mx-auto">
-                  <svg className="w-8 h-8 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
                 </div>
@@ -769,7 +769,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
                 <p className="text-sm text-slate-500 max-w-xs mx-auto">
                   Create an account to save your children's details and get personalized recommendations.
                 </p>
-                <p className="text-sky-500 font-semibold text-sm mt-4">Tap to sign in →</p>
+                <p className="text-purple-500 font-semibold text-sm mt-4">Tap to sign in →</p>
               </div>
             </button>
           ) : (
@@ -787,7 +787,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
                           </div>
                           <div>
                             <p className="font-black text-sm text-[#1E293B]">{child.name}</p>
-                            <p className="text-[9px] text-sky-500 font-black uppercase tracking-widest">Age {child.age}</p>
+                            <p className="text-[9px] text-purple-500 font-black uppercase tracking-widest">Age {child.age}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -843,7 +843,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
                                   key={pref}
                                   onClick={() => toggleChildPref(child.id, 'accessibility', pref)}
                                   className={`px-2 py-1 rounded-lg text-[9px] font-bold ${
-                                    childPrefs.accessibility.includes(pref) ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400'
+                                    childPrefs.accessibility.includes(pref) ? 'bg-purple-500 text-white' : 'bg-slate-100 text-slate-400'
                                   }`}
                                 >
                                   {pref}
@@ -898,7 +898,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
                 </div>
                 <button 
                   type="submit"
-                  className="w-full h-12 bg-sky-500 text-white rounded-2xl font-bold text-sm shadow-lg shadow-sky-100 active-press flex items-center justify-center gap-2"
+                  className="w-full h-12 bg-purple-500 text-white rounded-2xl font-bold text-sm shadow-lg shadow-purple-100 active-press flex items-center justify-center gap-2"
                 >
                   <span>+</span> Add Child
                 </button>
@@ -1029,7 +1029,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
                           onClick={() => toggleAccessibilityNeed(need.key as keyof UserAccessibilityNeeds)}
                           className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${
                             accessibilityNeeds[need.key as keyof UserAccessibilityNeeds]
-                              ? 'bg-sky-500 text-white'
+                              ? 'bg-purple-500 text-white'
                               : 'bg-slate-100 text-slate-500'
                           }`}
                         >
@@ -1094,7 +1094,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
                           onClick={() => toggleUserPref('accessibility', pref)}
                           className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${
                             userPrefs.accessibility.includes(pref) 
-                              ? 'bg-blue-500 text-white' 
+                              ? 'bg-purple-500 text-white' 
                               : 'bg-slate-100 text-slate-500'
                           }`}
                         >
@@ -1148,7 +1148,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
                       ) : (
                         <>
                           <p className="text-sm font-black text-sky-900">Your Invite Code</p>
-                          <p className="text-2xl font-black text-sky-500 tracking-[0.3em] mt-1">{state.partnerLink.inviteCode}</p>
+                          <p className="text-2xl font-black text-purple-500 tracking-[0.3em] mt-1">{state.partnerLink.inviteCode}</p>
                           <p className="text-[10px] text-amber-500 font-black uppercase tracking-widest mt-1">Waiting for partner</p>
                         </>
                       )}
@@ -1218,7 +1218,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
                       <button 
                         onClick={handleJoinWithCode}
                         disabled={partnerCode.length !== 6}
-                        className="w-full h-14 bg-sky-500 text-white rounded-2xl text-sm font-black uppercase tracking-widest active-press disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full h-14 bg-purple-500 text-white rounded-2xl text-sm font-black uppercase tracking-widest active-press disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Join with Code
                       </button>
@@ -1233,7 +1233,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
                     <div className="flex gap-2">
                       <button 
                         onClick={handleGenerateCode}
-                        className="flex-1 h-14 bg-sky-500 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest active-press"
+                        className="flex-1 h-14 bg-purple-500 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest active-press"
                       >
                         Generate Invite Code
                       </button>
@@ -1339,7 +1339,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
               localStorage.setItem('fampals_netflix_layout', current ? 'false' : 'true');
               window.location.reload();
             }}
-            className="w-full flex items-center justify-between p-6 text-slate-500 font-semibold text-sm hover:bg-sky-50 hover:text-sky-600 transition-colors"
+            className="w-full flex items-center justify-between p-6 text-slate-500 font-semibold text-sm hover:bg-purple-50 hover:text-purple-600 transition-colors"
           >
             <div className="flex items-center gap-3">
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" /></svg>
@@ -1347,7 +1347,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
             </div>
             <span className={`text-xs px-2 py-1 rounded-full font-bold ${
               localStorage.getItem('fampals_netflix_layout') === 'true'
-                ? 'text-sky-600 bg-sky-50'
+                ? 'text-purple-600 bg-purple-50'
                 : 'text-slate-400 bg-slate-100'
             }`}>
               {localStorage.getItem('fampals_netflix_layout') === 'true' ? 'On' : 'Off'}
@@ -1358,7 +1358,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
         <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
           <button
             onClick={onToggleDarkMode}
-            className="w-full flex items-center justify-between p-6 text-slate-500 font-semibold text-sm hover:bg-sky-50 hover:text-sky-600 transition-colors"
+            className="w-full flex items-center justify-between p-6 text-slate-500 font-semibold text-sm hover:bg-purple-50 hover:text-purple-600 transition-colors"
           >
             <div className="flex items-center gap-3">
               {darkMode ? (
@@ -1369,7 +1369,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
               <span>Dark Mode</span>
             </div>
             <div className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
-              darkMode ? 'bg-sky-500' : 'bg-slate-300'
+              darkMode ? 'bg-purple-500' : 'bg-slate-300'
             }`}>
               <span data-toggle-knob className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${
                 darkMode ? 'translate-x-5' : 'translate-x-0'
@@ -1382,7 +1382,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
           <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-slate-100">
               <div className="flex items-center gap-2 mb-2">
-                <svg className="w-4 h-4 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg className="w-4 h-4 text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                 </svg>
                 <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest">Data & Privacy</h3>
@@ -1393,7 +1393,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
             </div>
             <button
               onClick={() => setShowManageData(true)}
-              className="w-full flex items-center justify-between p-6 text-blue-600 font-black text-xs uppercase tracking-widest hover:bg-blue-50 transition-colors min-h-[52px]"
+              className="w-full flex items-center justify-between p-6 text-purple-600 font-black text-xs uppercase tracking-widest hover:bg-purple-50 transition-colors min-h-[52px]"
             >
               <span>Manage My Data</span>
               <span>→</span>
@@ -1443,7 +1443,7 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
                   <button
                     onClick={handleReauthenticateForDelete}
                     disabled={reauthInProgress}
-                    className="w-full h-10 rounded-xl bg-sky-500 text-white text-xs font-bold uppercase tracking-wide disabled:opacity-60"
+                    className="w-full h-10 rounded-xl bg-purple-500 text-white text-xs font-bold uppercase tracking-wide disabled:opacity-60"
                   >
                     {reauthInProgress ? 'Re-authenticating...' : 'Sign in again to continue'}
                   </button>

@@ -31,7 +31,7 @@ const FamilyGroups: React.FC<FamilyGroupsProps> = ({ groups, onAddGroup }) => {
         </div>
         <button 
           onClick={() => setShowAdd(!showAdd)}
-          className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-sky-500 font-black shadow-sm border border-slate-50 active:scale-90"
+          className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-purple-500 font-black shadow-sm border border-slate-50 active:scale-90"
         >
           {showAdd ? (
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -55,7 +55,7 @@ const FamilyGroups: React.FC<FamilyGroupsProps> = ({ groups, onAddGroup }) => {
               <button 
                 key={t}
                 onClick={() => setType(t)}
-                className={`flex-1 h-12 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${type === t ? 'bg-sky-500 text-white shadow-lg shadow-sky-100' : 'bg-slate-50 text-slate-300 hover:text-slate-400'}`}
+                className={`flex-1 h-12 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${type === t ? 'bg-purple-500 text-white shadow-lg shadow-purple-100' : 'bg-slate-50 text-slate-300 hover:text-slate-400'}`}
               >
                 {t}
               </button>
@@ -85,7 +85,7 @@ const FamilyGroups: React.FC<FamilyGroupsProps> = ({ groups, onAddGroup }) => {
               </div>
               <button 
                 onClick={() => handleShare(group)}
-                className="w-11 h-11 bg-sky-50 text-sky-500 rounded-2xl flex items-center justify-center shadow-inner"
+                className="w-11 h-11 bg-purple-50 text-purple-500 rounded-2xl flex items-center justify-center shadow-inner"
               >
                 <span className="text-sm">↗</span>
               </button>
@@ -103,8 +103,8 @@ const FamilyGroups: React.FC<FamilyGroupsProps> = ({ groups, onAddGroup }) => {
             </div>
 
             <div className="flex gap-3">
-              <button className="flex-1 h-12 bg-slate-50 rounded-2xl text-[9px] font-black text-slate-400 uppercase tracking-widest hover:bg-sky-50 hover:text-sky-500 transition-colors">Shared Log</button>
-              <button className="flex-1 h-12 bg-slate-50 rounded-2xl text-[9px] font-black text-slate-400 uppercase tracking-widest hover:bg-sky-50 hover:text-sky-500 transition-colors">Calendar</button>
+              <button className="flex-1 h-12 bg-slate-50 rounded-2xl text-[9px] font-black text-slate-400 uppercase tracking-widest hover:bg-purple-50 hover:text-purple-500 transition-colors">Shared Log</button>
+              <button className="flex-1 h-12 bg-slate-50 rounded-2xl text-[9px] font-black text-slate-400 uppercase tracking-widest hover:bg-purple-50 hover:text-purple-500 transition-colors">Calendar</button>
             </div>
           </div>
         ))}

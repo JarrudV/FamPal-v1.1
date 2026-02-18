@@ -48,10 +48,10 @@ const getDefaultPreferences = (): Preferences => ({
 });
 
 const STEP_GRADIENTS = [
-  'from-sky-400 via-blue-500 to-indigo-600',
+  'from-purple-400 via-fuchsia-500 to-pink-500',
   'from-emerald-400 via-teal-500 to-cyan-600',
-  'from-pink-400 via-rose-500 to-red-500',
-  'from-violet-400 via-purple-500 to-indigo-600',
+  'from-pink-400 via-rose-500 to-orange-400',
+  'from-violet-500 via-purple-500 to-fuchsia-500',
 ];
 
 const Onboarding: React.FC<OnboardingProps> = ({

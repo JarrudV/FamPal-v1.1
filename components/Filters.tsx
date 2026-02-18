@@ -50,7 +50,7 @@ const Filters: React.FC<FiltersProps> = ({ selected, onChange }) => {
           <div
             className={`w-16 h-16 rounded-[24px] flex items-center justify-center transition-all duration-300 ${
               selected === cat.id
-                ? 'bg-[#0EA5E9] text-white shadow-xl shadow-sky-200 -translate-y-1'
+                ? 'bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white shadow-xl shadow-purple-200 -translate-y-1'
                 : 'bg-white text-slate-400 shadow-sm border border-slate-50'
             }`}
           >
@@ -58,7 +58,7 @@ const Filters: React.FC<FiltersProps> = ({ selected, onChange }) => {
           </div>
           <span
             className={`text-[11px] font-extrabold tracking-tighter uppercase ${
-              selected === cat.id ? 'text-[#0EA5E9]' : 'text-slate-400'
+              selected === cat.id ? 'text-purple-500' : 'text-slate-400'
             }`}
           >
             {cat.label}

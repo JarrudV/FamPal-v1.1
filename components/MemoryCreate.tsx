@@ -355,7 +355,7 @@ const MemoryCreate: React.FC<MemoryCreateProps> = ({
         {showToggle && (
           <button
             onClick={() => setIsOpen(prev => !prev)}
-            className="text-sky-500 font-black text-[10px] uppercase tracking-widest bg-sky-50 px-4 py-2 rounded-xl"
+            className="text-purple-500 font-black text-[10px] uppercase tracking-widest bg-purple-50 px-4 py-2 rounded-xl"
           >
             {isOpen ? toggleLabels.open : toggleLabels.closed}
           </button>
@@ -446,7 +446,7 @@ const MemoryCreate: React.FC<MemoryCreateProps> = ({
               <div className="flex gap-2">
                 <button
                   onClick={handleShare}
-                  className="flex-1 py-2.5 rounded-xl bg-sky-500 text-white text-xs font-bold hover:bg-sky-600 transition-colors"
+                  className="flex-1 py-2.5 rounded-xl bg-purple-500 text-white text-xs font-bold hover:bg-purple-600 transition-colors"
                 >
                   Share to Social
                 </button>
@@ -468,7 +468,7 @@ const MemoryCreate: React.FC<MemoryCreateProps> = ({
             disabled={!memoryInfo.allowed}
             className={`w-full py-3 rounded-2xl font-bold text-sm shadow-lg ${
               memoryInfo.allowed
-                ? 'bg-sky-500 text-white'
+                ? 'bg-purple-500 text-white'
                 : 'bg-slate-200 text-slate-400 cursor-not-allowed'
             }`}
           >

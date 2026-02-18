@@ -146,10 +146,10 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                     key={`${chip.lensKey}:${chip.chipId}`}
                     type="button"
                     onClick={() => onToggleLensChip(chip.lensKey, chip.chipId)}
-                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-semibold bg-sky-50 text-sky-700 border border-sky-100"
+                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-100"
                   >
                     <span>{chip.label}</span>
-                    <span className="text-sky-500">x</span>
+                    <span className="text-purple-500">x</span>
                   </button>
                 ))}
               </div>
@@ -159,7 +159,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
           <div className="bg-white rounded-2xl p-4 mt-4 border border-slate-100 shadow-sm">
             <div className="flex justify-between items-center mb-3">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Search Radius</span>
-              <span className="text-base font-bold text-sky-500">{radiusKm} km</span>
+              <span className="text-base font-bold text-purple-500">{radiusKm} km</span>
             </div>
             <input
               type="range"
@@ -199,7 +199,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
               <button
                 onClick={() => onPrefFilterModeChange('family')}
                 className={`px-4 py-3 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
-                  prefFilterMode === 'family' ? 'bg-sky-500 text-white' : 'bg-sky-50 text-sky-600 active:bg-sky-100'
+                  prefFilterMode === 'family' ? 'bg-purple-500 text-white' : 'bg-purple-50 text-purple-600 active:bg-purple-100'
                 }`}
               >
                 Family
@@ -262,10 +262,10 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
           </div>
 
           <div className="mt-4 space-y-3">
-            <div className="bg-gradient-to-r from-sky-50 to-purple-50 rounded-2xl p-4 border border-sky-100">
+            <div className="bg-gradient-to-r from-purple-50 to-fuchsia-50 rounded-2xl p-4 border border-purple-100">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5 text-sky-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" /></svg>
+                  <svg className="w-5 h-5 text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" /></svg>
                   <div>
                     <span className="font-bold text-slate-700 text-sm">Discovery Mode</span>
                     <p className="text-[10px] text-slate-400 mt-0.5">Browse by category</p>
@@ -273,7 +273,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                 </div>
                 <button
                   onClick={onToggleDiscoveryMode}
-                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${discoveryMode ? 'bg-sky-500' : 'bg-slate-300'}`}
+                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${discoveryMode ? 'bg-purple-500' : 'bg-slate-300'}`}
                   aria-label="Toggle Discovery Mode"
                 >
                   <span data-toggle-knob className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${discoveryMode ? 'translate-x-5' : 'translate-x-0'}`} />
@@ -291,7 +291,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                 </div>
                 <button
                   onClick={onToggleHideSavedPlaces}
-                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${hideSavedPlaces ? 'bg-sky-500' : 'bg-slate-300'}`}
+                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${hideSavedPlaces ? 'bg-purple-500' : 'bg-slate-300'}`}
                   aria-label="Toggle Fresh Finds"
                 >
                   <span data-toggle-knob className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${hideSavedPlaces ? 'translate-x-5' : 'translate-x-0'}`} />
@@ -304,7 +304,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-5 py-4 pb-safe z-10" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
           <button
             onClick={handleApply}
-            className="w-full py-4 bg-sky-500 active:bg-sky-600 text-white font-bold text-base rounded-2xl transition-colors shadow-lg shadow-sky-200 min-h-[56px]"
+            className="w-full py-4 bg-gradient-to-r from-purple-500 to-fuchsia-500 active:from-purple-600 active:to-fuchsia-600 text-white font-bold text-base rounded-2xl transition-colors shadow-lg shadow-purple-200 min-h-[56px]"
           >
             Apply Filters
           </button>

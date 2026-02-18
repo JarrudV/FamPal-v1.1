@@ -501,7 +501,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
               onClick={onToggleFavorite}
               className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm shadow-sm transition-all ${
                 isFavorite 
-                  ? 'bg-sky-500 text-white shadow-sky-200' 
+                  ? 'bg-purple-500 text-white shadow-purple-200' 
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
@@ -963,7 +963,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                 {!showNavOptions ? (
                   <button 
                     onClick={() => setShowNavOptions(true)} 
-                    className="w-full h-16 bg-[#0EA5E9] text-white rounded-3xl font-extrabold mt-4 shadow-xl shadow-sky-100 flex items-center justify-center gap-2 active:scale-95 transition-all"
+                    className="w-full h-16 bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white rounded-3xl font-extrabold mt-4 shadow-xl shadow-purple-200 flex items-center justify-center gap-2 active:scale-95 transition-all"
                   >
                     <svg className="w-5 h-5 inline -mt-0.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11" /></svg>Navigate
                   </button>
@@ -1086,7 +1086,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                     href={placeDetails.mapsUrl || place.mapsUrl} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="text-xs font-bold text-sky-500 hover:underline"
+                    className="text-xs font-bold text-purple-500 hover:underline"
                   >
                     See all on Google
                   </a>
@@ -1133,7 +1133,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                   href={placeDetails.mapsUrl || place.mapsUrl} 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="block text-center text-sm font-bold text-sky-500 hover:underline py-2"
+                  className="block text-center text-sm font-bold text-purple-500 hover:underline py-2"
                 >
                   Read more reviews on Google →
                 </a>
@@ -1186,7 +1186,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                 <h3 className="font-black text-sky-900 text-xl">Unlock the Notebook</h3>
                 <p className="text-xs text-sky-700/70 font-bold leading-relaxed">Save or mark this place as visited to keep notes, photos, and memories.</p>
                 <div className="flex gap-3 justify-center">
-                  <button onClick={onToggleFavorite} className="px-6 h-12 bg-sky-500 text-white rounded-2xl font-black text-sm shadow-lg shadow-sky-200">Save Place</button>
+                  <button onClick={onToggleFavorite} className="px-6 h-12 bg-purple-500 text-white rounded-2xl font-black text-sm shadow-lg shadow-purple-200">Save Place</button>
                   <button onClick={onMarkVisited} className="px-6 h-12 bg-green-500 text-white rounded-2xl font-black text-sm shadow-lg shadow-green-200">Mark Visited</button>
                 </div>
               </div>
@@ -1239,7 +1239,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                                   }}
                                   className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
                                     isSelected
-                                      ? 'bg-sky-500 text-white shadow-sm'
+                                      ? 'bg-purple-500 text-white shadow-sm'
                                       : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                                   }`}
                                 >
@@ -1273,7 +1273,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                         <button 
                           key={price}
                           onClick={() => onUpdateDetails({ costEstimate: price })}
-                          className={`flex-1 h-12 rounded-2xl font-black text-xs transition-all ${favoriteData?.costEstimate === price ? 'bg-sky-500 text-white shadow-lg' : 'text-slate-300 hover:bg-slate-50'}`}
+                          className={`flex-1 h-12 rounded-2xl font-black text-xs transition-all ${favoriteData?.costEstimate === price ? 'bg-purple-500 text-white shadow-lg' : 'text-slate-300 hover:bg-slate-50'}`}
                         >
                           {price}
                         </button>
@@ -1535,7 +1535,7 @@ const TabBtn = ({ active, onClick, label }: any) => (
   <button 
     onClick={onClick}
     className={`px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all ${
-      active ? 'bg-sky-500 text-white shadow-lg shadow-sky-100' : 'text-slate-400 bg-white shadow-sm'
+      active ? 'bg-purple-500 text-white shadow-lg shadow-purple-100' : 'text-slate-400 bg-white shadow-sm'
     }`}
   >
     {label}
@@ -1561,7 +1561,7 @@ const ContactLink = ({ icon, label, value, link }: any) => (
       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{label}</p>
       <p className="text-sm font-black text-[#1E293B] leading-none">{value}</p>
     </div>
-    <span className="text-slate-200 group-hover:text-sky-500 transition-colors">→</span>
+    <span className="text-slate-200 group-hover:text-purple-500 transition-colors">→</span>
   </div>
 );
 

@@ -82,7 +82,7 @@ export default function MustHavesSheet({
             <div className="flex items-center justify-between">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Selected</p>
               {(selectedSummary.length > 0 || lensDefinitions.some((lens) => filters.strict[lens.key])) && (
-                <button type="button" onClick={onClear} className="text-xs font-semibold text-sky-600">
+                <button type="button" onClick={onClear} className="text-xs font-semibold text-purple-600">
                   Clear all
                 </button>
               )}
@@ -92,7 +92,7 @@ export default function MustHavesSheet({
             ) : (
               <div className="mt-2 flex flex-wrap gap-2">
                 {selectedSummary.slice(0, 6).map((label) => (
-                  <span key={label} className="px-2 py-1 rounded-full text-[10px] font-semibold bg-sky-50 text-sky-700 border border-sky-100">
+                  <span key={label} className="px-2 py-1 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-100">
                     {label}
                   </span>
                 ))}
@@ -152,7 +152,7 @@ export default function MustHavesSheet({
                         type="button"
                         onClick={() => onToggleChip(lens.key, chip.id)}
                         className={`px-3 py-2 rounded-full text-xs font-semibold min-h-[36px] transition-all ${
-                          selected ? 'bg-sky-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          selected ? 'bg-purple-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}
                       >
                         {chip.label}

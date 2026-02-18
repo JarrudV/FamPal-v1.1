@@ -42,6 +42,12 @@ The application is built with React 19, TypeScript, Vite 7, and Tailwind CSS v4.
 -   **3-tier cache**: `localStorage` (60min) → Firestore shared cache (90 days / permanent) → Google Places API (last resort).
 -   **Cost-effective**: Firestore reads are significantly cheaper than Google Places API calls, reducing dependency over time as community data grows.
 
+**Brand & Design System (Feb 2026):**
+-   **Primary Brand Colors**: Purple gradient (#A855F7 → #D946EF → #EC4899), dark backgrounds (#0F0A2A → #2D1B69), orange accent (#F97316).
+-   **UI Color Rules**: Primary CTAs use purple gradient (from-purple-500 to-fuchsia-500). Favorites/hearts use pink (#EC4899/pink-500). Toggles use bg-purple-500 (active) / bg-slate-300 (inactive) with white knob. Keep sky/blue ONLY for contextual info (phone, website, location info icons in VenueProfile). Amber for warnings/pet-friendly, emerald for success, rose for errors/delete.
+-   **Dark Mode**: Supported via html.dark class with comprehensive CSS overrides in index.css for all brand colors including purple, pink, fuchsia variants.
+-   **Logos**: Dual-variant system - dark variant (purple bg rounded rect) for dark backgrounds (Login), light variant (transparent gradient F) for white backgrounds (Header). Both use unique SVG gradient IDs via React useId().
+
 ## External Dependencies
 -   **Firebase**: User authentication (Google Sign-In, email/password), Firestore database, Firebase App Hosting.
 -   **Google Gemini API**: AI-driven place recommendations.
