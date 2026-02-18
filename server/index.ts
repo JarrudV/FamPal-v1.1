@@ -67,6 +67,22 @@ interface AuthenticatedRequest extends Request {
   uid?: string;
 }
 
+function isAdminAccessUser(userData: Record<string, any> | undefined): boolean {
+  if (!userData) return false;
+  const role = typeof userData.role === 'string' ? userData.role.toLowerCase() : '';
+  const entitlementTier = typeof userData?.entitlement?.subscription_tier === 'string'
+    ? String(userData.entitlement.subscription_tier).toLowerCase()
+    : '';
+  const topLevelEntitlement = typeof userData.entitlement === 'string'
+    ? String(userData.entitlement).toLowerCase()
+    : '';
+  return role === 'admin'
+    || entitlementTier === 'admin'
+    || topLevelEntitlement === 'admin'
+    || userData.unlimited_credits === true
+    || userData.is_review_account === true;
+}
+
 const app = express();
 
 // Health check endpoint - respond BEFORE any initialization or middleware
@@ -1032,6 +1048,11 @@ app.post('/api/paystack/webhook', async (req: any, res) => {
         
         if (!userSnapshot.empty) {
           const userDoc = userSnapshot.docs[0];
+          const userData = userDoc.data() as Record<string, any> | undefined;
+          if (isAdminAccessUser(userData)) {
+            console.log(`[FamPals API] Skipped cancellation downgrade for admin/review account ${userDoc.id}`);
+            break;
+          }
           await userDoc.ref.update({
             'entitlement.plan_status': 'cancelled',
           });
@@ -1050,6 +1071,11 @@ app.post('/api/paystack/webhook', async (req: any, res) => {
           
           if (!userSnapshot.empty) {
             const userDoc = userSnapshot.docs[0];
+            const userData = userDoc.data() as Record<string, any> | undefined;
+            if (isAdminAccessUser(userData)) {
+              console.log(`[FamPals API] Skipped expiry downgrade for admin/review account ${userDoc.id}`);
+              break;
+            }
             await userDoc.ref.update({
               'entitlement.plan_status': 'expired',
             });
@@ -1076,6 +1102,9 @@ app.post('/api/subscription/cancel', async (req, res) => {
     
     const userDoc = await db.collection('users').doc(userId).get();
     const userData = userDoc.data();
+    if (isAdminAccessUser(userData as Record<string, any> | undefined)) {
+      return res.json({ success: true, skipped: true, reason: 'admin_review_account' });
+    }
     const subscriptionCode = userData?.entitlement?.paystack_subscription_code;
     const emailToken = userData?.entitlement?.paystack_email_token;
     
@@ -1114,6 +1143,13 @@ async function updateUserEntitlement(
   reference: string,
   paymentData: any
 ) {
+  const userRef = db.collection('users').doc(userId);
+  const existingUserDoc = await userRef.get();
+  const existingUserData = existingUserDoc.exists ? (existingUserDoc.data() as Record<string, any>) : undefined;
+  if (isAdminAccessUser(existingUserData)) {
+    console.log(`[FamPals API] Skipped entitlement overwrite for admin/review account ${userId}`);
+    return;
+  }
   const now = new Date();
   let endDate: string | null = null;
   const oneMonthLater = new Date(now);
@@ -1136,7 +1172,7 @@ async function updateUserEntitlement(
     ai_requests_reset_date: nextMonth.toISOString(),
   };
   
-  await db.collection('users').doc(userId).set(
+  await userRef.set(
     { entitlement },
     { merge: true }
   );

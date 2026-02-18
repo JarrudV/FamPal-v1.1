@@ -46,6 +46,16 @@ function resolveLimit(tier: SubscriptionTier): number {
   return 5;
 }
 
+function isAdminAccessUser(userData: Record<string, any>, entitlement: Record<string, any> | undefined): boolean {
+  const role = typeof userData.role === 'string' ? userData.role.toLowerCase() : '';
+  const topLevelEntitlement = typeof userData.entitlement === 'string' ? userData.entitlement.toLowerCase() : '';
+  return role === 'admin'
+    || topLevelEntitlement === 'admin'
+    || entitlement?.subscription_tier === 'admin'
+    || userData.unlimited_credits === true
+    || userData.is_review_account === true;
+}
+
 export const reserveSmartInsightCredit = onCall(async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
@@ -59,6 +69,15 @@ export const reserveSmartInsightCredit = onCall(async (request) => {
     const snap = await tx.get(userRef);
     const userData = snap.exists ? (snap.data() as Record<string, any>) : {};
     const entitlement = (userData.entitlement || {}) as Record<string, any>;
+    // Google Play review account – do not remove without updating Play Console
+    if (isAdminAccessUser(userData, entitlement)) {
+      return {
+        ok: true,
+        used: 0,
+        limit: -1,
+        remaining: -1,
+      };
+    }
     const nowMs = Date.now();
 
     let tier = resolveTier(entitlement);
@@ -149,6 +168,15 @@ export const refundSmartInsightCredit = onCall(async (request) => {
     const snap = await tx.get(userRef);
     const userData = snap.exists ? (snap.data() as Record<string, any>) : {};
     const entitlement = (userData.entitlement || {}) as Record<string, any>;
+    // Google Play review account – do not remove without updating Play Console
+    if (isAdminAccessUser(userData, entitlement)) {
+      return {
+        ok: true,
+        used: 0,
+        limit: -1,
+        remaining: -1,
+      };
+    }
 
     let tier = resolveTier(entitlement);
     const status = resolveStatus(entitlement);

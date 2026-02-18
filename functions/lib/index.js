@@ -43,6 +43,15 @@ function resolveLimit(tier) {
         return 100;
     return 5;
 }
+function isAdminAccessUser(userData, entitlement) {
+    const role = typeof userData.role === 'string' ? userData.role.toLowerCase() : '';
+    const topLevelEntitlement = typeof userData.entitlement === 'string' ? userData.entitlement.toLowerCase() : '';
+    return role === 'admin'
+        || topLevelEntitlement === 'admin'
+        || entitlement?.subscription_tier === 'admin'
+        || userData.unlimited_credits === true
+        || userData.is_review_account === true;
+}
 exports.reserveSmartInsightCredit = (0, https_1.onCall)(async (request) => {
     const uid = request.auth?.uid;
     if (!uid) {
@@ -54,6 +63,15 @@ exports.reserveSmartInsightCredit = (0, https_1.onCall)(async (request) => {
         const snap = await tx.get(userRef);
         const userData = snap.exists ? snap.data() : {};
         const entitlement = (userData.entitlement || {});
+        // Google Play review account – do not remove without updating Play Console
+        if (isAdminAccessUser(userData, entitlement)) {
+            return {
+                ok: true,
+                used: 0,
+                limit: -1,
+                remaining: -1,
+            };
+        }
         const nowMs = Date.now();
         let tier = resolveTier(entitlement);
         const status = resolveStatus(entitlement);
@@ -134,6 +152,15 @@ exports.refundSmartInsightCredit = (0, https_1.onCall)(async (request) => {
         const snap = await tx.get(userRef);
         const userData = snap.exists ? snap.data() : {};
         const entitlement = (userData.entitlement || {});
+        // Google Play review account – do not remove without updating Play Console
+        if (isAdminAccessUser(userData, entitlement)) {
+            return {
+                ok: true,
+                used: 0,
+                limit: -1,
+                remaining: -1,
+            };
+        }
         let tier = resolveTier(entitlement);
         const status = resolveStatus(entitlement);
         if (status !== 'active' && tier !== 'admin') {

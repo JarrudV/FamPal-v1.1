@@ -22,6 +22,8 @@ import ClaimPlaceModal from '../src/components/ClaimPlaceModal';
 import OwnerDashboard from '../src/components/OwnerDashboard';
 import { fetchPlaceClaim } from '../lib/placeOwner';
 import type { PlaceClaim } from '../src/types/placeOwner';
+import ReportContentModal from './ReportContentModal';
+import { createUgcReport, type UgcReportReason } from '../src/services/ugcReports';
 
 function getNavigationUrls(place: Place, placeDetails?: PlaceDetails | null) {
   const lat = (place as any).lat || placeDetails?.lat;
@@ -149,6 +151,9 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   const [showOwnerDashboard, setShowOwnerDashboard] = useState(false);
   const [myClaim, setMyClaim] = useState<PlaceClaim | null>(null);
   const [claimLoaded, setClaimLoaded] = useState(false);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [selectedReviewReport, setSelectedReviewReport] = useState<{ reviewId: string; reportedUserId: string } | null>(null);
 
   useEffect(() => {
     if (userId && place.id) {
@@ -198,6 +203,40 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
   ];
 
   const aiLimitReached = serverLimitReached || !aiInfo.allowed;
+
+  const buildReviewId = (review: PlaceReview, idx: number): string => {
+    const author = (review.authorName || 'unknown').toLowerCase().replace(/\s+/g, '_');
+    const when = (review.relativeTimeDescription || 'unknown').toLowerCase().replace(/\s+/g, '_');
+    return `${place.id}_r${idx}_${author}_${when}`;
+  };
+
+  const openReviewReport = (review: PlaceReview, idx: number) => {
+    const reviewId = buildReviewId(review, idx);
+    const reportedUserId = review.authorName?.trim() || 'unknown_google_user';
+    setSelectedReviewReport({ reviewId, reportedUserId });
+    setReportModalOpen(true);
+  };
+
+  const handleSubmitReviewReport = async (reason: UgcReportReason) => {
+    if (!selectedReviewReport) return;
+    setReportSubmitting(true);
+    try {
+      await createUgcReport({
+        reported_content_type: 'review',
+        reported_content_id: selectedReviewReport.reviewId,
+        reported_user_id: selectedReviewReport.reportedUserId,
+        reason,
+      });
+      setReportModalOpen(false);
+      setSelectedReviewReport(null);
+      window.alert('Report submitted. Thank you.');
+    } catch (err) {
+      console.error('Failed to submit review report:', err);
+      window.alert('Could not submit report. Please try again.');
+    } finally {
+      setReportSubmitting(false);
+    }
+  };
   
   const handleAskAI = async (question: string, forceRefresh: boolean = false) => {
     if (!question.trim()) return;
@@ -1017,9 +1056,20 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
                           </div>
                         )}
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-bold text-sm text-slate-700">{review.authorName}</span>
-                            <span className="text-xs text-slate-400">{review.relativeTimeDescription}</span>
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-bold text-sm text-slate-700 truncate">{review.authorName}</span>
+                              <span className="text-xs text-slate-400">{review.relativeTimeDescription}</span>
+                            </div>
+                            {!isGuest && (
+                              <button
+                                type="button"
+                                onClick={() => openReviewReport(review, idx)}
+                                className="text-[11px] font-bold text-rose-500 hover:text-rose-600"
+                              >
+                                Report
+                              </button>
+                            )}
                           </div>
                           <div className="flex gap-0.5 mb-2">
                             {[...Array(5)].map((_, i) => (
@@ -1391,6 +1441,18 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
           document.body
         );
       })()}
+
+      <ReportContentModal
+        isOpen={reportModalOpen}
+        targetLabel="this review"
+        submitting={reportSubmitting}
+        onClose={() => {
+          if (reportSubmitting) return;
+          setReportModalOpen(false);
+          setSelectedReviewReport(null);
+        }}
+        onSubmit={handleSubmitReviewReport}
+      />
     </div>
   );
 };

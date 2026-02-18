@@ -73,6 +73,32 @@ service cloud.firestore {
         && request.resource.data.createdAt is timestamp;
     }
 
+    function validUgcReportCreate() {
+      return request.resource.data.keys().hasOnly([
+          'reported_content_type',
+          'reported_content_id',
+          'reported_user_id',
+          'reason',
+          'reported_by',
+          'created_at',
+          'status'
+        ])
+        && request.resource.data.reported_content_type in ['review', 'profile']
+        && request.resource.data.reported_content_id is string
+        && request.resource.data.reported_content_id.size() > 0
+        && request.resource.data.reported_user_id is string
+        && request.resource.data.reason in ['Inappropriate content', 'Nudity', 'Violence', 'Spam', 'Harassment', 'Other']
+        && request.resource.data.reported_by == request.auth.uid
+        && request.resource.data.created_at is timestamp
+        && request.resource.data.status == 'pending';
+    }
+
+    // Required for Google Play UGC compliance
+    match /reports/{reportId} {
+      allow create: if signedIn() && validUgcReportCreate();
+      allow read, update, delete: if false;
+    }
+
     // User Data
     // Allow the owner to read/write their root user doc
     // Allow authenticated users to query for partner invite codes
