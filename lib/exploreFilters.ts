@@ -5,6 +5,7 @@ export type ExploreLensKey =
   | 'venueTypes'
   | 'kidPrefs'
   | 'accessibility'
+  | 'petFriendly'
   | 'indoorOutdoor';
 
 export interface ExploreFilters {
@@ -12,12 +13,14 @@ export interface ExploreFilters {
   venueTypes: string[];
   kidPrefs: string[];
   accessibility: string[];
+  petFriendly: string[];
   indoorOutdoor: string[];
   strict: {
     foodTypes: boolean;
     venueTypes: boolean;
     kidPrefs: boolean;
     accessibility: boolean;
+    petFriendly: boolean;
     indoorOutdoor: boolean;
   };
 }
@@ -28,6 +31,7 @@ export interface PlaceCapabilities {
   venueTypes: Set<string>;
   kidFriendlySignals: Set<string>;
   accessibilitySignals: Set<string>;
+  petFriendlySignals: Set<string>;
   indoorOutdoorSignals: Set<string>;
 }
 
@@ -121,6 +125,19 @@ const LENS_DEFINITIONS: Record<ExploreLensKey, LensDefinition> = {
       { id: 'quiet_friendly', label: 'Quiet friendly', matches: (caps) => caps.accessibilitySignals.has('quiet_friendly') || caps.foodKeywords.has('quiet') },
     ],
   },
+  petFriendly: {
+    key: 'petFriendly',
+    title: 'Pet friendly',
+    helperText: 'Find venues welcoming pets using community and public data.',
+    chips: [
+      { id: 'dogs_allowed', label: 'Dogs allowed', matches: (caps) => caps.petFriendlySignals.has('dogs_allowed') },
+      { id: 'pet_friendly_patio', label: 'Pet-friendly patio', matches: (caps) => caps.petFriendlySignals.has('pet_friendly_patio') },
+      { id: 'water_bowls', label: 'Water bowls', matches: (caps) => caps.petFriendlySignals.has('water_bowls') },
+      { id: 'off_leash_area', label: 'Off-leash area', matches: (caps) => caps.petFriendlySignals.has('off_leash_area') },
+      { id: 'enclosed_garden', label: 'Enclosed garden', matches: (caps) => caps.petFriendlySignals.has('enclosed_garden') },
+      { id: 'pets_inside_allowed', label: 'Pets inside', matches: (caps) => caps.petFriendlySignals.has('pets_inside_allowed') },
+    ],
+  },
   indoorOutdoor: {
     key: 'indoorOutdoor',
     title: 'Indoor or Outdoor',
@@ -149,13 +166,13 @@ const LENS_DEFINITIONS: Record<ExploreLensKey, LensDefinition> = {
 };
 
 const INTENT_LENS_MAP: Record<ExploreIntent, ExploreLensKey[]> = {
-  all: ['venueTypes', 'foodTypes', 'kidPrefs', 'accessibility', 'indoorOutdoor'],
-  eat_drink: ['venueTypes', 'foodTypes', 'kidPrefs', 'accessibility', 'indoorOutdoor'],
-  play_kids: ['venueTypes', 'kidPrefs', 'accessibility', 'indoorOutdoor'],
-  outdoors: ['venueTypes', 'kidPrefs', 'accessibility', 'indoorOutdoor'],
-  things_to_do: ['venueTypes', 'kidPrefs', 'accessibility', 'indoorOutdoor'],
-  sport_active: ['venueTypes', 'accessibility', 'indoorOutdoor'],
-  indoor: ['venueTypes', 'kidPrefs', 'accessibility', 'indoorOutdoor'],
+  all: ['venueTypes', 'foodTypes', 'kidPrefs', 'petFriendly', 'accessibility', 'indoorOutdoor'],
+  eat_drink: ['venueTypes', 'foodTypes', 'kidPrefs', 'petFriendly', 'accessibility', 'indoorOutdoor'],
+  play_kids: ['venueTypes', 'kidPrefs', 'petFriendly', 'accessibility', 'indoorOutdoor'],
+  outdoors: ['venueTypes', 'kidPrefs', 'petFriendly', 'accessibility', 'indoorOutdoor'],
+  things_to_do: ['venueTypes', 'kidPrefs', 'petFriendly', 'accessibility', 'indoorOutdoor'],
+  sport_active: ['venueTypes', 'petFriendly', 'accessibility', 'indoorOutdoor'],
+  indoor: ['venueTypes', 'kidPrefs', 'petFriendly', 'accessibility', 'indoorOutdoor'],
 };
 
 function normalizeToken(value: string): string {
@@ -199,6 +216,7 @@ function extractHintFeatures(place: Place): Set<string> {
   const hints = [
     ...(((place as any).googleHints || []) as Array<{ feature?: string }>),
     ...(((place as any).familyHints || []) as Array<{ feature?: string }>),
+    ...(((place as any).petFriendlyHints || []) as Array<{ feature?: string }>),
   ];
   hints.forEach((hint) => {
     if (hint?.feature) features.add(normalizeToken(hint.feature));
@@ -212,12 +230,14 @@ export function createDefaultExploreFilters(): ExploreFilters {
     venueTypes: [],
     kidPrefs: [],
     accessibility: [],
+    petFriendly: [],
     indoorOutdoor: [],
     strict: {
       foodTypes: false,
       venueTypes: false,
       kidPrefs: false,
       accessibility: false,
+      petFriendly: false,
       indoorOutdoor: false,
     },
   };
@@ -331,6 +351,25 @@ export function derivePlaceCapabilities(place: Place): PlaceCapabilities {
   if (hintSet.has('step_free_entry') || hintSet.has('accessible_parking')) accessibilitySignals.add('wheelchair_friendly');
   if (keywordMatches(text, ['quiet', 'calm'])) accessibilitySignals.add('quiet_friendly');
 
+  const petFriendlySignals = new Set<string>();
+  (place.petFriendly || []).forEach((feature) => {
+    if (!isPositiveCommunityValue(feature)) return;
+    const key = normalizeToken(feature.feature || '');
+    petFriendlySignals.add(key);
+  });
+  const petHints = [
+    ...(((place as any).petFriendlyHints || []) as Array<{ feature?: string }>),
+  ];
+  petHints.forEach((hint) => {
+    if (hint?.feature) petFriendlySignals.add(normalizeToken(hint.feature));
+  });
+  if (keywordMatches(text, ['pet friendly', 'dog friendly', 'dogs welcome', 'pets welcome'])) petFriendlySignals.add('dogs_allowed');
+  if (keywordMatches(text, ['off-leash', 'off leash', 'dog park'])) petFriendlySignals.add('off_leash_area');
+  if (keywordMatches(text, ['pet patio', 'dog patio', 'outdoor seating'])) petFriendlySignals.add('pet_friendly_patio');
+  if (keywordMatches(text, ['water bowl', 'water bowls', 'dog water'])) petFriendlySignals.add('water_bowls');
+  if (keywordMatches(text, ['enclosed garden', 'fenced garden', 'fenced yard', 'enclosed yard'])) petFriendlySignals.add('enclosed_garden');
+  if (keywordMatches(text, ['pets inside', 'dogs inside', 'pets indoors', 'dogs indoors', 'pets allowed inside'])) petFriendlySignals.add('pets_inside_allowed');
+
   const hasIndoorHint = typeSet.has('museum') || typeSet.has('library') || typeSet.has('movie_theater') || typeSet.has('shopping_mall') || keywordMatches(text, INDOOR_HINTS);
   const hasOutdoorHint = typeSet.has('park') || typeSet.has('beach') || typeSet.has('hiking_area') || typeSet.has('national_park') || keywordMatches(text, OUTDOOR_HINTS);
   if (hasIndoorHint) indoorOutdoorSignals.add('indoor');
@@ -350,6 +389,7 @@ export function derivePlaceCapabilities(place: Place): PlaceCapabilities {
     venueTypes,
     kidFriendlySignals: kidSignals,
     accessibilitySignals,
+    petFriendlySignals,
     indoorOutdoorSignals,
   };
 }

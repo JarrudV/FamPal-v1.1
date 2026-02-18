@@ -40,6 +40,7 @@ export interface PlaceSourceGoogle {
   goodForChildren?: boolean;
   menuForChildren?: boolean;
   restroom?: boolean;
+  allowsDogs?: boolean;
   accessibilityOptions?: Record<string, unknown>;
   parkingOptions?: Record<string, unknown>;
   raw?: Record<string, unknown>;
@@ -57,6 +58,7 @@ export interface PlaceFacets {
   foodTypes: string[];
   kidFriendlySignals: string[];
   accessibilitySignals: string[];
+  petFriendlySignals: string[];
   indoorOutdoorSignals: string[];
   confidence: number;
 }
@@ -314,6 +316,19 @@ export function computeFacetsFromGoogleSource(source: PlaceSourceGoogle, request
   }
   if (keywordMatches(text, ['quiet', 'calm'])) accessibilitySignals.add('quiet_friendly');
 
+  const petFriendlySignals = new Set<string>();
+  if (source.allowsDogs) petFriendlySignals.add('dogs_allowed');
+  if (keywordMatches(text, ['pet friendly', 'dog friendly', 'pets welcome', 'dogs welcome'])) petFriendlySignals.add('dogs_allowed');
+  if (keywordMatches(text, ['off-leash', 'off leash', 'dog park'])) petFriendlySignals.add('off_leash_area');
+  if (keywordMatches(text, ['pet patio', 'dog patio', 'outdoor seating'])) petFriendlySignals.add('pet_friendly_patio');
+  if (keywordMatches(text, ['water bowl', 'water bowls', 'dog water'])) petFriendlySignals.add('water_bowls');
+  if (keywordMatches(text, ['enclosed garden', 'fenced garden', 'fenced yard', 'enclosed yard'])) petFriendlySignals.add('enclosed_garden');
+  if (keywordMatches(text, ['pets inside', 'dogs inside', 'pets indoors', 'dogs indoors', 'pets allowed inside'])) petFriendlySignals.add('pets_inside_allowed');
+  if (types.includes('dog_park') || types.includes('pet_store')) {
+    petFriendlySignals.add('dogs_allowed');
+    petFriendlySignals.add('off_leash_area');
+  }
+
   const hasIndoor = types.some((t) => INDOOR_HINTS.includes(t)) || keywordMatches(text, INDOOR_HINTS);
   const hasOutdoor = types.some((t) => OUTDOOR_HINTS.includes(t)) || keywordMatches(text, OUTDOOR_HINTS);
   if (hasIndoor) indoorOutdoorSignals.add('indoor');
@@ -326,6 +341,7 @@ export function computeFacetsFromGoogleSource(source: PlaceSourceGoogle, request
     (foodTypes.size > 0 ? 1 : 0) +
     (kidFriendlySignals.size > 0 ? 1 : 0) +
     (accessibilitySignals.size > 0 ? 1 : 0) +
+    (petFriendlySignals.size > 0 ? 1 : 0) +
     (indoorOutdoorSignals.size > 0 ? 1 : 0);
   const confidence = Math.min(
     0.95,
@@ -341,6 +357,7 @@ export function computeFacetsFromGoogleSource(source: PlaceSourceGoogle, request
     foodTypes: Array.from(foodTypes),
     kidFriendlySignals: Array.from(kidFriendlySignals),
     accessibilitySignals: Array.from(accessibilitySignals),
+    petFriendlySignals: Array.from(petFriendlySignals),
     indoorOutdoorSignals: Array.from(indoorOutdoorSignals),
     confidence: Number(confidence.toFixed(2)),
   };
@@ -514,6 +531,7 @@ export async function upsertPlaceFromGoogle(
       foodTypes: facets.foodTypes,
       kidFriendlySignals: facets.kidFriendlySignals,
       accessibilitySignals: facets.accessibilitySignals,
+      petFriendlySignals: facets.petFriendlySignals,
       indoorOutdoorSignals: facets.indoorOutdoorSignals,
     },
     facetsConfidence: facets.confidence,

@@ -206,7 +206,7 @@ async function fetchGooglePlaceForRefresh(googlePlaceId: string): Promise<any> {
   const response = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(googlePlaceId)}`, {
     headers: {
       'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
-      'X-Goog-FieldMask': 'id,displayName,formattedAddress,rating,userRatingCount,types,priceLevel,location,photos,primaryType,primaryTypeDisplayName,googleMapsUri,goodForChildren,menuForChildren,restroom,accessibilityOptions,parkingOptions',
+      'X-Goog-FieldMask': 'id,displayName,formattedAddress,rating,userRatingCount,types,priceLevel,location,photos,primaryType,primaryTypeDisplayName,googleMapsUri,goodForChildren,menuForChildren,restroom,allowsDogs,accessibilityOptions,parkingOptions',
     },
   });
   if (!response.ok) {
@@ -320,6 +320,7 @@ async function runPlaceRefreshJob(options: PlaceRefreshOptions = {}) {
           goodForChildren: p.goodForChildren === true,
           menuForChildren: p.menuForChildren === true,
           restroom: p.restroom === true,
+          allowsDogs: p.allowsDogs === true,
           accessibilityOptions: p.accessibilityOptions || {},
           parkingOptions: p.parkingOptions || {},
         };
@@ -331,6 +332,7 @@ async function runPlaceRefreshJob(options: PlaceRefreshOptions = {}) {
           goodForChildren: source.goodForChildren,
           menuForChildren: source.menuForChildren,
           restroom: source.restroom,
+          allowsDogs: source.allowsDogs,
           accessibilityOptions: source.accessibilityOptions,
           requestedCategory,
           rating: source.rating || undefined,
@@ -500,6 +502,7 @@ function buildFacetSnapshotFromGoogle(source: {
   goodForChildren?: boolean;
   menuForChildren?: boolean;
   restroom?: boolean;
+  allowsDogs?: boolean;
   accessibilityOptions?: Record<string, unknown>;
   requestedCategory?: string;
   rating?: number;
@@ -510,6 +513,7 @@ function buildFacetSnapshotFromGoogle(source: {
   foodTypes: string[];
   kidFriendlySignals: string[];
   accessibilitySignals: string[];
+  petFriendlySignals: string[];
   indoorOutdoorSignals: string[];
   confidence: number;
 } {
@@ -551,6 +555,19 @@ function buildFacetSnapshotFromGoogle(source: {
   }
   if (text.includes('quiet') || text.includes('calm')) accessibilitySignals.add('quiet_friendly');
 
+  const petFriendlySignals = new Set<string>();
+  if (source.allowsDogs) petFriendlySignals.add('dogs_allowed');
+  if (text.includes('pet friendly') || text.includes('dog friendly') || text.includes('pets welcome') || text.includes('dogs welcome')) petFriendlySignals.add('dogs_allowed');
+  if (text.includes('off-leash') || text.includes('off leash') || text.includes('dog park')) petFriendlySignals.add('off_leash_area');
+  if (text.includes('pet patio') || text.includes('dog patio') || text.includes('outdoor seating')) petFriendlySignals.add('pet_friendly_patio');
+  if (text.includes('water bowl') || text.includes('water bowls') || text.includes('dog water')) petFriendlySignals.add('water_bowls');
+  if (text.includes('enclosed garden') || text.includes('fenced garden') || text.includes('fenced yard') || text.includes('enclosed yard')) petFriendlySignals.add('enclosed_garden');
+  if (text.includes('pets inside') || text.includes('dogs inside') || text.includes('pets indoors') || text.includes('dogs indoors') || text.includes('pets allowed inside')) petFriendlySignals.add('pets_inside_allowed');
+  if (types.includes('dog_park') || types.includes('pet_store')) {
+    petFriendlySignals.add('dogs_allowed');
+    petFriendlySignals.add('off_leash_area');
+  }
+
   const hasIndoor = types.some((t) => indoorHints.includes(t)) || indoorHints.some((k) => text.includes(k));
   const hasOutdoor = types.some((t) => outdoorHints.includes(t)) || outdoorHints.some((k) => text.includes(k));
   if (hasIndoor) indoorOutdoorSignals.add('indoor');
@@ -574,6 +591,7 @@ function buildFacetSnapshotFromGoogle(source: {
     (foodTypes.size > 0 ? 1 : 0) +
     (kidFriendlySignals.size > 0 ? 1 : 0) +
     (accessibilitySignals.size > 0 ? 1 : 0) +
+    (petFriendlySignals.size > 0 ? 1 : 0) +
     (indoorOutdoorSignals.size > 0 ? 1 : 0);
   const confidence = Math.min(
     0.95,
@@ -586,6 +604,7 @@ function buildFacetSnapshotFromGoogle(source: {
     foodTypes: Array.from(foodTypes),
     kidFriendlySignals: Array.from(kidFriendlySignals),
     accessibilitySignals: Array.from(accessibilitySignals),
+    petFriendlySignals: Array.from(petFriendlySignals),
     indoorOutdoorSignals: Array.from(indoorOutdoorSignals),
     confidence: Number(confidence.toFixed(2)),
   };

@@ -1,4 +1,4 @@
-import { Place, ActivityType, ExploreIntent, AccessibilityFeature, FamilyFacility } from "./types";
+import { Place, ActivityType, ExploreIntent, AccessibilityFeature, FamilyFacility, PetFriendlyFeature } from "./types";
 import { getExploreIntentDefinition, type ExploreIntentDefinition } from './server/exploreIntentConfig';
 import type { ExploreFilters } from './lib/exploreFilters';
 import {
@@ -195,8 +195,10 @@ export interface PlaceDetails {
   goodForChildren?: boolean;
   menuForChildren?: boolean;
   restroom?: boolean;
+  allowsDogs?: boolean;
   parkingOptions?: Record<string, unknown>;
   familyHints?: { feature: FamilyFacility; source: 'google_places' }[];
+  petFriendlyHints?: { feature: PetFriendlyFeature; source: 'google_places' }[];
   editorialSummary?: string;
   reviewSummary?: string;
 }
@@ -1597,6 +1599,7 @@ export async function searchNearbyPlacesTextApi(
         goodForChildren: p.goodForChildren === true,
         menuForChildren: p.menuForChildren === true,
         restroom: p.restroom === true,
+        allowsDogs: p.allowsDogs === true,
         accessibilityOptions: p.accessibilityOptions,
         parkingOptions: p.parkingOptions,
         raw: p,
@@ -1801,7 +1804,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
 
   if (!PLACES_API_KEY) return null;
 
-  const baseFields = 'id,displayName,formattedAddress,nationalPhoneNumber,internationalPhoneNumber,websiteUri,rating,userRatingCount,regularOpeningHours,photos,reviews,priceLevel,types,location,googleMapsUri,accessibilityOptions,goodForChildren,menuForChildren,restroom,parkingOptions';
+  const baseFields = 'id,displayName,formattedAddress,nationalPhoneNumber,internationalPhoneNumber,websiteUri,rating,userRatingCount,regularOpeningHours,photos,reviews,priceLevel,types,location,googleMapsUri,accessibilityOptions,goodForChildren,menuForChildren,restroom,allowsDogs,parkingOptions';
   const extendedFields = `${baseFields},editorialSummary,generativeSummary`;
 
   try {
@@ -1864,6 +1867,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
       goodForChildren: p.goodForChildren === true,
       menuForChildren: p.menuForChildren === true,
       restroom: p.restroom === true,
+      allowsDogs: p.allowsDogs === true,
       parkingOptions: p.parkingOptions || undefined,
       editorialSummary: p.editorialSummary?.text || undefined,
       reviewSummary: p.generativeSummary?.overview?.text || undefined,

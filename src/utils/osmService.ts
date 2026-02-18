@@ -1,9 +1,11 @@
 import type { AccessibilityFeature } from '../types/place';
 import type { FamilyFacility } from '../types/place';
+import type { PetFriendlyFeature } from '../types/place';
 
 export interface OsmVenueData {
   accessibilityHints: AccessibilityFeature[];
   familyFacilityHints: FamilyFacility[];
+  petFriendlyHints: PetFriendlyFeature[];
   tags: Record<string, string>;
 }
 
@@ -94,6 +96,32 @@ function extractFamilyFacilitiesFromTags(tags: Record<string, string>): FamilyFa
   return hints;
 }
 
+function extractPetFriendlyFromTags(tags: Record<string, string>): PetFriendlyFeature[] {
+  const hints: PetFriendlyFeature[] = [];
+
+  if (tags['dog'] === 'yes' || tags['dogs'] === 'yes' || tags['pet'] === 'yes') {
+    hints.push('dogs_allowed');
+  }
+  if (tags['cat'] === 'yes' || tags['cats'] === 'yes') {
+    hints.push('cats_allowed');
+  }
+  if (tags['leisure'] === 'dog_park' || tags['animal'] === 'dog_park') {
+    hints.push('dogs_allowed');
+    hints.push('off_leash_area');
+  }
+  if (tags['outdoor_seating'] === 'yes' && (tags['dog'] === 'yes' || tags['pet'] === 'yes')) {
+    hints.push('pet_friendly_patio');
+  }
+  if (tags['drinking_water:dogs'] === 'yes' || tags['dog:water'] === 'yes') {
+    hints.push('water_bowls');
+  }
+  if (tags['fence'] === 'yes' || tags['fenced'] === 'yes') {
+    hints.push('enclosed_garden');
+  }
+
+  return hints;
+}
+
 export async function fetchOsmVenueData(
   lat: number,
   lng: number,
@@ -138,6 +166,7 @@ export async function fetchOsmVenueData(
     const data: OsmVenueData = {
       accessibilityHints: extractAccessibilityFromTags(allTags),
       familyFacilityHints: extractFamilyFacilitiesFromTags(allTags),
+      petFriendlyHints: extractPetFriendlyFromTags(allTags),
       tags: allTags,
     };
 

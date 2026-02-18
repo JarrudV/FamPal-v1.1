@@ -20,7 +20,7 @@ The application is built with React 19, TypeScript, Vite 7, and Tailwind CSS v4.
 -   **Persistence**: User preferences (location, radius, category) persist across sessions via Firestore (logged-in) and localStorage (guests).
 -   **Social Features**: Friend Circles for private groups and shared places; Partner Space for shared favorites and memories.
 -   **Activity Tracking**: "My Activity" dashboard for tracking visited places, notes, and past outings.
--   **Accessibility & Family Facilities**: Community-contributed and verified data for accessibility features and family facilities, influencing ranking and filtering.
+-   **Accessibility, Family Facilities & Pet-Friendly**: Community-contributed and verified data for accessibility features, family facilities, and pet-friendly venue attributes, influencing ranking and filtering. Pet-friendly lens filter in Must Haves panel with chips: Dogs allowed, Pet-friendly patio, Water bowls, Off-leash area, Enclosed garden, Pets inside.
 -   **Gamification**: FamPals Explorer system awards points and badges for user contributions (e.g., reports, reviews), tracked via levels and an activity dashboard. Weekly contribution streaks (currentStreakWeeks, bestStreakWeeks) with ISO week calculation. In-app nudge banner prompts inactive users (30+ days) to contribute, with 7-day dismissal cooldown.
 -   **Place Owner Claim & Verification**: Two-sided marketplace allowing business owners to claim venues, submit verification evidence, and manage profiles. Admin review interface for approving/rejecting claims. Owner Dashboard with dynamic templates per ActivityType (restaurant, outdoor, kids, wine, etc.). Business Pro tier (R149/month) unlocks photo gallery, special offers, events, verified badge, and ranking boost.
 -   **PWA Support**: Installable as a web app on iOS and Android.
@@ -37,8 +37,8 @@ The application is built with React 19, TypeScript, Vite 7, and Tailwind CSS v4.
 -   Firebase client SDK for auth and Firestore.
 
 **Data Strategy:**
--   **Community-first model**: User-contributed data (accessibility, family facilities, reports, verdicts) is prioritized and cached permanently in Firestore.
--   **Google Places as fallback**: Google Places API data fills gaps, cached in Firestore for 90 days.
+-   **Community-first model**: User-contributed data (accessibility, family facilities, pet-friendly features, reports, verdicts) is prioritized and cached permanently in Firestore.
+-   **Google Places as fallback**: Google Places API data fills gaps, cached in Firestore for 90 days. Uses `allowsDogs` field from Google Places API (Enterprise + Atmosphere SKU) for pet-friendly data. Also extracts pet-friendly signals from reviews and venue types.
 -   **3-tier cache**: `localStorage` (60min) → Firestore shared cache (90 days / permanent) → Google Places API (last resort).
 -   **Cost-effective**: Firestore reads are significantly cheaper than Google Places API calls, reducing dependency over time as community data grows.
 
@@ -47,6 +47,6 @@ The application is built with React 19, TypeScript, Vite 7, and Tailwind CSS v4.
 -   **Google Gemini API**: AI-driven place recommendations.
 -   **Google Places API**: Browsing, searching, and detailed location information.
 -   **Paystack**: Payment processing for premium plans.
--   **OpenStreetMap Nominatim**: Reverse geocoding and enriching place data with accessibility/family facility tags.
+-   **OpenStreetMap Nominatim**: Reverse geocoding and enriching place data with accessibility/family facility/pet-friendly tags.
 -   **WhatsApp**: Sharing place details.
 -   **Google Calendar**: Adding planned activities.

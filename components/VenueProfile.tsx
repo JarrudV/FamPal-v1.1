@@ -15,6 +15,7 @@ import FamilyFacilitiesContributionModal from '../src/components/FamilyFacilitie
 import { getFamilyFacilitiesHintsFromGoogle } from '../src/utils/familyFacilitiesHints';
 import PlacePetFriendlySection from '../src/components/PlacePetFriendlySection';
 import PetFriendlyContributionModal from '../src/components/PetFriendlyContributionModal';
+import { getPetFriendlyHintsFromGoogle } from '../src/utils/petFriendlyHints';
 import { getPublicHints } from '../src/utils/publicHints';
 import { fetchOsmVenueData, OsmVenueData } from '../src/utils/osmService';
 
@@ -429,6 +430,17 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
       (feature) => !confirmedFamilyFacilities.some((confirmed) => confirmed.feature === feature)
     );
   }, [placeDetails, osmData, confirmedFamilyFacilities]);
+  const confirmedPetFriendly = (place.petFriendly || []).filter(
+    (item) => item.value === true && (item.confidence === 'reported' || item.confidence === 'verified')
+  );
+  const suggestedPetFriendlyHints = React.useMemo(() => {
+    const googleHints = getPetFriendlyHintsFromGoogle(placeDetails);
+    const osmHints = osmData?.petFriendlyHints || [];
+    const combined = new Set([...googleHints, ...osmHints]);
+    return [...combined].filter(
+      (feature) => !confirmedPetFriendly.some((confirmed) => confirmed.feature === feature)
+    );
+  }, [placeDetails, osmData, confirmedPetFriendly]);
   const publicHints = getPublicHints(placeDetails);
   const confirmedStrollerFromFamily = confirmedFamilyFacilities.some((item) => item.feature === 'stroller_friendly');
   const confirmedStrollerFromAccessibility = confirmedAccessibility.some((item) => item.feature === 'step_free_entry');
@@ -784,6 +796,7 @@ const VenueProfile: React.FC<VenueProfileProps> = ({
             <PlacePetFriendlySection
               petFriendly={place.petFriendly}
               petFriendlySummary={place.petFriendlySummary}
+              suggestedFeatures={suggestedPetFriendlyHints}
               onAddPetFriendlyInfo={(options) => {
                 setPetFriendlyModalScrollTarget(options?.focusSection || 'manual');
                 setPetFriendlyHighlightedSuggested(options?.highlightedSuggestedFeatures || []);
