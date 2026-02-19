@@ -5,7 +5,6 @@ import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-do
 import {
   auth,
   googleProvider,
-  signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
   onAuthStateChanged,
@@ -45,35 +44,6 @@ const authDebugLog = (message: string, payload?: Record<string, unknown>) => {
     return;
   }
   console.log(`[FamPals Auth] ${message}`);
-};
-
-const isLikelyInAppBrowser = (): boolean => {
-  if (typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent || '';
-  return /FBAN|FBAV|Instagram|Line|wv|WebView|GSA|TikTok/i.test(ua);
-};
-
-const isMobileUa = (): boolean => {
-  if (typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent || '';
-  return /Android|iPhone|iPad|iPod|IEMobile|Opera Mini|CriOS|FxiOS/i.test(ua);
-};
-
-const isStandaloneDisplayMode = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  const mediaStandalone = window.matchMedia?.('(display-mode: standalone)')?.matches;
-  const iosStandalone = (window.navigator as any)?.standalone === true;
-  return !!mediaStandalone || !!iosStandalone;
-};
-
-const canUsePopupFlowSafely = (): boolean => {
-  return !isMobileUa() && !isLikelyInAppBrowser() && !isStandaloneDisplayMode();
-};
-
-const isLocalhost = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  const host = window.location.hostname;
-  return host === 'localhost' || host === '127.0.0.1' || host === '::1';
 };
 
 // Convert Firebase Auth User to plain serializable object
@@ -219,45 +189,28 @@ const App: React.FC = () => {
     setLoading(true);
     try {
       await authPersistenceReady;
-      authDebugLog('Google sign-in start', { flow: 'popup-first' });
-      await signInWithPopup(auth, googleProvider);
+      authDebugLog('Google sign-in start', { flow: 'redirect' });
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(AUTH_REDIRECT_PENDING_KEY, '1');
+      }
+      await signInWithRedirect(auth, googleProvider);
       return;
-    } catch (popupErr: any) {
-      authDebugLog('Popup sign-in failed', { code: popupErr?.code, message: popupErr?.message });
-      if (popupErr?.code === 'auth/popup-closed-by-user' || popupErr?.code === 'auth/cancelled-popup-request') {
+    } catch (redirectErr: any) {
+      authDebugLog('Redirect sign-in failed', { code: redirectErr?.code, message: redirectErr?.message });
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
+      }
+      if (redirectErr?.code === 'auth/cancelled-popup-request' || redirectErr?.code === 'auth/redirect-cancelled-by-user') {
         setError(null);
         setLoading(false);
         return;
       }
-      if (popupErr?.code === 'auth/unauthorized-domain') {
+      if (redirectErr?.code === 'auth/unauthorized-domain') {
         setError("This domain is not authorized for Google Sign-In. Please add it to Firebase Console -> Authentication -> Settings -> Authorized domains.");
         setLoading(false);
         return;
       }
-      const isPopupBlocked = popupErr?.code === 'auth/popup-blocked' ||
-        popupErr?.code === 'auth/operation-not-supported-in-this-environment';
-      if (isPopupBlocked) {
-        authDebugLog('Popup blocked, falling back to redirect');
-        try {
-          if (typeof window !== 'undefined') {
-            window.sessionStorage.setItem(AUTH_REDIRECT_PENDING_KEY, '1');
-          }
-          await signInWithRedirect(auth, googleProvider);
-          return;
-        } catch (redirectErr: any) {
-          if (typeof window !== 'undefined') {
-            window.sessionStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
-          }
-          if (redirectErr?.code === 'auth/unauthorized-domain') {
-            setError("This domain is not authorized for Google Sign-In. Please add it to Firebase Console -> Authentication -> Settings -> Authorized domains.");
-          } else {
-            setError(`Login failed: ${redirectErr?.message || 'Unknown error'}`);
-          }
-          setLoading(false);
-          return;
-        }
-      }
-      setError(`Login failed: ${popupErr?.message || 'Unknown error'}`);
+      setError(`Login failed: ${redirectErr?.message || 'Unknown error'}`);
       setLoading(false);
     }
   }, [authBypassEnabled]);

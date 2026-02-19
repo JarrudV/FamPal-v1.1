@@ -6,7 +6,7 @@ import { getLimits, getPlanDisplayName, canUseAI, isPaidTier } from '../lib/enti
 import { storage, auth, db, collection, query, where, getDocs, getDoc, doc, setDoc, ref, uploadBytes, getDownloadURL, writeBatch, deleteField, serverTimestamp } from '../lib/firebase';
 import type { AppAccessContext } from '../lib/access';
 import { googleProvider, signOut as firebaseSignOut } from '../lib/firebase';
-import { reauthenticateWithPopup, reauthenticateWithRedirect } from 'firebase/auth';
+import { reauthenticateWithRedirect } from 'firebase/auth';
 import {
   clearLocalAppState,
   deleteUserOwnedFirestoreData,
@@ -19,29 +19,6 @@ import ManageMyData from '../src/components/ManageMyData';
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const DELETE_CONFIRM_TEXT = 'DELETE';
 const DELETE_REAUTH_PENDING_KEY = 'fampals_delete_reauth_pending';
-
-const isLikelyInAppBrowser = (): boolean => {
-  if (typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent || '';
-  return /FBAN|FBAV|Instagram|Line|wv|WebView|GSA|TikTok/i.test(ua);
-};
-
-const isMobileUa = (): boolean => {
-  if (typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent || '';
-  return /Android|iPhone|iPad|iPod|IEMobile|Opera Mini|CriOS|FxiOS/i.test(ua);
-};
-
-const isStandaloneDisplayMode = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  const mediaStandalone = window.matchMedia?.('(display-mode: standalone)')?.matches;
-  const iosStandalone = (window.navigator as any)?.standalone === true;
-  return !!mediaStandalone || !!iosStandalone;
-};
-
-const canUsePopupFlowSafely = (): boolean => {
-  return !isMobileUa() && !isLikelyInAppBrowser() && !isStandaloneDisplayMode();
-};
 
 interface ProfileProps {
   state: AppState;
@@ -613,22 +590,13 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
     setReauthInProgress(true);
     setDeleteError(null);
     try {
-      if (canUsePopupFlowSafely()) {
-        if (import.meta.env.DEV) {
-          console.log('[FamPals Delete] Re-auth using popup flow');
-        }
-        await reauthenticateWithPopup(auth.currentUser, googleProvider);
-        setRequiresReauthForDelete(false);
-        setDeleteSuccess('Re-authentication complete. Confirm deletion to continue.');
-      } else {
-        if (import.meta.env.DEV) {
-          console.log('[FamPals Delete] Re-auth using redirect flow');
-        }
-        if (typeof window !== 'undefined') {
-          window.sessionStorage.setItem(DELETE_REAUTH_PENDING_KEY, '1');
-        }
-        await reauthenticateWithRedirect(auth.currentUser, googleProvider);
+      if (import.meta.env.DEV) {
+        console.log('[FamPals Delete] Re-auth using redirect flow');
       }
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(DELETE_REAUTH_PENDING_KEY, '1');
+      }
+      await reauthenticateWithRedirect(auth.currentUser, googleProvider);
     } catch (err: any) {
       setDeleteError(err?.message || 'Re-authentication failed. Please try again.');
       if (import.meta.env.DEV) {
