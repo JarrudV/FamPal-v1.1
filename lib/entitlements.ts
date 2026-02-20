@@ -31,6 +31,10 @@ function getEffectiveCreditLimit(entitlement: Entitlement | undefined): number {
   return tierDefault;
 }
 
+function isSubscriptionActiveStatus(status: Entitlement['subscription_status'] | undefined): boolean {
+  return status === 'active' || status === 'grace_period' || status === 'cancelled_active';
+}
+
 function getEffectiveCreditsUsed(
   entitlement: Entitlement | undefined,
   poolUsage?: { ai_requests_this_month?: number; ai_requests_reset_date?: string } | null
@@ -47,12 +51,16 @@ function getEffectiveCreditsUsed(
 }
 
 export function getLimits(entitlement: Entitlement | undefined) {
+  if (entitlement?.subscription_tier === 'admin') {
+    return PLAN_LIMITS.pro;
+  }
+
+  if (entitlement?.subscription_tier === 'pro') {
+    return isSubscriptionActiveStatus(entitlement.subscription_status) ? PLAN_LIMITS.pro : PLAN_LIMITS.free;
+  }
+
   const raw =
-    entitlement?.subscription_tier === 'admin'
-      ? 'pro'
-      : entitlement?.subscription_tier === 'pro'
-        ? 'pro'
-        : (entitlement?.plan_tier || 'free');
+    entitlement?.plan_tier || 'free';
   const tier = (raw === 'family' || raw === 'lifetime') ? 'pro' : raw as 'free' | 'pro';
   const status = entitlement?.plan_status || 'active';
   
@@ -68,7 +76,7 @@ export function isPaidTier(entitlement: Entitlement | undefined): boolean {
   const tier = getEntitlementTier(entitlement);
   if (tier === 'admin') return true;
   if (tier === 'pro' && entitlement.subscription_status) {
-    return entitlement.subscription_status === 'active';
+    return isSubscriptionActiveStatus(entitlement.subscription_status);
   }
   const { plan_tier, plan_status } = entitlement;
   return (plan_tier === 'pro' || plan_tier === 'family' || plan_tier === 'lifetime') && plan_status === 'active';

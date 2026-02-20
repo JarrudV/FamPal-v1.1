@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import type { CorsOptions, CorsOptionsDelegate } from 'cors';
 import { createRequire } from 'module';
 import crypto from 'crypto';
+import { Readable } from 'stream';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -9,6 +10,7 @@ import dotenv from 'dotenv';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
+import { GoogleAuth } from 'google-auth-library';
 import { getExploreIntentDefinition, type ExploreIntentId } from './exploreIntentConfig.js';
 
 const require = createRequire(import.meta.url);
@@ -51,7 +53,7 @@ function loadEnvFiles(): string[] {
 
 const envFilesLoaded = loadEnvFiles();
 
-const placesFromAlias = process.env.GOOGLE_PLACES_API_KEY || process.env.VITE_GOOGLE_PLACES_API_KEY || '';
+const placesFromAlias = process.env.GOOGLE_PLACES_API_KEY || '';
 if (!process.env.PLACES_API_KEY && placesFromAlias) {
   process.env.PLACES_API_KEY = placesFromAlias;
 }
@@ -92,29 +94,46 @@ app.get('/health', (_req, res) => {
 
 const replitDomains = process.env.REPLIT_DOMAINS?.split(',').map((domain) => domain.trim()).filter(Boolean) ?? [];
 const replitOrigins = replitDomains.map((domain) => `https://${domain}`);
+const configuredProdOrigin = (process.env.FRONTEND_PRODUCTION_ORIGIN || '').trim();
+const configuredStagingOrigin = (process.env.FRONTEND_STAGING_ORIGIN || '').trim();
 const allowedOrigins = [
+  configuredProdOrigin,
+  configuredStagingOrigin,
   'https://app.fampal.co.za',
+  'https://staging.fampal.co.za',
   'http://localhost:3000',
   'http://localhost:5173',
   'http://localhost:5000',
   'http://localhost:8080',
   ...replitOrigins,
-];
+].filter(Boolean);
 
 const isProduction = process.env.NODE_ENV === 'production';
+if (isProduction && !PLACES_API_KEY) {
+  console.error('[FamPals API] PLACES_API_KEY is required in production.');
+  process.exit(1);
+}
 app.use(cors({
-  origin: isProduction
-    ? (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
-      return callback(null, false);
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (!isProduction && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+      return callback(null, true);
     }
-    : true,
+    return callback(null, false);
+  },
 }));
 app.use(express.json({ verify: (req: any, _res, buf) => { req.rawBody = buf; } }));
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || '';
 const PAYSTACK_PUBLIC_KEY = process.env.PAYSTACK_PUBLIC_KEY || '';
+const GOOGLE_PLAY_PACKAGE_NAME = process.env.GOOGLE_PLAY_PACKAGE_NAME || 'co.fampal.app';
+const GOOGLE_PLAY_SUBSCRIPTION_PRODUCT_IDS = (process.env.GOOGLE_PLAY_SUBSCRIPTION_PRODUCT_IDS || process.env.GOOGLE_PLAY_SUBSCRIPTION_PRODUCT_ID || 'fampal_pro_monthly')
+  .split(',')
+  .map((id) => id.trim())
+  .filter(Boolean);
+const GOOGLE_PLAY_SERVICE_ACCOUNT_JSON = process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT || '';
+const GOOGLE_PLAY_VERIFICATION_ENABLED = !!GOOGLE_PLAY_SERVICE_ACCOUNT_JSON;
 const APP_URL = process.env.APP_URL
   || (replitDomains[0] ? `https://${replitDomains[0]}` : 'http://localhost:5000');
 const GOOGLE_PLACES_API_KEY = PLACES_API_KEY;
@@ -123,6 +142,10 @@ const PLACE_REFRESH_MAX_PER_RUN = Math.max(1, Number(process.env.PLACE_REFRESH_M
 const PLACE_REFRESH_CANDIDATE_MULTIPLIER = Math.max(2, Number(process.env.PLACE_REFRESH_CANDIDATE_MULTIPLIER || 4));
 const PLACE_REFRESH_CONCURRENCY = Math.max(1, Number(process.env.PLACE_REFRESH_CONCURRENCY || 3));
 const PLACE_REFRESH_CRON_TOKEN = process.env.PLACE_REFRESH_CRON_TOKEN || '';
+const PLACES_REQUEST_TIMEOUT_MS = Math.min(8000, Math.max(3000, Number(process.env.PLACES_REQUEST_TIMEOUT_MS || 7000)));
+const PLACES_SEARCH_CACHE_TTL_MS = Math.min(300000, Math.max(60000, Number(process.env.PLACES_SEARCH_CACHE_TTL_MS || 120000)));
+const PLACES_DETAILS_CACHE_TTL_MS = Math.min(300000, Math.max(60000, Number(process.env.PLACES_DETAILS_CACHE_TTL_MS || 180000)));
+const PLACES_CACHE_MAX_ENTRIES = Math.max(50, Number(process.env.PLACES_CACHE_MAX_ENTRIES || 400));
 
 console.log('[FamPals API] Startup config:', {
   port: process.env.PORT || 8080,
@@ -130,7 +153,110 @@ console.log('[FamPals API] Startup config:', {
   nodeEnv: process.env.NODE_ENV,
   envFilesLoaded,
   paystackConfigured: !!PAYSTACK_SECRET_KEY,
+  playVerificationConfigured: GOOGLE_PLAY_VERIFICATION_ENABLED,
   placesConfigured: PLACES_CONFIGURED,
+  placesTimeoutMs: PLACES_REQUEST_TIMEOUT_MS,
+});
+
+function getClientIp(req: Request): string {
+  const xfwd = req.headers['x-forwarded-for'];
+  if (typeof xfwd === 'string' && xfwd.length > 0) {
+    return xfwd.split(',')[0].trim();
+  }
+  if (Array.isArray(xfwd) && xfwd.length > 0) {
+    return xfwd[0];
+  }
+  return req.ip || 'unknown';
+}
+
+type RateConfig = { windowMs: number; max: number; label: string };
+const rateStore = new Map<string, { count: number; resetAt: number }>();
+function createIpRateLimiter(config: RateConfig) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const now = Date.now();
+    const ip = getClientIp(req);
+    const key = `${config.label}:${ip}`;
+    const current = rateStore.get(key);
+    if (!current || current.resetAt <= now) {
+      rateStore.set(key, { count: 1, resetAt: now + config.windowMs });
+      return next();
+    }
+    if (current.count >= config.max) {
+      return res.status(429).json({ error: 'rate_limit_exceeded' });
+    }
+    current.count += 1;
+    rateStore.set(key, current);
+    if (rateStore.size > 10000) {
+      for (const [storeKey, state] of rateStore.entries()) {
+        if (state.resetAt <= now) rateStore.delete(storeKey);
+      }
+    }
+    return next();
+  };
+}
+
+type CacheEntry = { expiresAt: number; body: string };
+const responseCache = new Map<string, CacheEntry>();
+function buildSortedQueryKey(query: Request['query']): string {
+  const entries = Object.entries(query)
+    .filter(([, value]) => value !== undefined && value !== null)
+    .map(([key, value]) => [key, String(value)] as const)
+    .sort(([a], [b]) => a.localeCompare(b));
+  const params = new URLSearchParams(entries as [string, string][]);
+  return params.toString();
+}
+function createJsonCache(ttlMs: number, label: string) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (req.method !== 'GET') return next();
+    const cacheKey = `${label}:${req.path}?${buildSortedQueryKey(req.query)}`;
+    const now = Date.now();
+    const hit = responseCache.get(cacheKey);
+    if (hit && hit.expiresAt > now) {
+      res.setHeader('X-Cache', 'HIT');
+      res.setHeader('Cache-Control', 'private, max-age=60');
+      return res.type('application/json').send(hit.body);
+    }
+    const originalJson = res.json.bind(res);
+    res.json = ((payload: any) => {
+      try {
+        const body = JSON.stringify(payload);
+        responseCache.set(cacheKey, { expiresAt: now + ttlMs, body });
+        if (responseCache.size > PLACES_CACHE_MAX_ENTRIES) {
+          const oldest = responseCache.keys().next().value;
+          if (oldest) responseCache.delete(oldest);
+        }
+        res.setHeader('X-Cache', 'MISS');
+      } catch {
+        // no-op
+      }
+      return originalJson(payload);
+    }) as typeof res.json;
+    return next();
+  };
+}
+
+async function fetchWithTimeout(url: string, init?: RequestInit, timeoutMs: number = PLACES_REQUEST_TIMEOUT_MS): Promise<globalThis.Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...(init || {}), signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+app.use('/api/places', (req, res, next) => {
+  const start = Date.now();
+  const route = req.path;
+  res.on('finish', () => {
+    console.log('[FamPals Places] request', {
+      route,
+      method: req.method,
+      status: res.statusCode,
+      durationMs: Date.now() - start,
+    });
+  });
+  next();
 });
 
 // Initialize Firebase Admin SDK
@@ -197,13 +323,124 @@ function requireSchedulerAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+type PlaySubscriptionStatus =
+  | 'inactive'
+  | 'active'
+  | 'pending'
+  | 'grace_period'
+  | 'cancelled_active'
+  | 'billing_retry'
+  | 'expired';
+
+function hashPurchaseToken(token: string | null | undefined): string | null {
+  if (!token) return null;
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function isPlayStatusPaid(status: PlaySubscriptionStatus): boolean {
+  return status === 'active' || status === 'grace_period' || status === 'cancelled_active';
+}
+
+function mapPlanStatusFromPlay(status: PlaySubscriptionStatus): 'active' | 'cancelled' | 'expired' {
+  if (status === 'cancelled_active') return 'cancelled';
+  if (status === 'active' || status === 'grace_period') return 'active';
+  return 'expired';
+}
+
+function mapClientFallbackPlayStatus(purchaseState: number | null, autoRenewing: boolean | null): PlaySubscriptionStatus {
+  if (purchaseState === 2) return 'pending';
+  if (purchaseState === 1) return autoRenewing === false ? 'cancelled_active' : 'active';
+  return 'inactive';
+}
+
+function mapPlayApiStateToStatus(subscriptionState: string | undefined, expiryTime: string | null, autoRenewEnabled: boolean): PlaySubscriptionStatus {
+  const now = Date.now();
+  const expiryMs = expiryTime ? Date.parse(expiryTime) : NaN;
+  const hasFutureExpiry = Number.isFinite(expiryMs) && expiryMs > now;
+
+  switch (subscriptionState) {
+    case 'SUBSCRIPTION_STATE_ACTIVE':
+      return autoRenewEnabled ? 'active' : 'cancelled_active';
+    case 'SUBSCRIPTION_STATE_PENDING':
+      return 'pending';
+    case 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD':
+      return 'grace_period';
+    case 'SUBSCRIPTION_STATE_ON_HOLD':
+      return 'billing_retry';
+    case 'SUBSCRIPTION_STATE_CANCELED':
+      return hasFutureExpiry ? 'cancelled_active' : 'expired';
+    case 'SUBSCRIPTION_STATE_EXPIRED':
+      return 'expired';
+    default:
+      return hasFutureExpiry ? 'cancelled_active' : 'inactive';
+  }
+}
+
+async function verifyPlaySubscriptionOnServer(
+  purchaseToken: string,
+): Promise<{
+  status: PlaySubscriptionStatus;
+  productId: string | null;
+  expiryTime: string | null;
+  autoRenewing: boolean;
+  rawState: string | null;
+  latestOrderId: string | null;
+}> {
+  const credentials = JSON.parse(GOOGLE_PLAY_SERVICE_ACCOUNT_JSON);
+  const auth = new GoogleAuth({
+    credentials,
+    scopes: ['https://www.googleapis.com/auth/androidpublisher'],
+  });
+  const client = await auth.getClient();
+  const token = await client.getAccessToken();
+  const accessToken = typeof token === 'string' ? token : token?.token;
+  if (!accessToken) {
+    throw new Error('google_play_access_token_unavailable');
+  }
+
+  const verifyUrl = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${encodeURIComponent(GOOGLE_PLAY_PACKAGE_NAME)}/purchases/subscriptionsv2/tokens/${encodeURIComponent(purchaseToken)}`;
+  const response = await fetch(verifyUrl, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (response.status === 404) {
+    return {
+      status: 'inactive',
+      productId: null,
+      expiryTime: null,
+      autoRenewing: false,
+      rawState: 'NOT_FOUND',
+      latestOrderId: null,
+    };
+  }
+
+  if (!response.ok) {
+    const bodyText = await response.text().catch(() => '');
+    throw new Error(`google_play_verify_failed_${response.status}:${bodyText}`);
+  }
+
+  const payload: any = await response.json();
+  const lineItem = Array.isArray(payload?.lineItems) ? payload.lineItems[0] : null;
+  const productId = lineItem?.productId || null;
+  const expiryTime = lineItem?.expiryTime || null;
+  const latestOrderId = lineItem?.latestSuccessfulOrderId || null;
+  const autoRenewing = lineItem?.autoRenewingPlan?.autoRenewEnabled === true;
+  const rawState = payload?.subscriptionState || null;
+  const status = mapPlayApiStateToStatus(rawState || undefined, expiryTime, autoRenewing);
+
+  return { status, productId, expiryTime, autoRenewing, rawState, latestOrderId };
+}
+
 type PlaceRefreshOptions = {
   limit?: number;
   dryRun?: boolean;
 };
 
 async function fetchGooglePlaceForRefresh(googlePlaceId: string): Promise<any> {
-  const response = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(googlePlaceId)}`, {
+  const response = await fetchWithTimeout(`https://places.googleapis.com/v1/places/${encodeURIComponent(googlePlaceId)}`, {
     headers: {
       'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
       'X-Goog-FieldMask': 'id,displayName,formattedAddress,rating,userRatingCount,types,priceLevel,location,photos,primaryType,primaryTypeDisplayName,googleMapsUri,goodForChildren,menuForChildren,restroom,allowsDogs,accessibilityOptions,parkingOptions',
@@ -670,14 +907,14 @@ app.post('/api/admin/places/refresh-stale', requireSchedulerAuth, async (req, re
   }
 });
 
-app.get('/api/places/nearby', async (req, res) => {
+const placesSearchRateLimit = createIpRateLimiter({ windowMs: 60_000, max: 120, label: 'places_search' });
+const placesDetailsRateLimit = createIpRateLimiter({ windowMs: 60_000, max: 90, label: 'places_details' });
+const placesPhotoRateLimit = createIpRateLimiter({ windowMs: 60_000, max: 180, label: 'places_photo' });
+
+app.get('/api/places/nearby', placesSearchRateLimit, createJsonCache(PLACES_SEARCH_CACHE_TTL_MS, 'places_nearby'), async (req, res) => {
   try {
-    const apiKey = GOOGLE_PLACES_API_KEY || (typeof req.query.apiKey === 'string' ? req.query.apiKey : '');
-    if (!apiKey) {
+    if (!GOOGLE_PLACES_API_KEY) {
       return res.status(500).json({ error: 'Places API not configured' });
-    }
-    if (!GOOGLE_PLACES_API_KEY && apiKey) {
-      console.warn('[FamPals API] Using client-provided Places API key for nearby search.');
     }
     const lat = Number(req.query.lat);
     const lng = Number(req.query.lng);
@@ -691,7 +928,7 @@ app.get('/api/places/nearby', async (req, res) => {
     const legacyType = resolveLegacyType(typeParam);
 
     const params = new URLSearchParams({
-      key: apiKey,
+      key: GOOGLE_PLACES_API_KEY,
       location: `${lat},${lng}`,
       radius: `${radiusMeters}`,
     });
@@ -703,7 +940,7 @@ app.get('/api/places/nearby', async (req, res) => {
     }
 
     const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${params.toString()}`;
-    const response = await fetch(url);
+    const response = await fetchWithTimeout(url);
     const data = await response.json();
 
     if (data.status === 'INVALID_REQUEST' && pageToken) {
@@ -718,19 +955,15 @@ app.get('/api/places/nearby', async (req, res) => {
       hasMore: !!data.next_page_token,
     });
   } catch (error) {
-    console.error('Places nearby error:', error);
+    console.error('Places nearby error:', (error as any)?.name || 'unknown_error');
     return res.status(500).json({ error: 'Places search failed' });
   }
 });
 
-app.get('/api/places/text', async (req, res) => {
+app.get('/api/places/text', placesSearchRateLimit, createJsonCache(PLACES_SEARCH_CACHE_TTL_MS, 'places_text'), async (req, res) => {
   try {
-    const apiKey = GOOGLE_PLACES_API_KEY || (typeof req.query.apiKey === 'string' ? req.query.apiKey : '');
-    if (!apiKey) {
+    if (!GOOGLE_PLACES_API_KEY) {
       return res.status(500).json({ error: 'Places API not configured' });
-    }
-    if (!GOOGLE_PLACES_API_KEY && apiKey) {
-      console.warn('[FamPals API] Using client-provided Places API key for text search.');
     }
     const query = typeof req.query.query === 'string' ? req.query.query.trim() : '';
     if (!query) {
@@ -746,7 +979,7 @@ app.get('/api/places/text', async (req, res) => {
     const pageToken = typeof req.query.pageToken === 'string' ? req.query.pageToken : undefined;
 
     const params = new URLSearchParams({
-      key: apiKey,
+      key: GOOGLE_PLACES_API_KEY,
       query: `${query} family friendly`,
       location: `${lat},${lng}`,
       radius: `${radiusMeters}`,
@@ -756,7 +989,7 @@ app.get('/api/places/text', async (req, res) => {
     }
 
     const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?${params.toString()}`;
-    const response = await fetch(url);
+    const response = await fetchWithTimeout(url);
     const data = await response.json();
 
     if (data.status === 'INVALID_REQUEST' && pageToken) {
@@ -771,15 +1004,61 @@ app.get('/api/places/text', async (req, res) => {
       hasMore: !!data.next_page_token,
     });
   } catch (error) {
-    console.error('Places text search error:', error);
+    console.error('Places text search error:', (error as any)?.name || 'unknown_error');
     return res.status(500).json({ error: 'Places search failed' });
   }
 });
 
-app.get('/api/places/intent', async (req, res) => {
+app.get('/api/places/search', placesSearchRateLimit, createJsonCache(PLACES_SEARCH_CACHE_TTL_MS, 'places_search'), async (req, res) => {
   try {
-    const apiKey = GOOGLE_PLACES_API_KEY || (typeof req.query.apiKey === 'string' ? req.query.apiKey : '');
-    if (!apiKey) {
+    if (!GOOGLE_PLACES_API_KEY) {
+      return res.status(500).json({ error: 'Places API not configured' });
+    }
+    const query = typeof req.query.q === 'string'
+      ? req.query.q.trim()
+      : (typeof req.query.query === 'string' ? req.query.query.trim() : '');
+    if (!query) {
+      return res.status(400).json({ error: 'Missing query' });
+    }
+    const lat = Number(req.query.lat);
+    const lng = Number(req.query.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({ error: 'Missing or invalid lat/lng' });
+    }
+    const radiusKm = Number(req.query.radiusKm || 10);
+    const radiusMeters = Math.min(Math.max(radiusKm, 0.1) * 1000, 50000);
+    const pageToken = typeof req.query.pageToken === 'string' ? req.query.pageToken : undefined;
+
+    const params = new URLSearchParams({
+      key: GOOGLE_PLACES_API_KEY,
+      query: `${query} family friendly`,
+      location: `${lat},${lng}`,
+      radius: `${radiusMeters}`,
+    });
+    if (pageToken) params.set('pagetoken', pageToken);
+
+    const response = await fetchWithTimeout(`https://maps.googleapis.com/maps/api/place/textsearch/json?${params.toString()}`);
+    const data = await response.json();
+    if (data.status === 'INVALID_REQUEST' && pageToken) {
+      return res.status(409).json({ error: 'page_token_not_ready' });
+    }
+    if (data.status && data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+      return res.status(400).json({ error: data.error_message || data.status, status: data.status });
+    }
+    return res.json({
+      results: data.results || [],
+      nextPageToken: data.next_page_token || null,
+      hasMore: !!data.next_page_token,
+    });
+  } catch (error) {
+    console.error('Places search error:', (error as any)?.name || 'unknown_error');
+    return res.status(500).json({ error: 'Places search failed' });
+  }
+});
+
+app.get('/api/places/intent', placesSearchRateLimit, createJsonCache(PLACES_SEARCH_CACHE_TTL_MS, 'places_intent'), async (req, res) => {
+  try {
+    if (!GOOGLE_PLACES_API_KEY) {
       return res.status(500).json({ error: 'Places API not configured' });
     }
     const intent = (typeof req.query.intent === 'string' ? req.query.intent : 'all') as ExploreIntentId;
@@ -815,7 +1094,7 @@ app.get('/api/places/intent', async (req, res) => {
         }
 
         const params = new URLSearchParams({
-          key: apiKey,
+          key: GOOGLE_PLACES_API_KEY,
           query: query,
           location: `${lat},${lng}`,
           radius: `${radiusMeters}`,
@@ -825,7 +1104,7 @@ app.get('/api/places/intent', async (req, res) => {
         }
 
         const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?${params.toString()}`;
-        const response = await fetch(url);
+        const response = await fetchWithTimeout(url);
         const data = await response.json();
 
         if (data.status === 'INVALID_REQUEST' && nextPageToken) {
@@ -907,7 +1186,7 @@ app.get('/api/places/intent', async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Places intent search error:', error);
+    console.error('Places intent search error:', (error as any)?.name || 'unknown_error');
     return res.status(500).json({ error: 'Places intent search failed' });
   }
 });
@@ -926,6 +1205,183 @@ app.get('/api/subscription/status/:userId', async (req, res) => {
   } catch (error) {
     console.error('Error fetching subscription status:', error);
     return res.status(500).json({ error: 'Failed to fetch status' });
+  }
+});
+
+app.get('/api/places/details/:placeId', placesDetailsRateLimit, createJsonCache(PLACES_DETAILS_CACHE_TTL_MS, 'places_details'), async (req, res) => {
+  try {
+    if (!GOOGLE_PLACES_API_KEY) {
+      return res.status(500).json({ error: 'Places API not configured' });
+    }
+    const placeId = String(req.params.placeId || '').trim();
+    if (!placeId) {
+      return res.status(400).json({ error: 'Missing placeId' });
+    }
+
+    const baseFields = 'id,displayName,formattedAddress,nationalPhoneNumber,internationalPhoneNumber,websiteUri,rating,userRatingCount,regularOpeningHours,photos,reviews,priceLevel,types,location,googleMapsUri,accessibilityOptions,goodForChildren,menuForChildren,restroom,allowsDogs,parkingOptions';
+    const extendedFields = `${baseFields},editorialSummary,generativeSummary`;
+
+    let response = await fetchWithTimeout(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`, {
+      headers: {
+        'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
+        'X-Goog-FieldMask': extendedFields,
+      },
+    });
+    if (!response.ok && response.status === 400) {
+      response = await fetchWithTimeout(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`, {
+        headers: {
+          'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
+          'X-Goog-FieldMask': baseFields,
+        },
+      });
+    }
+
+    if (!response.ok) {
+      return res.status(response.status === 404 ? 404 : 502).json({ error: 'Places details failed' });
+    }
+
+    const data = await response.json();
+    return res.json(data);
+  } catch (error) {
+    console.error('Places details error:', (error as any)?.name || 'unknown_error');
+    return res.status(500).json({ error: 'Places details failed' });
+  }
+});
+
+app.get('/api/places/photo', placesPhotoRateLimit, async (req, res) => {
+  try {
+    if (!GOOGLE_PLACES_API_KEY) {
+      return res.status(500).json({ error: 'Places API not configured' });
+    }
+    const photoName = typeof req.query.photoName === 'string' ? req.query.photoName.trim() : '';
+    const photoReference = typeof req.query.photoReference === 'string' ? req.query.photoReference.trim() : '';
+    const maxWidth = Number(req.query.maxWidth || 600);
+    const maxHeight = Number(req.query.maxHeight || 400);
+
+    let targetUrl = '';
+    if (photoName) {
+      targetUrl = `https://places.googleapis.com/v1/${encodeURIComponent(photoName)}/media?maxHeightPx=${Math.min(Math.max(maxHeight, 64), 1600)}&maxWidthPx=${Math.min(Math.max(maxWidth, 64), 1600)}&key=${encodeURIComponent(GOOGLE_PLACES_API_KEY)}`;
+    } else if (photoReference) {
+      targetUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${Math.min(Math.max(maxWidth, 64), 1600)}&photo_reference=${encodeURIComponent(photoReference)}&key=${encodeURIComponent(GOOGLE_PLACES_API_KEY)}`;
+    } else {
+      return res.status(400).json({ error: 'Missing photoName or photoReference' });
+    }
+
+    const response = await fetchWithTimeout(targetUrl);
+    if (!response.ok) {
+      return res.status(response.status === 404 ? 404 : 502).json({ error: 'Photo fetch failed' });
+    }
+
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    const cacheControl = response.headers.get('cache-control') || 'public, max-age=300, stale-while-revalidate=86400';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', cacheControl);
+    const stream = response.body;
+    if (!stream) {
+      return res.status(502).json({ error: 'Photo stream unavailable' });
+    }
+    Readable.fromWeb(stream as any).pipe(res);
+    return;
+  } catch (error) {
+    console.error('Places photo proxy error:', (error as any)?.name || 'unknown_error');
+    return res.status(500).json({ error: 'Photo proxy failed' });
+  }
+});
+
+app.post('/api/play/subscription/sync', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.uid!;
+    const requestedProductId = typeof req.body?.productId === 'string' ? req.body.productId.trim() : '';
+    const purchaseToken = typeof req.body?.purchaseToken === 'string' ? req.body.purchaseToken.trim() : '';
+    const purchaseState = Number.isFinite(Number(req.body?.purchaseState)) ? Number(req.body.purchaseState) : null;
+    const autoRenewing = typeof req.body?.autoRenewing === 'boolean' ? req.body.autoRenewing : null;
+    const orderId = typeof req.body?.orderId === 'string' ? req.body.orderId : null;
+
+    const productId = requestedProductId || GOOGLE_PLAY_SUBSCRIPTION_PRODUCT_IDS[0];
+    if (!productId || !GOOGLE_PLAY_SUBSCRIPTION_PRODUCT_IDS.includes(productId)) {
+      return res.status(400).json({ error: 'Unsupported subscription product id' });
+    }
+
+    const userRef = db.collection('users').doc(userId);
+    const userDoc = await userRef.get();
+    const userData = userDoc.exists ? (userDoc.data() as Record<string, any>) : {};
+    if (isAdminAccessUser(userData)) {
+      return res.json({
+        status: 'active',
+        source: 'admin',
+        entitlement: userData?.entitlement || null,
+        skipped: true,
+      });
+    }
+
+    let status: PlaySubscriptionStatus = 'inactive';
+    let verifiedProductId: string | null = productId;
+    let expiryTime: string | null = null;
+    let autoRenewFlag = autoRenewing === true;
+    let playState: string | null = null;
+    let latestOrderId: string | null = orderId;
+
+    if (purchaseToken) {
+      if (GOOGLE_PLAY_VERIFICATION_ENABLED) {
+        const verification = await verifyPlaySubscriptionOnServer(purchaseToken);
+        status = verification.status;
+        verifiedProductId = verification.productId || productId;
+        expiryTime = verification.expiryTime;
+        autoRenewFlag = verification.autoRenewing;
+        playState = verification.rawState;
+        latestOrderId = verification.latestOrderId || latestOrderId;
+      } else {
+        status = mapClientFallbackPlayStatus(purchaseState, autoRenewing);
+      }
+    }
+
+    const existingEntitlement = (userData?.entitlement || {}) as Record<string, any>;
+    const nowIso = new Date().toISOString();
+    const nextResetDate = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toISOString();
+    const tier = isPlayStatusPaid(status) ? 'pro' : 'free';
+    const planStatus = mapPlanStatusFromPlay(status);
+
+    const mergedEntitlement = {
+      ...existingEntitlement,
+      subscription_tier: tier,
+      subscription_status: status,
+      subscription_source: purchaseToken || existingEntitlement.subscription_source === 'play' ? 'play' : null,
+      plan_tier: tier,
+      plan_status: planStatus,
+      entitlement_source: purchaseToken || existingEntitlement.entitlement_source === 'play' ? 'play' : null,
+      entitlement_start_date: existingEntitlement.entitlement_start_date || null,
+      entitlement_end_date: expiryTime || null,
+      ai_requests_this_month: typeof existingEntitlement.ai_requests_this_month === 'number' ? existingEntitlement.ai_requests_this_month : 0,
+      ai_requests_reset_date: existingEntitlement.ai_requests_reset_date || nextResetDate,
+      usage_reset_month: existingEntitlement.usage_reset_month || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`,
+      gemini_credits_used: typeof existingEntitlement.gemini_credits_used === 'number' ? existingEntitlement.gemini_credits_used : 0,
+      gemini_credits_limit: typeof existingEntitlement.gemini_credits_limit === 'number' ? existingEntitlement.gemini_credits_limit : (tier === 'pro' ? 100 : 5),
+      play_product_id: verifiedProductId,
+      play_purchase_token_hash: hashPurchaseToken(purchaseToken || null),
+      play_last_order_id: latestOrderId || null,
+      play_auto_renewing: autoRenewFlag,
+      play_state: playState || null,
+      last_verified_at: nowIso,
+    };
+
+    if (tier === 'pro' && !existingEntitlement.entitlement_start_date) {
+      mergedEntitlement.entitlement_start_date = nowIso;
+    }
+    if (tier === 'free' && !mergedEntitlement.entitlement_start_date) {
+      mergedEntitlement.entitlement_start_date = null;
+    }
+
+    await userRef.set({ entitlement: mergedEntitlement }, { merge: true });
+
+    return res.json({
+      status,
+      source: GOOGLE_PLAY_VERIFICATION_ENABLED ? 'play_verified' : 'play_client_fallback',
+      entitlement: mergedEntitlement,
+      verificationEnabled: GOOGLE_PLAY_VERIFICATION_ENABLED,
+    });
+  } catch (error: any) {
+    console.error('Play subscription sync failed:', error?.message || error);
+    return res.status(500).json({ error: 'Play subscription sync failed' });
   }
 });
 

@@ -53,7 +53,7 @@ Key notes:
 - `PLACES_API_KEY` is the server canonical key.
 - Server bridges aliases at runtime:
   - `GOOGLE_PLACES_API_KEY`
-  - `VITE_GOOGLE_PLACES_API_KEY`
+- Client must not use any Google Places API key directly.
 - Keep all `.env*` files local and uncommitted.
 
 ## Dev Auth Bypass (QA/Store Review Only)

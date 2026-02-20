@@ -93,6 +93,29 @@ service cloud.firestore {
         && request.resource.data.status == 'pending';
     }
 
+    function entitlementClientSafe() {
+      return !(request.resource.data.entitlement is map)
+        || (
+          // New doc: client can only initialize free-tier entitlement values.
+          (
+            resource == null
+            && (!('subscription_tier' in request.resource.data.entitlement) || request.resource.data.entitlement.subscription_tier == 'free')
+            && (!('plan_tier' in request.resource.data.entitlement) || request.resource.data.entitlement.plan_tier == 'free')
+          )
+          // Existing doc: client can only update usage counters.
+          || (
+            resource != null
+            && request.resource.data.entitlement.diff(resource.data.entitlement).affectedKeys().hasOnly([
+              'gemini_credits_used',
+              'gemini_credits_limit',
+              'usage_reset_month',
+              'ai_requests_this_month',
+              'ai_requests_reset_date'
+            ])
+          )
+        );
+    }
+
     // Required for Google Play UGC compliance
     match /reports/{reportId} {
       allow create: if signedIn() && validUgcReportCreate();
@@ -108,7 +131,7 @@ service cloud.firestore {
         // Allow reading for partner code lookups (query must filter by partnerLink.inviteCode)
         resource.data.partnerLink.inviteCode != null
       );
-      allow write: if signedIn() && request.auth.uid == userId;
+      allow write: if signedIn() && request.auth.uid == userId && entitlementClientSafe();
     }
     // Allow the owner to read/write any subcollections under their user doc
     match /users/{userId}/{document=**} {

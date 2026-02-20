@@ -44,8 +44,6 @@ env:
     availability:
       - BUILD
       - RUNTIME
-  - variable: VITE_GOOGLE_PLACES_API_KEY
-    secret: VITE_GOOGLE_PLACES_API_KEY
     availability:
       - BUILD
       - RUNTIME

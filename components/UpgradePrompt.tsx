@@ -1,4 +1,4 @@
-import { PLAN_PRICES, GOOGLE_PLAY_SUBSCRIPTION_URL } from '../types';
+import { PLAN_PRICES } from '../types';
 
 interface UpgradePromptProps {
   feature: string;
@@ -7,13 +7,8 @@ interface UpgradePromptProps {
   compact?: boolean;
 }
 
-function openPlayStore() {
-  window.open(GOOGLE_PLAY_SUBSCRIPTION_URL, '_blank', 'noopener,noreferrer');
-}
-
 export function UpgradePrompt({ feature, currentLimit, onUpgrade, compact = false }: UpgradePromptProps) {
   const handleUpgrade = () => {
-    openPlayStore();
     onUpgrade();
   };
 
@@ -71,7 +66,6 @@ export function LimitIndicator({ current, limit, label, showUpgrade, onUpgrade }
   const isAtLimit = !isUnlimited && current >= limit;
   
   const handleUpgrade = () => {
-    openPlayStore();
     onUpgrade?.();
   };
 

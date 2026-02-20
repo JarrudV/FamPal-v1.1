@@ -23,7 +23,7 @@
 - `PLACE_REFRESH_MAX_PER_RUN` (default `30`)
 - `PLACE_REFRESH_CANDIDATE_MULTIPLIER` (default `4`)
 - `PLACE_REFRESH_CONCURRENCY` (default `3`)
-- `GOOGLE_PLACES_API_KEY` or `VITE_GOOGLE_PLACES_API_KEY`
+- `GOOGLE_PLACES_API_KEY` (server-side only)
 
 ## Manual Run (local/dev)
 ```bash

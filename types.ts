@@ -281,10 +281,10 @@ export interface User {
 
 export type PlanTier = 'free' | 'pro' | 'family' | 'lifetime';
 export type PlanStatus = 'active' | 'cancelled' | 'expired';
-export type EntitlementSource = 'paystack' | 'apple' | 'google' | 'admin' | null;
+export type EntitlementSource = 'paystack' | 'apple' | 'google' | 'play' | 'admin' | null;
 export type SubscriptionTier = 'free' | 'pro' | 'admin';
-export type SubscriptionStatus = 'active' | 'inactive';
-export type SubscriptionSource = 'apple' | 'google' | 'admin' | null;
+export type SubscriptionStatus = 'active' | 'inactive' | 'pending' | 'grace_period' | 'cancelled_active' | 'billing_retry' | 'expired';
+export type SubscriptionSource = 'apple' | 'google' | 'play' | 'admin' | null;
 
 export interface Entitlement {
   subscription_tier: SubscriptionTier;
@@ -302,6 +302,12 @@ export interface Entitlement {
   paystack_subscription_code?: string;
   paystack_email_token?: string | null;
   last_payment_reference?: string;
+  play_product_id?: string | null;
+  play_purchase_token_hash?: string | null;
+  play_last_order_id?: string | null;
+  play_auto_renewing?: boolean;
+  play_state?: string | null;
+  last_verified_at?: string | null;
   ai_requests_this_month: number;
   ai_requests_reset_date: string;
 }
@@ -388,7 +394,7 @@ export function getDefaultEntitlement(): Entitlement {
   const usageResetMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   return {
     subscription_tier: 'free',
-    subscription_status: 'active',
+    subscription_status: 'inactive',
     subscription_source: null,
     gemini_credits_used: 0,
     gemini_credits_limit: 5,

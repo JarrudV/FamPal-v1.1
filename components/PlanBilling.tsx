@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AppState, PLAN_LIMITS, GOOGLE_PLAY_SUBSCRIPTION_URL } from '../types';
 import { canUseAI, getPlanDisplayName, isPaidTier } from '../lib/entitlements';
+import { getPlayProductIds, getPlayProducts, isPlayBillingAvailable, purchasePlaySubscription, syncPlayEntitlementWithServer } from '../lib/playBilling';
 
 interface PlanBillingProps {
   state: AppState;
@@ -8,21 +9,79 @@ interface PlanBillingProps {
   onUpdateState: <K extends keyof AppState>(key: K, value: AppState[K]) => void;
 }
 
-export default function PlanBilling({ state, onClose }: PlanBillingProps) {
+export default function PlanBilling({ state, onClose, onUpdateState }: PlanBillingProps) {
   const entitlement = state.entitlement;
   const aiInfo = canUseAI(entitlement, state.familyPool);
   const aiUsed = entitlement?.gemini_credits_used ?? entitlement?.ai_requests_this_month ?? 0;
   const currentTier = entitlement?.subscription_tier || entitlement?.plan_tier || 'free';
   const isPaid = isPaidTier(entitlement);
+  const [isNativeBillingAvailable, setIsNativeBillingAvailable] = useState(false);
+  const [productPrice, setProductPrice] = useState<string | null>(null);
+  const [selectedProductId, setSelectedProductId] = useState<string>(getPlayProductIds()[0] || 'fampal_pro_monthly');
+  const [selectedOfferToken, setSelectedOfferToken] = useState<string | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const statusLabel = useMemo(() => {
     if (currentTier === 'admin') return 'Admin tester access';
+    if (entitlement?.subscription_status === 'pending') return 'Subscription pending confirmation';
+    if (entitlement?.subscription_status === 'grace_period') return 'Payment issue: grace period active';
+    if (entitlement?.subscription_status === 'billing_retry') return 'Payment retry needed in Google Play';
+    if (entitlement?.subscription_status === 'cancelled_active') return 'Cancelled, still active until period end';
     if (currentTier === 'pro' || currentTier === 'family' || currentTier === 'lifetime') return 'Pro monthly entitlement';
     return 'Free tier';
-  }, [currentTier]);
+  }, [currentTier, entitlement?.subscription_status]);
 
   const handleUpgradeToPlayStore = () => {
     window.open(GOOGLE_PLAY_SUBSCRIPTION_URL, '_blank', 'noopener,noreferrer');
+  };
+
+  useEffect(() => {
+    (async () => {
+      const available = await isPlayBillingAvailable();
+      setIsNativeBillingAvailable(available);
+      if (!available) return;
+      const products = await getPlayProducts();
+      const selected = products.find((product) => getPlayProductIds().includes(product.productId)) || products[0];
+      if (!selected) return;
+      setSelectedProductId(selected.productId);
+      setSelectedOfferToken(selected.offerToken || selected.offers?.[0]?.offerToken);
+      const firstOffer = selected.offers?.[0];
+      setProductPrice(firstOffer?.formattedPrice || null);
+    })();
+  }, []);
+
+  const syncEntitlement = async (messagePrefix: string) => {
+    setBusy(true);
+    setSyncMessage(null);
+    try {
+      const sync = await syncPlayEntitlementWithServer();
+      if (sync?.entitlement) {
+        onUpdateState('entitlement', sync.entitlement);
+      }
+      setSyncMessage(`${messagePrefix} complete.`);
+    } catch (err: any) {
+      setSyncMessage(err?.message || `${messagePrefix} failed.`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleUpgrade = async () => {
+    if (!isNativeBillingAvailable) {
+      handleUpgradeToPlayStore();
+      return;
+    }
+    setBusy(true);
+    setSyncMessage(null);
+    try {
+      await purchasePlaySubscription(selectedProductId, selectedOfferToken);
+      await syncEntitlement('Subscription sync');
+    } catch (err: any) {
+      setSyncMessage(err?.message || 'Purchase failed.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -99,12 +158,25 @@ export default function PlanBilling({ state, onClose }: PlanBillingProps) {
             {isPaid ? (
               <p className="mt-4 text-xs font-semibold text-emerald-700 dark:text-emerald-400">Pro is active on this account.</p>
             ) : (
-              <button
-                onClick={handleUpgradeToPlayStore}
-                className="mt-4 w-full py-3.5 bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-shadow active:scale-[0.98]"
-              >
-                Upgrade to Pro on Google Play
-              </button>
+              <div className="mt-4 space-y-2">
+                <button
+                  onClick={handleUpgrade}
+                  disabled={busy}
+                  className="w-full py-3.5 bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-shadow active:scale-[0.98] disabled:opacity-60"
+                >
+                  {busy ? 'Processing...' : `Go Pro${productPrice ? ` - ${productPrice}/month` : ''}`}
+                </button>
+                <button
+                  onClick={() => syncEntitlement('Restore purchases')}
+                  disabled={busy}
+                  className="w-full py-2.5 bg-white/70 dark:bg-slate-800 border border-purple-200 dark:border-purple-700 text-purple-700 dark:text-purple-300 rounded-xl font-semibold text-xs disabled:opacity-60"
+                >
+                  Restore / Sync purchases
+                </button>
+                {syncMessage && (
+                  <p className="text-[11px] text-purple-700 dark:text-purple-300">{syncMessage}</p>
+                )}
+              </div>
             )}
           </div>
 

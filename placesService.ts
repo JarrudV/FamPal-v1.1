@@ -9,10 +9,8 @@ import {
   type PlaceRecord,
 } from './src/services/placeStore';
 
-const PLACES_API_KEY = import.meta.env.VITE_GOOGLE_PLACES_API_KEY || "";
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const resolveApiUrl = (path: string) => (API_BASE ? `${API_BASE}${path}` : path);
-const CLIENT_PLACES_KEY = PLACES_API_KEY || '';
 const DENY_TYPES_ENV = import.meta.env.VITE_PLACES_DENY_TYPES || '';
 const DENY_BRANDS_ENV = import.meta.env.VITE_PLACES_DENY_BRANDS || '';
 const DENY_TYPES_STORAGE_KEY = 'fampals_places_deny_types';
@@ -92,8 +90,8 @@ const DEFAULT_DENY_BRANDS = [
   'builders warehouse',
 ];
 
-if (!PLACES_API_KEY) {
-  console.error('[FamPals] CRITICAL: Google Places API key is missing! Places will not load.');
+if (!API_BASE) {
+  console.error('[FamPals] CRITICAL: API base URL is missing! Places search requires server-side proxy.');
 }
 
 const PLACES_CACHE_KEY = 'fampals_google_places_cache';
@@ -959,6 +957,15 @@ export function getExploreIntentSubtitle(intent: ExploreIntent): string {
   return definition.subtitle;
 }
 
+function buildPhotoProxyUrl(params: { photoName?: string; photoReference?: string; maxWidth?: number; maxHeight?: number }): string {
+  const query = new URLSearchParams();
+  if (params.photoName) query.set('photoName', params.photoName);
+  if (params.photoReference) query.set('photoReference', params.photoReference);
+  query.set('maxWidth', String(params.maxWidth || 600));
+  query.set('maxHeight', String(params.maxHeight || 400));
+  return `${resolveApiUrl('/api/places/photo')}?${query.toString()}`;
+}
+
 function mapLegacyPlaceToPlace(
   raw: any,
   index: number,
@@ -973,8 +980,8 @@ function mapLegacyPlaceToPlace(
   const mappedType = mapGoogleTypeToCategory(rawTypes);
   const placeType = mappedType === 'all' && fallbackType !== 'all' ? fallbackType : mappedType;
   const photoRef = raw?.photos?.[0]?.photo_reference;
-  const imageUrl = photoRef && PLACES_API_KEY
-    ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=600&photo_reference=${photoRef}&key=${PLACES_API_KEY}`
+  const imageUrl = photoRef
+    ? buildPhotoProxyUrl({ photoReference: photoRef, maxWidth: 600, maxHeight: 400 })
     : getPlaceholderImage(placeType, name, index);
   const placeId = raw?.place_id || raw?.id || `gp-${Date.now()}-${index}`;
   const sourceGoogle: PlaceSourceGoogle | null = placeId
@@ -1074,14 +1081,10 @@ export async function searchNearbyPlacesPaged(
   options?: { signal?: AbortSignal }
 ): Promise<PlacesSearchResponse> {
   if (!lat || !lng) return { places: [], nextPageToken: null, hasMore: false };
-  if (PLACES_API_KEY) {
-    return searchNearbyPlacesTextApi(lat, lng, type, radiusKm, undefined, pageToken, { signal: options?.signal });
-  }
   if (API_BASE) {
     const response = await fetchLegacyPlaces(
       '/api/places/nearby',
       {
-        apiKey: CLIENT_PLACES_KEY || undefined,
         lat,
         lng,
         radiusKm,
@@ -1108,13 +1111,10 @@ export async function textSearchPlacesPaged(
   options?: { signal?: AbortSignal }
 ): Promise<PlacesSearchResponse> {
   if (!query.trim()) return { places: [], nextPageToken: null, hasMore: false };
-  if (!API_BASE && PLACES_API_KEY) {
-    return searchNearbyPlacesTextApi(lat, lng, 'all', radiusKm, query.trim(), pageToken, { useCache: false, signal: options?.signal });
-  }
+  if (!API_BASE) return { places: [], nextPageToken: null, hasMore: false };
   const response = await fetchLegacyPlaces(
     '/api/places/text',
     {
-      apiKey: CLIENT_PLACES_KEY || undefined,
       query: query.trim(),
       lat,
       lng,
@@ -1127,10 +1127,6 @@ export async function textSearchPlacesPaged(
     true,
     options?.signal
   );
-  if (response.error && !pageToken && PLACES_API_KEY) {
-    const places = await textSearchPlaces(query, lat, lng, radiusKm);
-    return { places, nextPageToken: null, hasMore: false };
-  }
   return response;
 }
 
@@ -1498,169 +1494,11 @@ export async function searchNearbyPlacesTextApi(
   pageToken?: string,
   options?: { useCache?: boolean; signal?: AbortSignal }
 ): Promise<PlacesSearchResponse> {
-  if (!PLACES_API_KEY) {
-    console.warn("Google Places API key missing");
-    return { places: [], nextPageToken: null, hasMore: false };
+  if (!API_BASE) return { places: [], nextPageToken: null, hasMore: false };
+  if (searchQuery && searchQuery.trim()) {
+    return textSearchPlacesPaged(searchQuery.trim(), lat, lng, radiusKm, pageToken, { signal: options?.signal });
   }
-
-  const useCache = options?.useCache !== false;
-  const cacheKey = `text-cat:${lat.toFixed(3)}:${lng.toFixed(3)}:${type}:${radiusKm}:${searchQuery || ''}:${pageToken || ''}`;
-
-  if (useCache) {
-    const cached = getCached<PlacesSearchResponse>(PLACES_CACHE_KEY, cacheKey);
-    if (cached) {
-      intentLog('[FamPals] Loaded places from cache (instant)');
-      return {
-        ...cached,
-        hasMore: typeof cached.hasMore === 'boolean' ? cached.hasMore : !!cached.nextPageToken,
-      };
-    }
-  }
-
-  try {
-    const radiusMeters = radiusKm * 1000;
-    const placeTypes = categoryToPlaceTypes[type] || categoryToPlaceTypes.all;
-    const categoryQuery = searchQuery || categoryToTextQuery[type] || categoryToTextQuery.all;
-
-    const requestBody: any = {
-      textQuery: categoryQuery,
-      pageSize: 20,
-      locationBias: {
-        circle: {
-          center: { latitude: lat, longitude: lng },
-          radius: Math.min(radiusMeters, 50000)
-        }
-      },
-    };
-
-    if (type !== 'all' && type !== 'kids' && placeTypes.length === 1) {
-      requestBody.includedType = placeTypes[0];
-    }
-
-    if (pageToken) {
-      requestBody.pageToken = pageToken;
-    }
-
-    const response = await fetch(
-      'https://places.googleapis.com/v1/places:searchText',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': PLACES_API_KEY,
-          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.types,places.location,places.photos,places.primaryTypeDisplayName,places.rating,places.userRatingCount,places.priceLevel,nextPageToken'
-        },
-        body: JSON.stringify(requestBody),
-        signal: options?.signal,
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Places Text Search API error:', errorText);
-      return { places: [], nextPageToken: null, hasMore: false };
-    }
-
-    const data = await response.json();
-
-    if (!data.places || !Array.isArray(data.places)) {
-      intentLog('[FamPals] No places found for this search');
-      return { places: [], nextPageToken: null, hasMore: false };
-    }
-
-    const rawPlaces: any[] = data.places.filter((p: any) => {
-      const rawTypes = Array.isArray(p.types) ? p.types : [];
-      const rawName = p.displayName?.text || p.name || '';
-      return !shouldExcludePlace(rawTypes, rawName);
-    });
-
-    const places: Place[] = rawPlaces.map((p: any, index: number) => {
-      const placeType = mapGoogleTypeToCategory(p.types || []);
-      const placeLat = p.location?.latitude || lat;
-      const placeLng = p.location?.longitude || lng;
-      const placeId = p.id || `gp-${Date.now()}-${index}`;
-      const imageUrl = p.photos?.[0]
-        ? `https://places.googleapis.com/v1/${p.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${PLACES_API_KEY}`
-        : getPlaceholderImage(placeType, p.displayName?.text || '', index);
-      const sourceGoogle: PlaceSourceGoogle = {
-        googlePlaceId: placeId,
-        name: p.displayName?.text || 'Unknown Place',
-        address: p.formattedAddress || '',
-        lat: placeLat,
-        lng: placeLng,
-        types: p.types || [],
-        primaryType: p.primaryType || p.types?.[0],
-        primaryTypeDisplayName: p.primaryTypeDisplayName?.text,
-        rating: p.rating,
-        userRatingsTotal: p.userRatingCount,
-        priceLevel: p.priceLevel,
-        mapsUrl: `https://www.google.com/maps/place/?q=place_id:${placeId}`,
-        photoUrl: imageUrl,
-        goodForChildren: p.goodForChildren === true,
-        menuForChildren: p.menuForChildren === true,
-        restroom: p.restroom === true,
-        allowsDogs: p.allowsDogs === true,
-        accessibilityOptions: p.accessibilityOptions,
-        parkingOptions: p.parkingOptions,
-        raw: p,
-      };
-      void upsertPlaceFromGoogle(sourceGoogle, {
-        requestedCategory: type,
-        searchQuery,
-        ingestionSource: 'searchNearbyPlacesTextApi',
-      }).catch((err) => {
-        if (import.meta.env.DEV) {
-          console.warn('[FamPals] Text API place cache upsert failed', err);
-        }
-      });
-
-      return {
-        id: placeId,
-        name: p.displayName?.text || 'Unknown Place',
-        description: p.primaryTypeDisplayName?.text || 'Family-friendly venue',
-        address: p.formattedAddress || '',
-        rating: p.rating || 4.0,
-        tags: (p.types || []).slice(0, 8).map((t: string) => t.replace(/_/g, ' ')),
-        mapsUrl: `https://www.google.com/maps/place/?q=place_id:${placeId}`,
-        type: placeType,
-        priceLevel: priceLevelToString(p.priceLevel),
-        imageUrl,
-        distance: calculateDistance(lat, lng, placeLat, placeLng),
-        ageAppropriate: 'All ages',
-        phone: undefined,
-        website: undefined,
-        googlePlaceId: placeId,
-        userRatingsTotal: p.userRatingCount,
-        lat: placeLat,
-        lng: placeLng
-      };
-    });
-
-    const filteredPlaces = places.filter(p => {
-      const pLat = (p as any).lat;
-      const pLng = (p as any).lng;
-      if (!pLat || !pLng) return true;
-      const distKm = calculateDistanceKm(lat, lng, pLat, pLng);
-      return distKm <= radiusKm;
-    });
-
-    const nextPageToken = data.nextPageToken || null;
-    const result: PlacesSearchResponse = {
-      places: filteredPlaces,
-      nextPageToken,
-      hasMore: !!nextPageToken
-    };
-
-    if (useCache) {
-      setCache(PLACES_CACHE_KEY, cacheKey, result);
-    }
-    intentLog(`[FamPals] Text Search: ${places.length} total, ${filteredPlaces.length} within ${radiusKm}km, hasMore: ${!!data.nextPageToken}`);
-
-    return result;
-  } catch (error) {
-    console.error('Error fetching places via Text Search:', error);
-    return { places: [], nextPageToken: null, hasMore: false };
-  }
+  return searchNearbyPlacesPaged(lat, lng, type, radiusKm, pageToken, { signal: options?.signal });
 }
 
 export async function textSearchPlaces(
@@ -1669,116 +1507,9 @@ export async function textSearchPlaces(
   lng: number,
   radiusKm: number = 10
 ): Promise<Place[]> {
-  if (!PLACES_API_KEY || !query.trim()) {
-    return [];
-  }
-
-  const cacheKey = `text:${query.toLowerCase()}:${lat.toFixed(3)}:${lng.toFixed(3)}:${radiusKm}`;
-  
-  const cached = getCached<Place[]>(PLACES_CACHE_KEY, cacheKey);
-  if (cached) {
-    intentLog('[FamPals] Loaded text search from cache');
-    return cached;
-  }
-
-  try {
-    const response = await fetch(
-      'https://places.googleapis.com/v1/places:searchText',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': PLACES_API_KEY,
-          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.types,places.location,places.photos,places.primaryTypeDisplayName,places.rating,places.userRatingCount,places.priceLevel'
-        },
-        body: JSON.stringify({
-          textQuery: query,
-          locationBias: {
-            circle: {
-              center: { latitude: lat, longitude: lng },
-              radius: Math.min(radiusKm * 1000, 50000)
-            }
-          },
-          pageSize: 20
-        })
-      }
-    );
-
-    if (!response.ok) {
-      console.error('Text search error:', await response.text());
-      return [];
-    }
-
-    const data = await response.json();
-    
-    if (!data.places) return [];
-
-    const rawPlaces: any[] = data.places.filter((p: any) => {
-      const rawTypes = Array.isArray(p.types) ? p.types : [];
-      const rawName = p.displayName?.text || p.name || '';
-      return !shouldExcludePlace(rawTypes, rawName);
-    });
-
-    const places: Place[] = rawPlaces.map((p: any, index: number) => {
-      const placeType = mapGoogleTypeToCategory(p.types || []);
-      const placeLat = p.location?.latitude || lat;
-      const placeLng = p.location?.longitude || lng;
-      const placeId = p.id || `gp-${Date.now()}-${index}`;
-      const imageUrl = p.photos?.[0]
-        ? `https://places.googleapis.com/v1/${p.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${PLACES_API_KEY}`
-        : getPlaceholderImage(placeType, p.displayName?.text || '', index);
-      const sourceGoogle: PlaceSourceGoogle = {
-        googlePlaceId: placeId,
-        name: p.displayName?.text || 'Unknown Place',
-        address: p.formattedAddress || '',
-        lat: placeLat,
-        lng: placeLng,
-        types: p.types || [],
-        primaryType: p.primaryType || p.types?.[0],
-        primaryTypeDisplayName: p.primaryTypeDisplayName?.text,
-        rating: p.rating,
-        userRatingsTotal: p.userRatingCount,
-        priceLevel: p.priceLevel,
-        mapsUrl: `https://www.google.com/maps/place/?q=place_id:${placeId}`,
-        photoUrl: imageUrl,
-        raw: p,
-      };
-      void upsertPlaceFromGoogle(sourceGoogle, {
-        requestedCategory: 'all',
-        searchQuery: query,
-        ingestionSource: 'textSearchPlaces',
-      }).catch((err) => {
-        if (import.meta.env.DEV) {
-          console.warn('[FamPals] Text search cache upsert failed', err);
-        }
-      });
-      
-      return {
-        id: placeId,
-        name: p.displayName?.text || 'Unknown Place',
-        description: p.primaryTypeDisplayName?.text || 'Family-friendly venue',
-        address: p.formattedAddress || '',
-        rating: p.rating || 4.0,
-        tags: (p.types || []).slice(0, 8).map((t: string) => t.replace(/_/g, ' ')),
-        mapsUrl: `https://www.google.com/maps/place/?q=place_id:${placeId}`,
-        type: placeType,
-        priceLevel: priceLevelToString(p.priceLevel),
-        imageUrl,
-        distance: calculateDistance(lat, lng, placeLat, placeLng),
-        ageAppropriate: 'All ages',
-        googlePlaceId: placeId,
-        userRatingsTotal: p.userRatingCount,
-        lat: placeLat,
-        lng: placeLng
-      };
-    });
-
-    setCache(PLACES_CACHE_KEY, cacheKey, places);
-    return places;
-  } catch (error) {
-    console.error('Text search error:', error);
-    return [];
-  }
+  if (!query.trim()) return [];
+  const response = await textSearchPlacesPaged(query, lat, lng, radiusKm);
+  return response.places;
 }
 
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | null> {
@@ -1802,34 +1533,10 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
     console.warn('[FamPals] Firestore cache check failed, falling back to API:', err);
   }
 
-  if (!PLACES_API_KEY) return null;
-
-  const baseFields = 'id,displayName,formattedAddress,nationalPhoneNumber,internationalPhoneNumber,websiteUri,rating,userRatingCount,regularOpeningHours,photos,reviews,priceLevel,types,location,googleMapsUri,accessibilityOptions,goodForChildren,menuForChildren,restroom,allowsDogs,parkingOptions';
-  const extendedFields = `${baseFields},editorialSummary,generativeSummary`;
+  if (!API_BASE) return null;
 
   try {
-    let response = await fetch(
-      `https://places.googleapis.com/v1/places/${placeId}`,
-      {
-        headers: {
-          'X-Goog-Api-Key': PLACES_API_KEY,
-          'X-Goog-FieldMask': extendedFields
-        }
-      }
-    );
-
-    if (!response.ok && response.status === 400) {
-      console.warn('[FamPals] Extended field mask failed, retrying with base fields');
-      response = await fetch(
-        `https://places.googleapis.com/v1/places/${placeId}`,
-        {
-          headers: {
-            'X-Goog-Api-Key': PLACES_API_KEY,
-            'X-Goog-FieldMask': baseFields
-          }
-        }
-      );
-    }
+    let response = await fetch(resolveApiUrl(`/api/places/details/${encodeURIComponent(placeId)}`));
 
     if (!response.ok) {
       console.error('Place details error:', await response.text());
@@ -1849,7 +1556,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
       openingHours: p.regularOpeningHours?.weekdayDescriptions,
       isOpen: p.regularOpeningHours?.openNow,
       photos: (p.photos || []).slice(0, 10).map((photo: any) => 
-        `https://places.googleapis.com/v1/${photo.name}/media?maxHeightPx=400&maxWidthPx=600&key=${PLACES_API_KEY}`
+        buildPhotoProxyUrl({ photoName: photo.name, maxHeight: 400, maxWidth: 600 })
       ),
       reviews: (p.reviews || []).slice(0, 5).map((r: any) => ({
         authorName: r.authorAttribution?.displayName || 'Anonymous',

@@ -59,6 +59,24 @@ function stripUndefined(value: any): any {
   return value;
 }
 
+const CLIENT_WRITABLE_ENTITLEMENT_KEYS = new Set([
+  'gemini_credits_used',
+  'gemini_credits_limit',
+  'usage_reset_month',
+  'ai_requests_this_month',
+  'ai_requests_reset_date',
+]);
+
+function sanitizeClientEntitlementPatch(value: any): Record<string, any> {
+  if (!value || typeof value !== 'object') return {};
+  const patch: Record<string, any> = {};
+  for (const [key, val] of Object.entries(value)) {
+    if (!CLIENT_WRITABLE_ENTITLEMENT_KEYS.has(key)) continue;
+    patch[key] = stripUndefined(val);
+  }
+  return patch;
+}
+
 export async function upsertUserProfile(uid: string, profile: Record<string, any>) {
   if (DEV_AUTH_BYPASS) return;
   console.log('[FamPals] upsertUserProfile called for uid:', uid);
@@ -93,7 +111,9 @@ export async function saveUserField(uid: string, key: string, value: any) {
   try {
     const userDocRef = doc(db, 'users', uid);
     const payload: Record<string, any> = {};
-    const cleanedValue = stripUndefined(value);
+    const cleanedValue = key === 'entitlement'
+      ? sanitizeClientEntitlementPatch(value)
+      : stripUndefined(value);
     payload[key] = cleanedValue === undefined ? deleteField() : cleanedValue;
     await setDoc(userDocRef, payload, { merge: true });
   } catch (err) {

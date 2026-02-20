@@ -31,10 +31,12 @@ import { Timestamp } from 'firebase/firestore';
 import { shouldResetMonthlyAI, getNextResetDate, getCurrentUsageMonth } from './lib/entitlements';
 import { joinCircleByCode } from './lib/circles';
 import { buildAccessContext, type AppAccessContext } from './lib/access';
+import { syncPlayEntitlementWithServer } from './lib/playBilling';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const AUTH_REDIRECT_PENDING_KEY = 'fampals_auth_redirect_pending';
-const BILLING_ENABLED = import.meta.env.VITE_BILLING_ENABLED === 'true';
+const BILLING_ENABLED = import.meta.env.VITE_BILLING_ENABLED !== 'false';
+const BILLING_PROVIDER = (import.meta.env.VITE_BILLING_PROVIDER || 'play').toLowerCase();
 const AUTH_DEBUG = import.meta.env.VITE_AUTH_DEBUG === 'true';
 
 const authDebugLog = (message: string, payload?: Record<string, unknown>) => {
@@ -150,6 +152,7 @@ const App: React.FC = () => {
   const migrationAttemptedRef = useRef(false);
   const redirectHandledRef = useRef(false);
   const aiResetAttemptedRef = useRef<string | null>(null);
+  const playSyncAttemptedRef = useRef<string | null>(null);
   const lastAuthUidRef = useRef<string | null>(null);
   const joinInFlightRef = useRef(false);
   const lastJoinCodeRef = useRef<string | null>(null);
@@ -672,6 +675,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!BILLING_ENABLED) return;
+    if (BILLING_PROVIDER !== 'paystack') return;
     if (!accessContext.canSyncCloud) return;
     if (!isFirebaseConfigured) return;
     const params = new URLSearchParams(window.location.search);
@@ -696,6 +700,33 @@ const App: React.FC = () => {
       }
     })();
   }, [accessContext.canSyncCloud]);
+
+  useEffect(() => {
+    if (!BILLING_ENABLED) return;
+    if (BILLING_PROVIDER !== 'play') return;
+    if (!accessContext.canSyncCloud) return;
+    const uid = state.user?.uid || auth?.currentUser?.uid;
+    if (!uid) return;
+    if (playSyncAttemptedRef.current === uid) return;
+    playSyncAttemptedRef.current = uid;
+
+    (async () => {
+      try {
+        const synced = await syncPlayEntitlementWithServer();
+        if (synced?.entitlement) {
+          setState(prev => ({
+            ...prev,
+            entitlement: {
+              ...prev.entitlement,
+              ...synced.entitlement,
+            },
+          }));
+        }
+      } catch (err) {
+        console.warn('Play subscription sync failed', err);
+      }
+    })();
+  }, [accessContext.canSyncCloud, state.user?.uid]);
 
   useEffect(() => {
     if (loading) return;

@@ -207,6 +207,10 @@ const Profile: React.FC<ProfileProps> = ({ state, isGuest, accessContext, onSign
   };
 
   const handleAdminCode = async () => {
+    if (!import.meta.env.DEV) {
+      alert('Admin code is disabled in production builds.');
+      return;
+    }
     const ADMIN_CODE = 'FAMPRO2026';
     if (adminCode.toUpperCase() === ADMIN_CODE) {
       if (!db || !auth?.currentUser) {
